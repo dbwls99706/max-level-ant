@@ -44,9 +44,10 @@ class StockService:
                 return {}
             
             try:
-                # KOSPI + KOSDAQ 종목 조회
-                kospi = stock.get_market_ticker_and_name("20241231", market="KOSPI")
-                kosdaq = stock.get_market_ticker_and_name("20241231", market="KOSDAQ")
+                # KOSPI + KOSDAQ 종목 조회 (오늘 날짜 기준)
+                today_str = today.strftime("%Y%m%d")
+                kospi = stock.get_market_ticker_and_name(today_str, market="KOSPI")
+                kosdaq = stock.get_market_ticker_and_name(today_str, market="KOSDAQ")
                 
                 # 합치기
                 cls._ticker_cache = {**kospi, **kosdaq}

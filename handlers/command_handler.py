@@ -69,7 +69,10 @@ class CommandHandler:
         
         elif cmd.startswith("/인기") or cmd.startswith("/거래량"):
             return self.handle_top_volume()
-        
+
+        elif cmd.startswith("/거래내역") or cmd.startswith("/ㄱㄹ"):
+            return self.handle_transactions()
+
         elif cmd.startswith("/도움말") or cmd.startswith("/help") or cmd.startswith("/ㄷㅇㅁ"):
             return self.handle_help()
         
@@ -446,19 +449,52 @@ class CommandHandler:
     def handle_top_volume(self) -> Dict:
         """거래량 상위 종목"""
         stocks = StockService.get_top_volume(limit=10)
-        
+
         if not stocks:
             return KakaoResponse.simple_text("거래량 데이터를 조회할 수 없습니다.")
-        
+
         msg = "📊 **거래량 TOP 10**\n"
         for i, s in enumerate(stocks, 1):
             emoji = "📈" if s["change"] >= 0 else "📉"
             msg += f"\n{i}. {s['name']}"
             msg += f"\n   {s['price']:,}원 ({s['change']:+.2f}%) {emoji}"
             msg += f"\n   거래량: {s['volume']:,}주\n"
-        
+
         return KakaoResponse.simple_text(msg)
-    
+
+    def handle_transactions(self) -> Dict:
+        """거래 내역 조회"""
+        transactions = TradeService.get_transactions(self.db, self.kakao_id, limit=10)
+
+        if transactions is None:
+            return KakaoResponse.simple_text("먼저 /시작 으로 게임을 시작해주세요.")
+
+        if not transactions:
+            return KakaoResponse.simple_text("거래 내역이 없습니다.\n\n/시세 [종목명] 으로 주식을 검색해보세요!")
+
+        msg = "📜 **최근 거래 내역**\n"
+        for t in transactions:
+            emoji = "📈" if t.trade_type == "BUY" else "📉"
+            trade_type_str = "매수" if t.trade_type == "BUY" else "매도"
+            time_str = t.created_at.strftime("%m/%d %H:%M")
+
+            msg += f"\n{emoji} [{trade_type_str}] {t.stock_name}"
+            msg += f"\n   {t.quantity:,}주 × {t.price:,}원"
+
+            if t.trade_type == "SELL" and t.profit is not None:
+                profit_emoji = "🔺" if t.profit >= 0 else "🔻"
+                msg += f"\n   수익: {t.profit:+,}원 ({t.profit_rate:+.2f}%) {profit_emoji}"
+
+            msg += f"\n   {time_str}\n"
+
+        return KakaoResponse.quick_replies(
+            msg,
+            [
+                {"label": "💼 포트폴리오", "action": "message", "messageText": "/포트폴리오"},
+                {"label": "🏆 랭킹", "action": "message", "messageText": "/랭킹"}
+            ]
+        )
+
     def handle_help(self) -> Dict:
         """도움말"""
         return KakaoResponse.simple_text(Messages.HELP)
