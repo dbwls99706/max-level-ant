@@ -464,10 +464,12 @@ class CommandHandler:
 
     def handle_transactions(self) -> Dict:
         """거래 내역 조회"""
-        transactions = TradeService.get_transactions(self.db, self.kakao_id, limit=10)
-
-        if transactions is None:
+        # 유저 확인 먼저
+        user = UserService.get_user(self.db, self.kakao_id)
+        if not user:
             return KakaoResponse.simple_text("먼저 /시작 으로 게임을 시작해주세요.")
+
+        transactions = TradeService.get_transactions(self.db, self.kakao_id, limit=10)
 
         if not transactions:
             return KakaoResponse.simple_text("거래 내역이 없습니다.\n\n/시세 [종목명] 으로 주식을 검색해보세요!")

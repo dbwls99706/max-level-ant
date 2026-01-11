@@ -31,33 +31,56 @@ class StockService:
     _ticker_cache_date = None
     
     @classmethod
+    def _get_recent_trading_date(cls) -> str:
+        """
+        최근 거래일 조회 (주말/공휴일 대비)
+        """
+        today = datetime.now()
+
+        # 최근 10일 내에서 거래일 찾기
+        for i in range(10):
+            check_date = today - timedelta(days=i)
+            date_str = check_date.strftime("%Y%m%d")
+
+            try:
+                # 해당 날짜에 데이터가 있는지 확인
+                df = stock.get_market_ohlcv(date_str, market="KOSPI")
+                if not df.empty:
+                    return date_str
+            except:
+                continue
+
+        # 못 찾으면 오늘 날짜 반환
+        return today.strftime("%Y%m%d")
+
+    @classmethod
     def _get_tickers(cls) -> Dict[str, str]:
         """
         종목 코드-이름 매핑 조회 (캐싱)
         Returns: {종목코드: 종목명}
         """
         today = datetime.now().date()
-        
+
         # 캐시가 없거나 날짜가 다르면 새로 조회
         if cls._ticker_cache is None or cls._ticker_cache_date != today:
             if not PYKRX_AVAILABLE:
                 return {}
-            
+
             try:
-                # KOSPI + KOSDAQ 종목 조회 (오늘 날짜 기준)
-                today_str = today.strftime("%Y%m%d")
-                kospi = stock.get_market_ticker_and_name(today_str, market="KOSPI")
-                kosdaq = stock.get_market_ticker_and_name(today_str, market="KOSDAQ")
-                
+                # 최근 거래일 기준으로 종목 조회 (주말/공휴일 대비)
+                trading_date = cls._get_recent_trading_date()
+                kospi = stock.get_market_ticker_and_name(trading_date, market="KOSPI")
+                kosdaq = stock.get_market_ticker_and_name(trading_date, market="KOSDAQ")
+
                 # 합치기
                 cls._ticker_cache = {**kospi, **kosdaq}
                 cls._ticker_cache_date = today
-                
-                print(f"✅ 종목 목록 로드 완료: {len(cls._ticker_cache)}개")
+
+                print(f"✅ 종목 목록 로드 완료: {len(cls._ticker_cache)}개 (기준일: {trading_date})")
             except Exception as e:
                 print(f"❌ 종목 목록 로드 실패: {e}")
                 cls._ticker_cache = {}
-        
+
         return cls._ticker_cache
     
     @classmethod
@@ -193,10 +216,11 @@ class StockService:
         """
         if not PYKRX_AVAILABLE:
             return []
-        
+
         try:
-            today = datetime.now().strftime("%Y%m%d")
-            df = stock.get_market_ohlcv(today, market=market)
+            # 최근 거래일 기준 (주말/공휴일 대비)
+            trading_date = cls._get_recent_trading_date()
+            df = stock.get_market_ohlcv(trading_date, market=market)
             
             if df.empty:
                 return []
