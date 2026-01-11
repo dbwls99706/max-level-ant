@@ -6,11 +6,13 @@ from .stock_service import StockService
 from .trade_service import TradeService
 from .ranking_service import RankingService
 from .mission_service import MissionService
+from .game_service import GameService
 
 __all__ = [
     "UserService",
     "StockService",
     "TradeService",
     "RankingService",
-    "MissionService"
+    "MissionService",
+    "GameService"
 ]
