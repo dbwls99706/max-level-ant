@@ -91,22 +91,58 @@ class StockService:
         """
         query = query.strip()
         tickers = cls._get_tickers()
-        
+
         # 1. 정확한 코드 매칭
         if query in tickers:
             return {"code": query, "name": tickers[query]}
-        
+
         # 2. 정확한 이름 매칭
         for code, name in tickers.items():
             if name == query:
                 return {"code": code, "name": name}
-        
+
         # 3. 부분 이름 매칭 (첫 번째 결과)
         for code, name in tickers.items():
             if query in name:
                 return {"code": code, "name": name}
-        
+
+        # 4. 공백 제거하고 다시 검색
+        query_no_space = query.replace(" ", "")
+        for code, name in tickers.items():
+            if query_no_space in name.replace(" ", ""):
+                return {"code": code, "name": name}
+
         return None
+
+    @classmethod
+    def search_similar_stocks(cls, query: str, limit: int = 5) -> List[Dict]:
+        """
+        유사 종목 검색 (부분 매칭)
+        Returns: [{"code": "...", "name": "..."}, ...]
+        """
+        query = query.strip().replace(" ", "")
+        tickers = cls._get_tickers()
+
+        results = []
+
+        # 부분 매칭
+        for code, name in tickers.items():
+            name_clean = name.replace(" ", "")
+            if query in name_clean or any(char in name_clean for char in query if char):
+                results.append({"code": code, "name": name})
+                if len(results) >= limit:
+                    break
+
+        # 결과가 없으면 첫 글자로 시작하는 종목 찾기
+        if not results and len(query) > 0:
+            first_char = query[0]
+            for code, name in tickers.items():
+                if name.startswith(first_char):
+                    results.append({"code": code, "name": name})
+                    if len(results) >= limit:
+                        break
+
+        return results
     
     @classmethod
     def search_stocks(cls, query: str, limit: int = 10) -> List[Dict]:

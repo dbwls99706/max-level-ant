@@ -8,6 +8,7 @@ psycopg2-binary==2.9.9
 
 # Stock data
 pykrx
+pandas
 
 # HTTP
 httpx==0.26.0
