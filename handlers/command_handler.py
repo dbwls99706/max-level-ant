@@ -8,7 +8,7 @@ import re
 from typing import Dict
 from sqlalchemy.orm import Session
 
-from services import UserService, StockService, TradeService, RankingService
+from services import UserService, StockService, TradeService, RankingService, MissionService
 from utils import KakaoResponse
 from config import GameConfig, Messages
 
@@ -69,6 +69,21 @@ class CommandHandler:
         
         elif cmd.startswith("/인기") or cmd.startswith("/거래량"):
             return self.handle_top_volume()
+
+        elif cmd.startswith("/급등") or cmd.startswith("/상승"):
+            return self.handle_top_gainers()
+
+        elif cmd.startswith("/급락") or cmd.startswith("/하락"):
+            return self.handle_top_losers()
+
+        elif cmd.startswith("/시장") or cmd.startswith("/지수"):
+            return self.handle_market_overview()
+
+        elif cmd.startswith("/미션"):
+            return self.handle_mission()
+
+        elif cmd.startswith("/업적"):
+            return self.handle_achievements()
 
         elif cmd.startswith("/거래내역") or cmd.startswith("/ㄱㄹ"):
             return self.handle_transactions()
@@ -212,7 +227,18 @@ class CommandHandler:
             fee=data["fee"],
             cash=data["cash"]
         )
-        
+
+        # 미션 완료 알림
+        if data.get("mission_reward"):
+            mr = data["mission_reward"]
+            bonus_text = " (보너스 요일!)" if mr.get("is_bonus_day") else ""
+            msg += f"\n\n🎯 **일간 미션 완료!**{bonus_text}\n💰 +{mr['reward']:,}원 획득!"
+
+        # 업적 달성 알림
+        if data.get("new_achievements"):
+            for ach in data["new_achievements"]:
+                msg += f"\n\n🏆 **업적 달성: {ach['name']}!**\n💰 +{ach['reward']:,}원 획득!"
+
         return KakaoResponse.quick_replies(
             msg,
             [
@@ -224,19 +250,19 @@ class CommandHandler:
     def handle_sell(self) -> Dict:
         """주식 매도"""
         parts = self.utterance.split()
-        
+
         if len(parts) < 3:
             return KakaoResponse.simple_text("사용법: /매도 [종목명] [수량]\n예: /매도 삼성전자 10")
-        
+
         stock_query = parts[1]
-        
+
         try:
             quantity = int(parts[2])
         except ValueError:
             return KakaoResponse.simple_text("수량은 숫자로 입력해주세요.\n예: /매도 삼성전자 10")
-        
+
         result = TradeService.sell_stock(self.db, self.kakao_id, stock_query, quantity)
-        
+
         if not result["success"]:
             if "data" in result and "holding" in result.get("data", {}):
                 data = result["data"]
@@ -247,15 +273,15 @@ class CommandHandler:
             else:
                 msg = result["message"]
             return KakaoResponse.simple_text(msg)
-        
+
         data = result["data"]
-        
+
         # 수익 텍스트
         if data["profit"] >= 0:
             profit_text = f"📈 수익: +{data['profit']:,}원 (+{data['profit_rate']:.2f}%)"
         else:
             profit_text = f"📉 손실: {data['profit']:,}원 ({data['profit_rate']:.2f}%)"
-        
+
         msg = Messages.SELL_SUCCESS.format(
             name=data["name"],
             quantity=data["quantity"],
@@ -265,8 +291,25 @@ class CommandHandler:
             profit_text=profit_text,
             cash=data["cash"]
         )
-        
-        return KakaoResponse.simple_text(msg)
+
+        # 미션 완료 알림
+        if data.get("mission_reward"):
+            mr = data["mission_reward"]
+            bonus_text = " (보너스 요일!)" if mr.get("is_bonus_day") else ""
+            msg += f"\n\n🎯 **일간 미션 완료!**{bonus_text}\n💰 +{mr['reward']:,}원 획득!"
+
+        # 업적 달성 알림
+        if data.get("new_achievements"):
+            for ach in data["new_achievements"]:
+                msg += f"\n\n🏆 **업적 달성: {ach['name']}!**\n💰 +{ach['reward']:,}원 획득!"
+
+        return KakaoResponse.quick_replies(
+            msg,
+            [
+                {"label": "💼 포트폴리오", "action": "message", "messageText": "/포트폴리오"},
+                {"label": "🏆 랭킹", "action": "message", "messageText": "/랭킹"}
+            ]
+        )
     
     def handle_buy_max(self) -> Dict:
         """전량 매수"""
@@ -464,10 +507,12 @@ class CommandHandler:
 
     def handle_transactions(self) -> Dict:
         """거래 내역 조회"""
-        transactions = TradeService.get_transactions(self.db, self.kakao_id, limit=10)
-
-        if transactions is None:
+        # 유저 확인 먼저
+        user = UserService.get_user(self.db, self.kakao_id)
+        if not user:
             return KakaoResponse.simple_text("먼저 /시작 으로 게임을 시작해주세요.")
+
+        transactions = TradeService.get_transactions(self.db, self.kakao_id, limit=10)
 
         if not transactions:
             return KakaoResponse.simple_text("거래 내역이 없습니다.\n\n/시세 [종목명] 으로 주식을 검색해보세요!")
@@ -492,6 +537,150 @@ class CommandHandler:
             [
                 {"label": "💼 포트폴리오", "action": "message", "messageText": "/포트폴리오"},
                 {"label": "🏆 랭킹", "action": "message", "messageText": "/랭킹"}
+            ]
+        )
+
+    def handle_top_gainers(self) -> Dict:
+        """급등주 조회"""
+        stocks = StockService.get_top_gainers(limit=10)
+
+        if not stocks:
+            return KakaoResponse.simple_text("급등주 데이터를 조회할 수 없습니다.")
+
+        msg = "🚀 **오늘의 급등주 TOP 10**\n"
+        for i, s in enumerate(stocks, 1):
+            msg += f"\n{i}. {s['name']}"
+            msg += f"\n   {s['price']:,}원 (📈 {s['change']:+.2f}%)"
+            msg += f"\n   거래량: {s['volume']:,}주\n"
+
+        return KakaoResponse.quick_replies(
+            msg,
+            [
+                {"label": "📉 급락주", "action": "message", "messageText": "/급락"},
+                {"label": "📊 거래량", "action": "message", "messageText": "/인기"}
+            ]
+        )
+
+    def handle_top_losers(self) -> Dict:
+        """급락주 조회"""
+        stocks = StockService.get_top_losers(limit=10)
+
+        if not stocks:
+            return KakaoResponse.simple_text("급락주 데이터를 조회할 수 없습니다.")
+
+        msg = "📉 **오늘의 급락주 TOP 10**\n"
+        for i, s in enumerate(stocks, 1):
+            msg += f"\n{i}. {s['name']}"
+            msg += f"\n   {s['price']:,}원 (🔻 {s['change']:+.2f}%)"
+            msg += f"\n   거래량: {s['volume']:,}주\n"
+
+        return KakaoResponse.quick_replies(
+            msg,
+            [
+                {"label": "🚀 급등주", "action": "message", "messageText": "/급등"},
+                {"label": "📊 거래량", "action": "message", "messageText": "/인기"}
+            ]
+        )
+
+    def handle_market_overview(self) -> Dict:
+        """시장 현황 조회"""
+        market = StockService.get_market_overview()
+
+        if not market:
+            return KakaoResponse.simple_text("시장 데이터를 조회할 수 없습니다.")
+
+        msg = "📈 **시장 현황**\n"
+
+        if "kospi" in market:
+            k = market["kospi"]
+            emoji = "🔺" if k["change"] >= 0 else "🔻"
+            msg += f"\n🇰🇷 **KOSPI**"
+            msg += f"\n   {k['price']:,.2f} ({k['change']:+.2f}%) {emoji}\n"
+
+        if "kosdaq" in market:
+            k = market["kosdaq"]
+            emoji = "🔺" if k["change"] >= 0 else "🔻"
+            msg += f"\n💹 **KOSDAQ**"
+            msg += f"\n   {k['price']:,.2f} ({k['change']:+.2f}%) {emoji}\n"
+
+        return KakaoResponse.quick_replies(
+            msg,
+            [
+                {"label": "🚀 급등주", "action": "message", "messageText": "/급등"},
+                {"label": "📉 급락주", "action": "message", "messageText": "/급락"},
+                {"label": "📊 거래량", "action": "message", "messageText": "/인기"}
+            ]
+        )
+
+    def handle_mission(self) -> Dict:
+        """일간 미션 현황"""
+        user = UserService.get_user(self.db, self.kakao_id)
+        if not user:
+            return KakaoResponse.simple_text("먼저 /시작 으로 게임을 시작해주세요.")
+
+        status = MissionService.get_mission_status(self.db, self.kakao_id)
+        mission = status["daily_mission"]
+
+        # 주간 보너스 체크
+        bonus_text = ""
+        if status["is_bonus_day"]:
+            bonus_text = f"\n\n🎉 **오늘은 보너스 요일!** (보상 {status['bonus_multiplier']}배)"
+
+        # 미션 상태
+        if mission["completed"]:
+            mission_status = "✅ 완료!"
+        else:
+            mission_status = f"{mission['progress']}/{mission['target']}회"
+
+        msg = f"""📋 **일간 미션**{bonus_text}
+
+🎯 **오늘의 미션**: {GameConfig.DAILY_MISSION_TRADE_COUNT}회 거래하기
+📊 진행 상황: {mission_status}
+💰 보상: {mission['reward']:,}원
+
+📈 총 거래 횟수: {status['total_trades']:,}회
+💵 누적 실현 수익: {status['total_profit_realized']:,}원"""
+
+        return KakaoResponse.quick_replies(
+            msg,
+            [
+                {"label": "🏆 업적", "action": "message", "messageText": "/업적"},
+                {"label": "📊 인기종목", "action": "message", "messageText": "/인기"}
+            ]
+        )
+
+    def handle_achievements(self) -> Dict:
+        """업적 현황"""
+        user = UserService.get_user(self.db, self.kakao_id)
+        if not user:
+            return KakaoResponse.simple_text("먼저 /시작 으로 게임을 시작해주세요.")
+
+        status = MissionService.get_mission_status(self.db, self.kakao_id)
+
+        msg = f"""🏆 **업적 현황**
+
+달성: {status['achievements_completed']}/{status['achievements_total']}개
+
+"""
+        # 달성한 업적
+        if status["achievements"]:
+            msg += "**✅ 달성한 업적**\n"
+            for ach in status["achievements"]:
+                msg += f"{ach['icon']} {ach['name']}\n"
+            msg += "\n"
+
+        # 미달성 업적 (처음 3개만)
+        if status["available_achievements"]:
+            msg += "**🎯 도전 중**\n"
+            for ach in status["available_achievements"][:3]:
+                msg += f"⬜ {ach['name']}: {ach['description']}\n"
+                msg += f"   보상: {ach['reward']:,}원\n"
+
+        return KakaoResponse.quick_replies(
+            msg,
+            [
+                {"label": "📋 미션", "action": "message", "messageText": "/미션"},
+                {"label": "💼 포트폴리오", "action": "message", "messageText": "/포트폴리오"}
             ]
         )
 

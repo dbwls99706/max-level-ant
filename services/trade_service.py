@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 from models import User, Holding, Transaction
 from services.stock_service import StockService
 from services.user_service import UserService
+from services.mission_service import MissionService
 from config import GameConfig
 
 
@@ -111,7 +112,11 @@ class TradeService:
         
         db.commit()
         db.refresh(user)
-        
+
+        # 미션 및 업적 처리
+        mission_reward = MissionService.increment_trade_count(db, kakao_id)
+        new_achievements = MissionService.check_and_award_achievements(db, kakao_id)
+
         return {
             "success": True,
             "message": "매수 완료",
@@ -122,7 +127,9 @@ class TradeService:
                 "price": price,
                 "total": total_amount,
                 "fee": fee,
-                "cash": user.cash
+                "cash": user.cash,
+                "mission_reward": mission_reward,
+                "new_achievements": new_achievements
             }
         }
     
@@ -209,7 +216,13 @@ class TradeService:
         
         db.commit()
         db.refresh(user)
-        
+
+        # 미션 및 업적 처리 (수익 실현 시 업적 체크)
+        mission_reward = MissionService.increment_trade_count(db, kakao_id)
+        new_achievements = MissionService.check_and_award_achievements(
+            db, kakao_id, trade_profit=profit if profit > 0 else 0
+        )
+
         return {
             "success": True,
             "message": "매도 완료",
@@ -222,7 +235,9 @@ class TradeService:
                 "fee": fee,
                 "profit": profit,
                 "profit_rate": profit_rate,
-                "cash": user.cash
+                "cash": user.cash,
+                "mission_reward": mission_reward,
+                "new_achievements": new_achievements
             }
         }
     
