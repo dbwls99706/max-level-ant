@@ -8,7 +8,7 @@ import re
 from typing import Dict
 from sqlalchemy.orm import Session
 
-from services import UserService, StockService, TradeService, RankingService, MissionService
+from services import UserService, StockService, TradeService, RankingService, MissionService, GameService
 from utils import KakaoResponse
 from config import GameConfig, Messages
 
@@ -88,9 +88,25 @@ class CommandHandler:
         elif cmd.startswith("/거래내역") or cmd.startswith("/ㄱㄹ"):
             return self.handle_transactions()
 
+        # 미니게임
+        elif cmd.startswith("/복권") or cmd.startswith("/ㅂㄱ"):
+            return self.handle_lottery()
+
+        elif cmd.startswith("/슬롯") or cmd.startswith("/ㅅㄹ"):
+            return self.handle_slot()
+
+        elif cmd.startswith("/동전") or cmd.startswith("/코인"):
+            return self.handle_coin()
+
+        elif cmd.startswith("/하이로우") or cmd.startswith("/ㅎㅇㄹㅇ"):
+            return self.handle_highlow()
+
+        elif cmd.startswith("/게임") or cmd.startswith("/미니게임"):
+            return self.handle_game_menu()
+
         elif cmd.startswith("/도움말") or cmd.startswith("/help") or cmd.startswith("/ㄷㅇㅁ"):
             return self.handle_help()
-        
+
         else:
             return self.handle_unknown()
     
@@ -99,23 +115,26 @@ class CommandHandler:
         user, is_new = UserService.create_user(self.db, self.kakao_id)
         
         if is_new:
-            welcome_msg = Messages.WELCOME.format(
-                initial_cash=GameConfig.INITIAL_CASH,
-                attendance=GameConfig.ATTENDANCE_REWARD,
-                ad=GameConfig.AD_REWARD,
-                max_ads=GameConfig.MAX_ADS_PER_DAY
-            )
+            welcome_msg = Messages.WELCOME.format(initial_cash=GameConfig.INITIAL_CASH)
             return KakaoResponse.quick_replies(
                 welcome_msg,
                 [
-                    {"label": "📈 매수", "action": "message", "messageText": "/시세 삼성전자"},
-                    {"label": "📉 매도", "action": "message", "messageText": "/포트폴리오"},
-                    {"label": "📅 출석", "action": "message", "messageText": "/출석"},
-                    {"label": "📖 도움말", "action": "message", "messageText": "/도움말"}
+                    {"label": "🚀 급등주", "action": "message", "messageText": "/급등"},
+                    {"label": "📅 출석 +200만", "action": "message", "messageText": "/출석"},
+                    {"label": "🎫 무료복권", "action": "message", "messageText": "/복권"},
+                    {"label": "🎰 게임", "action": "message", "messageText": "/게임"}
                 ]
             )
         else:
-            return KakaoResponse.simple_text(Messages.ALREADY_REGISTERED)
+            return KakaoResponse.quick_replies(
+                "이미 가입했어요! 바로 플레이 👇",
+                [
+                    {"label": "🚀 급등주", "action": "message", "messageText": "/급등"},
+                    {"label": "📅 출석", "action": "message", "messageText": "/출석"},
+                    {"label": "🎫 복권", "action": "message", "messageText": "/복권"},
+                    {"label": "💼 포폴", "action": "message", "messageText": "/포트폴리오"}
+                ]
+            )
     
     def handle_attendance(self) -> Dict:
         """출석 체크"""
@@ -136,11 +155,13 @@ class CommandHandler:
         return KakaoResponse.quick_replies(
             msg,
             [
-                {"label": "📺 광고보기", "action": "message", "messageText": "/광고"},
-                {"label": "💼 포트폴리오", "action": "message", "messageText": "/포트폴리오"}
+                {"label": "🚀 급등주", "action": "message", "messageText": "/급등"},
+                {"label": "📺 광고 +150만", "action": "message", "messageText": "/광고"},
+                {"label": "🎫 복권", "action": "message", "messageText": "/복권"},
+                {"label": "🎰 게임", "action": "message", "messageText": "/게임"}
             ]
         )
-    
+
     def handle_ad(self) -> Dict:
         """광고 시청"""
         success, reward, remaining, cash = UserService.watch_ad(self.db, self.kakao_id)
@@ -154,24 +175,56 @@ class CommandHandler:
                 remaining=remaining,
                 cash=cash
             )
+            return KakaoResponse.quick_replies(
+                msg,
+                [
+                    {"label": "🚀 급등주", "action": "message", "messageText": "/급등"},
+                    {"label": "📺 광고 한번 더", "action": "message", "messageText": "/광고"},
+                    {"label": "🎫 복권", "action": "message", "messageText": "/복권"},
+                    {"label": "🎰 게임", "action": "message", "messageText": "/게임"}
+                ]
+            )
         else:
-            msg = Messages.AD_LIMIT.format(max_ads=GameConfig.MAX_ADS_PER_DAY)
-        
-        return KakaoResponse.simple_text(msg)
+            return KakaoResponse.quick_replies(
+                Messages.AD_LIMIT.format(max_ads=GameConfig.MAX_ADS_PER_DAY),
+                [
+                    {"label": "🚀 급등주", "action": "message", "messageText": "/급등"},
+                    {"label": "🎫 복권", "action": "message", "messageText": "/복권"},
+                    {"label": "🎰 게임", "action": "message", "messageText": "/게임"}
+                ]
+            )
     
     def handle_price(self) -> Dict:
         """시세 조회"""
         parts = self.utterance.split(maxsplit=1)
-        
+
         if len(parts) < 2:
-            return KakaoResponse.simple_text("사용법: /시세 [종목명]\n예: /시세 삼성전자")
-        
+            # 종목명 없으면 인기 종목 추천
+            return KakaoResponse.quick_replies(
+                "📊 어떤 종목을 볼까요?",
+                [
+                    {"label": "🔥 삼성전자", "action": "message", "messageText": "/시세 삼성전자"},
+                    {"label": "🚀 SK하이닉스", "action": "message", "messageText": "/시세 SK하이닉스"},
+                    {"label": "⚡ 네이버", "action": "message", "messageText": "/시세 NAVER"},
+                    {"label": "🎮 카카오", "action": "message", "messageText": "/시세 카카오"},
+                    {"label": "📈 급등주", "action": "message", "messageText": "/급등"}
+                ]
+            )
+
         query = parts[1].strip()
         stock_info = StockService.get_price(query)
-        
+
         if not stock_info:
+            # 유사 종목 추천
+            similar = StockService.search_similar_stocks(query, limit=5)
+            if similar:
+                buttons = [{"label": f"📊 {s['name']}", "action": "message", "messageText": f"/시세 {s['name']}"} for s in similar]
+                return KakaoResponse.quick_replies(
+                    f"'{query}' 종목을 못 찾았어요 😅\n혹시 이 종목들 중에 있나요?",
+                    buttons
+                )
             return KakaoResponse.simple_text(Messages.STOCK_NOT_FOUND.format(query=query))
-        
+
         msg = Messages.STOCK_PRICE.format(
             name=stock_info["name"],
             code=stock_info["code"],
@@ -181,12 +234,15 @@ class CommandHandler:
             high=stock_info["high"],
             volume=stock_info["volume"]
         )
-        
+
+        # 원클릭 매수 버튼 (1주, 10주, 100주, 전량)
         return KakaoResponse.quick_replies(
             msg,
             [
-                {"label": "📈 매수", "action": "message", "messageText": f"/매수 {stock_info['name']} "},
-                {"label": "📉 매도", "action": "message", "messageText": f"/매도 {stock_info['name']} "}
+                {"label": "1주 매수", "action": "message", "messageText": f"/매수 {stock_info['name']} 1"},
+                {"label": "10주 매수", "action": "message", "messageText": f"/매수 {stock_info['name']} 10"},
+                {"label": "100주 매수", "action": "message", "messageText": f"/매수 {stock_info['name']} 100"},
+                {"label": "💰 전량매수", "action": "message", "messageText": f"/전량매수 {stock_info['name']}"}
             ]
         )
     
@@ -243,8 +299,9 @@ class CommandHandler:
         return KakaoResponse.quick_replies(
             msg,
             [
+                {"label": f"🔄 추가매수", "action": "message", "messageText": f"/시세 {data['name']}"},
                 {"label": "💼 포트폴리오", "action": "message", "messageText": "/포트폴리오"},
-                {"label": f"📊 {data['name']} 시세", "action": "message", "messageText": f"/시세 {data['name']}"}
+                {"label": "🚀 급등주", "action": "message", "messageText": "/급등"}
             ]
         )
     
@@ -307,11 +364,12 @@ class CommandHandler:
         return KakaoResponse.quick_replies(
             msg,
             [
+                {"label": "🚀 급등주", "action": "message", "messageText": "/급등"},
                 {"label": "💼 포트폴리오", "action": "message", "messageText": "/포트폴리오"},
                 {"label": "🏆 랭킹", "action": "message", "messageText": "/랭킹"}
             ]
         )
-    
+
     def handle_buy_max(self) -> Dict:
         """전량 매수"""
         parts = self.utterance.split()
@@ -334,9 +392,15 @@ class CommandHandler:
             fee=data["fee"],
             cash=data["cash"]
         )
-        
-        return KakaoResponse.simple_text(msg)
-    
+
+        return KakaoResponse.quick_replies(
+            msg,
+            [
+                {"label": "💼 포트폴리오", "action": "message", "messageText": "/포트폴리오"},
+                {"label": "🚀 급등주", "action": "message", "messageText": "/급등"}
+            ]
+        )
+
     def handle_sell_all(self) -> Dict:
         """전량 매도"""
         parts = self.utterance.split()
@@ -366,8 +430,15 @@ class CommandHandler:
             profit_text=profit_text,
             cash=data["cash"]
         )
-        
-        return KakaoResponse.simple_text(msg)
+
+        return KakaoResponse.quick_replies(
+            msg,
+            [
+                {"label": "🚀 급등주", "action": "message", "messageText": "/급등"},
+                {"label": "💼 포트폴리오", "action": "message", "messageText": "/포트폴리오"},
+                {"label": "🏆 랭킹", "action": "message", "messageText": "/랭킹"}
+            ]
+        )
     
     def handle_balance(self) -> Dict:
         """잔고 조회"""
@@ -389,37 +460,46 @@ class CommandHandler:
     def handle_portfolio(self) -> Dict:
         """포트폴리오 조회"""
         portfolio = TradeService.get_portfolio(self.db, self.kakao_id)
-        
+
         if portfolio is None:
             return KakaoResponse.simple_text("먼저 /시작 으로 게임을 시작해주세요.")
-        
+
         # 보유 주식 목록 생성
+        buttons = []
         if portfolio["holdings"]:
             holdings_text = ""
             for h in portfolio["holdings"]:
                 emoji = "🔺" if h["profit_rate"] >= 0 else "🔻"
-                holdings_text += f"\n┌ {h['name']} ({h['quantity']:,}주)"
-                holdings_text += f"\n│ 평균단가: {h['avg_price']:,}원"
-                holdings_text += f"\n│ 현재가: {h['current_price']:,}원"
-                holdings_text += f"\n│ 수익률: {h['profit_rate']:+.2f}% {emoji}"
-                holdings_text += f"\n└ 평가금액: {h['current_value']:,}원\n"
+                holdings_text += f"\n{h['name']} {h['quantity']:,}주"
+                holdings_text += f"\n  {h['current_price']:,}원 ({h['profit_rate']:+.1f}%) {emoji}\n"
+                # 보유 주식 전량매도 버튼 추가 (최대 4개)
+                if len(buttons) < 4:
+                    buttons.append({
+                        "label": f"💸 {h['name']} 전량매도",
+                        "action": "message",
+                        "messageText": f"/전량매도 {h['name']}"
+                    })
         else:
-            holdings_text = "\n(보유 중인 주식이 없습니다)"
-        
-        msg = Messages.PORTFOLIO.format(
-            cash=portfolio["cash"],
-            holdings=holdings_text,
-            total=portfolio["total_asset"],
-            profit_rate=portfolio["profit_rate"]
-        )
-        
-        return KakaoResponse.quick_replies(
-            msg,
-            [
-                {"label": "🏆 랭킹", "action": "message", "messageText": "/랭킹"},
+            holdings_text = "\n아직 보유 주식이 없어요!"
+            buttons = [
+                {"label": "🔥 삼성전자", "action": "message", "messageText": "/시세 삼성전자"},
+                {"label": "🚀 급등주", "action": "message", "messageText": "/급등"},
                 {"label": "📊 인기종목", "action": "message", "messageText": "/인기"}
             ]
-        )
+
+        # 총 수익률 이모지
+        profit_emoji = "🚀" if portfolio["profit_rate"] >= 10 else ("📈" if portfolio["profit_rate"] >= 0 else "📉")
+
+        msg = f"""💼 내 포트폴리오
+
+💵 현금: {portfolio['cash']:,}원
+{holdings_text}
+{profit_emoji} 총자산: {portfolio['total_asset']:,}원 ({portfolio['profit_rate']:+.1f}%)"""
+
+        if not buttons:
+            buttons = [{"label": "📊 인기종목", "action": "message", "messageText": "/인기"}]
+
+        return KakaoResponse.quick_replies(msg, buttons)
     
     def handle_ranking(self) -> Dict:
         """랭킹 조회"""
@@ -543,45 +623,39 @@ class CommandHandler:
 
     def handle_top_gainers(self) -> Dict:
         """급등주 조회"""
-        stocks = StockService.get_top_gainers(limit=10)
+        stocks = StockService.get_top_gainers(limit=5)
 
         if not stocks:
             return KakaoResponse.simple_text("급등주 데이터를 조회할 수 없습니다.")
 
-        msg = "🚀 오늘의 급등주 TOP 10\n"
+        msg = "🚀 오늘의 급등주 TOP 5\n"
         for i, s in enumerate(stocks, 1):
-            msg += f"\n{i}. {s['name']}"
-            msg += f"\n   {s['price']:,}원 (📈 {s['change']:+.2f}%)"
-            msg += f"\n   거래량: {s['volume']:,}주\n"
+            msg += f"\n{i}. {s['name']} 📈{s['change']:+.1f}%"
+            msg += f"\n   {s['price']:,}원\n"
 
-        return KakaoResponse.quick_replies(
-            msg,
-            [
-                {"label": "📉 급락주", "action": "message", "messageText": "/급락"},
-                {"label": "📊 거래량", "action": "message", "messageText": "/인기"}
-            ]
-        )
+        # 상위 종목 바로 매수 버튼
+        buttons = [{"label": f"🔥 {s['name']}", "action": "message", "messageText": f"/시세 {s['name']}"} for s in stocks[:4]]
+        buttons.append({"label": "📉 급락주", "action": "message", "messageText": "/급락"})
+
+        return KakaoResponse.quick_replies(msg, buttons)
 
     def handle_top_losers(self) -> Dict:
         """급락주 조회"""
-        stocks = StockService.get_top_losers(limit=10)
+        stocks = StockService.get_top_losers(limit=5)
 
         if not stocks:
             return KakaoResponse.simple_text("급락주 데이터를 조회할 수 없습니다.")
 
-        msg = "📉 오늘의 급락주 TOP 10\n"
+        msg = "📉 오늘의 급락주 TOP 5 (저점매수 기회?)\n"
         for i, s in enumerate(stocks, 1):
-            msg += f"\n{i}. {s['name']}"
-            msg += f"\n   {s['price']:,}원 (🔻 {s['change']:+.2f}%)"
-            msg += f"\n   거래량: {s['volume']:,}주\n"
+            msg += f"\n{i}. {s['name']} 🔻{s['change']:+.1f}%"
+            msg += f"\n   {s['price']:,}원\n"
 
-        return KakaoResponse.quick_replies(
-            msg,
-            [
-                {"label": "🚀 급등주", "action": "message", "messageText": "/급등"},
-                {"label": "📊 거래량", "action": "message", "messageText": "/인기"}
-            ]
-        )
+        # 저점 매수 버튼
+        buttons = [{"label": f"💎 {s['name']}", "action": "message", "messageText": f"/시세 {s['name']}"} for s in stocks[:4]]
+        buttons.append({"label": "🚀 급등주", "action": "message", "messageText": "/급등"})
+
+        return KakaoResponse.quick_replies(msg, buttons)
 
     def handle_market_overview(self) -> Dict:
         """시장 현황 조회"""
@@ -684,10 +758,242 @@ class CommandHandler:
             ]
         )
 
+    # ==========================================
+    # 미니게임 핸들러
+    # ==========================================
+
+    def handle_game_menu(self) -> Dict:
+        """게임 메뉴"""
+        msg = """🎰 미니게임
+
+주식 쉬는 시간? 게임으로 돈 벌자!
+
+🎫 /복권 - 무료 복권 (운빨 테스트)
+🎰 /슬롯 [금액] - 슬롯머신 (777 잭팟!)
+🪙 /동전 [금액] [앞/뒤] - 동전던지기 (x1.95)
+🎲 /하이로우 [금액] [높/낮] - 숫자게임 (x1.9)"""
+
+        return KakaoResponse.quick_replies(
+            msg,
+            [
+                {"label": "🎫 무료복권", "action": "message", "messageText": "/복권"},
+                {"label": "🎰 슬롯 5만", "action": "message", "messageText": "/슬롯 50000"},
+                {"label": "🪙 동전 10만", "action": "message", "messageText": "/동전 100000 앞"},
+                {"label": "🚀 급등주", "action": "message", "messageText": "/급등"}
+            ]
+        )
+
+    def handle_lottery(self) -> Dict:
+        """복권 긁기"""
+        result = GameService.play_lottery(self.db, self.kakao_id)
+
+        if not result["success"]:
+            return KakaoResponse.simple_text(result["message"])
+
+        # 등급별 이모지 효과
+        tier = result["tier"]
+        if "대박" in tier:
+            effect = "🎆🎇🎆🎇🎆"
+        elif "1등" in tier:
+            effect = "✨✨✨"
+        elif "2등" in tier:
+            effect = "🎉🎉"
+        elif "3등" in tier:
+            effect = "🎊"
+        else:
+            effect = ""
+
+        msg = f"""🎫 복권 긁기 {effect}
+
+{tier}! {result['message']}
+
+💰 당첨금: +{result['reward']:,}원
+💵 현재 잔고: {result['cash']:,}원"""
+
+        return KakaoResponse.quick_replies(
+            msg,
+            [
+                {"label": "🎰 슬롯머신", "action": "message", "messageText": "/슬롯 50000"},
+                {"label": "🚀 급등주", "action": "message", "messageText": "/급등"},
+                {"label": "💼 포트폴리오", "action": "message", "messageText": "/포트폴리오"}
+            ]
+        )
+
+    def handle_slot(self) -> Dict:
+        """슬롯머신"""
+        parts = self.utterance.split()
+
+        # 기본 배팅금 5만원
+        bet = 50_000
+        if len(parts) >= 2:
+            try:
+                bet = int(parts[1].replace(",", ""))
+            except ValueError:
+                return KakaoResponse.simple_text("배팅금은 숫자로 입력해주세요.\n예: /슬롯 50000")
+
+        result = GameService.play_slot(self.db, self.kakao_id, bet)
+
+        if not result["success"]:
+            return KakaoResponse.simple_text(result["message"])
+
+        slots = result["slots"]
+        slot_display = f"[ {slots[0]} | {slots[1]} | {slots[2]} ]"
+
+        if result["jackpot"]:
+            effect = "🎆 JACKPOT!!! 🎆"
+        elif result["multiplier"] >= 5:
+            effect = "🎉 BIG WIN! 🎉"
+        elif result["multiplier"] > 0:
+            effect = "✨ WIN! ✨"
+        else:
+            effect = "💨"
+
+        if result["profit"] >= 0:
+            profit_text = f"📈 +{result['profit']:,}원"
+        else:
+            profit_text = f"📉 {result['profit']:,}원"
+
+        msg = f"""🎰 슬롯머신
+
+{slot_display}
+
+{effect}
+
+💰 배팅: {result['bet']:,}원
+🎯 배율: x{result['multiplier']}
+{profit_text}
+💵 잔고: {result['cash']:,}원"""
+
+        return KakaoResponse.quick_replies(
+            msg,
+            [
+                {"label": "🎰 한번 더!", "action": "message", "messageText": f"/슬롯 {bet}"},
+                {"label": "🎰 2배 배팅", "action": "message", "messageText": f"/슬롯 {bet * 2}"},
+                {"label": "🚀 급등주", "action": "message", "messageText": "/급등"}
+            ]
+        )
+
+    def handle_coin(self) -> Dict:
+        """동전 던지기"""
+        parts = self.utterance.split()
+
+        if len(parts) < 3:
+            return KakaoResponse.quick_replies(
+                "🪙 동전 던지기\n\n사용법: /동전 [금액] [앞/뒤]\n예: /동전 100000 앞",
+                [
+                    {"label": "🪙 10만 앞", "action": "message", "messageText": "/동전 100000 앞"},
+                    {"label": "🪙 10만 뒤", "action": "message", "messageText": "/동전 100000 뒤"},
+                    {"label": "🪙 50만 앞", "action": "message", "messageText": "/동전 500000 앞"}
+                ]
+            )
+
+        try:
+            bet = int(parts[1].replace(",", ""))
+        except ValueError:
+            return KakaoResponse.simple_text("배팅금은 숫자로 입력해주세요.")
+
+        choice = parts[2]
+        result = GameService.play_coin_flip(self.db, self.kakao_id, bet, choice)
+
+        if not result["success"]:
+            return KakaoResponse.simple_text(result["message"])
+
+        if result["won"]:
+            effect = "🎉 WIN!"
+            profit_text = f"📈 +{result['profit']:,}원"
+        else:
+            effect = "💨 LOSE"
+            profit_text = f"📉 {result['profit']:,}원"
+
+        msg = f"""🪙 동전 던지기
+
+{result['emoji']} 결과: {result['result']}!
+🎯 선택: {result['choice']}
+
+{effect}
+
+💰 배팅: {result['bet']:,}원
+{profit_text}
+💵 잔고: {result['cash']:,}원"""
+
+        return KakaoResponse.quick_replies(
+            msg,
+            [
+                {"label": "🪙 한번 더!", "action": "message", "messageText": f"/동전 {bet} {choice}"},
+                {"label": "🪙 반대로!", "action": "message", "messageText": f"/동전 {bet} {'뒤' if choice == '앞' else '앞'}"},
+                {"label": "🚀 급등주", "action": "message", "messageText": "/급등"}
+            ]
+        )
+
+    def handle_highlow(self) -> Dict:
+        """하이로우 게임"""
+        parts = self.utterance.split()
+
+        if len(parts) < 3:
+            return KakaoResponse.quick_replies(
+                "🎲 하이로우\n\n1~100 중 숫자가 50보다 높을까 낮을까?\n\n사용법: /하이로우 [금액] [높/낮]",
+                [
+                    {"label": "🔼 10만 높", "action": "message", "messageText": "/하이로우 100000 높"},
+                    {"label": "🔽 10만 낮", "action": "message", "messageText": "/하이로우 100000 낮"},
+                    {"label": "🔼 50만 높", "action": "message", "messageText": "/하이로우 500000 높"}
+                ]
+            )
+
+        try:
+            bet = int(parts[1].replace(",", ""))
+        except ValueError:
+            return KakaoResponse.simple_text("배팅금은 숫자로 입력해주세요.")
+
+        choice = parts[2]
+        result = GameService.play_high_low(self.db, self.kakao_id, bet, choice)
+
+        if not result["success"]:
+            return KakaoResponse.simple_text(result["message"])
+
+        # 무승부 체크
+        if result["won"] is None:
+            msg = f"""🎲 하이로우
+
+🔢 숫자: {result['number']}
+
+😮 무승부! (50)
+배팅금 반환!
+
+💵 잔고: {result['cash']:,}원"""
+        else:
+            if result["won"]:
+                effect = "🎉 WIN!"
+                profit_text = f"📈 +{result['profit']:,}원"
+            else:
+                effect = "💨 LOSE"
+                profit_text = f"📉 {result['profit']:,}원"
+
+            arrow = "🔼" if result["actual"] == "높" else "🔽"
+
+            msg = f"""🎲 하이로우
+
+🔢 숫자: {result['number']} {arrow}
+🎯 선택: {result['choice']} / 정답: {result['actual']}
+
+{effect}
+
+💰 배팅: {result['bet']:,}원
+{profit_text}
+💵 잔고: {result['cash']:,}원"""
+
+        return KakaoResponse.quick_replies(
+            msg,
+            [
+                {"label": "🔼 높!", "action": "message", "messageText": f"/하이로우 {bet} 높"},
+                {"label": "🔽 낮!", "action": "message", "messageText": f"/하이로우 {bet} 낮"},
+                {"label": "🚀 급등주", "action": "message", "messageText": "/급등"}
+            ]
+        )
+
     def handle_help(self) -> Dict:
         """도움말"""
         return KakaoResponse.simple_text(Messages.HELP)
-    
+
     def handle_unknown(self) -> Dict:
         """알 수 없는 명령어"""
         return KakaoResponse.quick_replies(
