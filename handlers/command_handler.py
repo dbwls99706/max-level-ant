@@ -10,16 +10,25 @@ from sqlalchemy.orm import Session
 
 from services import UserService, StockService, TradeService, RankingService, MissionService, GameService
 from utils import KakaoResponse
-from config import GameConfig, Messages
+from config import GameConfig, Messages, is_market_closed
 
 
 class CommandHandler:
     """명령어 처리 클래스"""
-    
+
     def __init__(self, db: Session, kakao_id: str, utterance: str):
         self.db = db
         self.kakao_id = kakao_id
         self.utterance = utterance.strip()
+
+    def _get_game_buttons(self) -> list:
+        """장 마감 시간에만 게임 버튼 반환"""
+        if is_market_closed():
+            return [
+                {"label": "🎫 복권", "action": "message", "messageText": "/복권"},
+                {"label": "🎰 게임", "action": "message", "messageText": "/게임"}
+            ]
+        return []
     
     def handle(self) -> Dict:
         """
@@ -113,36 +122,31 @@ class CommandHandler:
     def handle_start(self) -> Dict:
         """게임 시작 / 회원가입"""
         user, is_new = UserService.create_user(self.db, self.kakao_id)
-        
+
         if is_new:
             welcome_msg = Messages.WELCOME.format(initial_cash=GameConfig.INITIAL_CASH)
-            return KakaoResponse.quick_replies(
-                welcome_msg,
-                [
-                    {"label": "🚀 급등주", "action": "message", "messageText": "/급등"},
-                    {"label": "📅 출석 +200만", "action": "message", "messageText": "/출석"},
-                    {"label": "🎫 무료복권", "action": "message", "messageText": "/복권"},
-                    {"label": "🎰 게임", "action": "message", "messageText": "/게임"}
-                ]
-            )
+            buttons = [
+                {"label": "🚀 급등주", "action": "message", "messageText": "/급등"},
+                {"label": "📅 출석 +200만", "action": "message", "messageText": "/출석"},
+            ]
+            buttons.extend(self._get_game_buttons())
+            return KakaoResponse.quick_replies(welcome_msg, buttons)
         else:
-            return KakaoResponse.quick_replies(
-                "이미 가입했어요! 바로 플레이 👇",
-                [
-                    {"label": "🚀 급등주", "action": "message", "messageText": "/급등"},
-                    {"label": "📅 출석", "action": "message", "messageText": "/출석"},
-                    {"label": "🎫 복권", "action": "message", "messageText": "/복권"},
-                    {"label": "💼 포폴", "action": "message", "messageText": "/포트폴리오"}
-                ]
-            )
+            buttons = [
+                {"label": "🚀 급등주", "action": "message", "messageText": "/급등"},
+                {"label": "📅 출석", "action": "message", "messageText": "/출석"},
+                {"label": "💼 포폴", "action": "message", "messageText": "/포트폴리오"},
+            ]
+            buttons.extend(self._get_game_buttons())
+            return KakaoResponse.quick_replies("이미 가입했어요! 바로 플레이 👇", buttons)
     
     def handle_attendance(self) -> Dict:
         """출석 체크"""
         success, reward, streak, cash = UserService.check_attendance(self.db, self.kakao_id)
-        
+
         if not success and reward == 0 and streak == 0:
             return KakaoResponse.simple_text("먼저 /시작 으로 게임을 시작해주세요.")
-        
+
         if success:
             msg = Messages.ATTENDANCE_SUCCESS.format(
                 reward=reward,
@@ -151,47 +155,41 @@ class CommandHandler:
             )
         else:
             msg = Messages.ATTENDANCE_ALREADY.format(streak=streak)
-        
-        return KakaoResponse.quick_replies(
-            msg,
-            [
-                {"label": "🚀 급등주", "action": "message", "messageText": "/급등"},
-                {"label": "📺 광고 +150만", "action": "message", "messageText": "/광고"},
-                {"label": "🎫 복권", "action": "message", "messageText": "/복권"},
-                {"label": "🎰 게임", "action": "message", "messageText": "/게임"}
-            ]
-        )
+
+        buttons = [
+            {"label": "🚀 급등주", "action": "message", "messageText": "/급등"},
+            {"label": "📺 광고 +150만", "action": "message", "messageText": "/광고"},
+        ]
+        buttons.extend(self._get_game_buttons())
+        return KakaoResponse.quick_replies(msg, buttons)
 
     def handle_ad(self) -> Dict:
         """광고 시청"""
         success, reward, remaining, cash = UserService.watch_ad(self.db, self.kakao_id)
-        
+
         if not success and reward == 0 and remaining == 0 and cash == 0:
             return KakaoResponse.simple_text("먼저 /시작 으로 게임을 시작해주세요.")
-        
+
         if success:
             msg = Messages.AD_SUCCESS.format(
                 reward=reward,
                 remaining=remaining,
                 cash=cash
             )
-            return KakaoResponse.quick_replies(
-                msg,
-                [
-                    {"label": "🚀 급등주", "action": "message", "messageText": "/급등"},
-                    {"label": "📺 광고 한번 더", "action": "message", "messageText": "/광고"},
-                    {"label": "🎫 복권", "action": "message", "messageText": "/복권"},
-                    {"label": "🎰 게임", "action": "message", "messageText": "/게임"}
-                ]
-            )
+            buttons = [
+                {"label": "🚀 급등주", "action": "message", "messageText": "/급등"},
+                {"label": "📺 광고 한번 더", "action": "message", "messageText": "/광고"},
+            ]
+            buttons.extend(self._get_game_buttons())
+            return KakaoResponse.quick_replies(msg, buttons)
         else:
+            buttons = [
+                {"label": "🚀 급등주", "action": "message", "messageText": "/급등"},
+            ]
+            buttons.extend(self._get_game_buttons())
             return KakaoResponse.quick_replies(
                 Messages.AD_LIMIT.format(max_ads=GameConfig.MAX_ADS_PER_DAY),
-                [
-                    {"label": "🚀 급등주", "action": "message", "messageText": "/급등"},
-                    {"label": "🎫 복권", "action": "message", "messageText": "/복권"},
-                    {"label": "🎰 게임", "action": "message", "messageText": "/게임"}
-                ]
+                buttons
             )
     
     def handle_price(self) -> Dict:

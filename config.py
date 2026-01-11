@@ -2,9 +2,37 @@
 주식왕 봇 설정 파일
 """
 import os
+from datetime import datetime
+import pytz
 from dotenv import load_dotenv
 
 load_dotenv()
+
+# 한국 시간대
+KST = pytz.timezone('Asia/Seoul')
+
+
+def is_market_closed() -> bool:
+    """
+    장 마감 시간인지 확인
+    - 주말: True
+    - 평일 09:00~15:30: False (장 중)
+    - 평일 15:30 이후 또는 09:00 이전: True (장 마감)
+    """
+    now = datetime.now(KST)
+
+    # 주말 체크 (토=5, 일=6)
+    if now.weekday() >= 5:
+        return True
+
+    # 장 시간 체크 (09:00 ~ 15:30)
+    market_open = now.replace(hour=9, minute=0, second=0, microsecond=0)
+    market_close = now.replace(hour=15, minute=30, second=0, microsecond=0)
+
+    if now < market_open or now > market_close:
+        return True
+
+    return False
 
 # ===========================================
 # 데이터베이스 설정
