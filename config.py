@@ -69,11 +69,11 @@ class CacheConfig:
 # 응답 메시지
 # ===========================================
 class Messages:
-    WELCOME = """🎮 **주식왕**에 오신 것을 환영합니다!
+    WELCOME = """🎮 주식왕에 오신 것을 환영합니다!
 
 💰 초기 자금 {initial_cash:,}원이 지급되었습니다.
 
-📌 **기본 명령어**
+📌 기본 명령어
 /출석 - 매일 {attendance:,}원 받기
 /광고 - 광고 보고 {ad:,}원 받기 (1일 {max_ads}회)
 /급등 - 오늘의 급등주 확인
@@ -83,42 +83,42 @@ class Messages:
 /미션 - 일간 미션 확인
 /도움말 - 전체 명령어"""
 
-    HELP = """📖 **주식왕 명령어 안내**
+    HELP = """📖 주식왕 명령어 안내
 
-💵 **재화 획득**
+💵 재화 획득
 /출석 - 일일 출석 보상 (200만원)
 /광고 - 광고 시청 보상 (150만원, 1일 3회)
 
-📊 **주식 거래**
+📊 주식 거래
 /시세 [종목명] - 시세 조회
 /매수 [종목명] [수량] - 주식 매수
 /매도 [종목명] [수량] - 주식 매도
 /전량매수 [종목명] - 최대 매수
 /전량매도 [종목명] - 전량 매도
 
-📈 **시장 정보**
+📈 시장 정보
 /시장 - KOSPI/KOSDAQ 지수
 /급등 - 급등주 TOP 10
 /급락 - 급락주 TOP 10
 /인기 - 거래량 TOP 10
 /검색 [키워드] - 종목 검색
 
-💼 **내 정보**
+💼 내 정보
 /잔고 - 보유 현금
 /포트폴리오 - 전체 자산
 /거래내역 - 최근 거래
 
-🎯 **미션 & 업적**
+🎯 미션 & 업적
 /미션 - 일간 미션 현황
 /업적 - 업적 달성 현황
 
-🏆 **경쟁**
+🏆 경쟁
 /랭킹 - 수익률 TOP 10
 /내순위 - 내 현재 순위"""
 
     ALREADY_REGISTERED = "이미 주식왕에 가입되어 있습니다!"
-    
-    ATTENDANCE_SUCCESS = """✅ **출석 완료!**
+
+    ATTENDANCE_SUCCESS = """✅ 출석 완료!
 
 💰 +{reward:,}원 지급!
 🔥 연속 출석: {streak}일
@@ -130,7 +130,7 @@ class Messages:
 내일 다시 출석해주세요.
 🔥 현재 연속 출석: {streak}일"""
 
-    AD_SUCCESS = """📺 **광고 시청 완료!**
+    AD_SUCCESS = """📺 광고 시청 완료!
 
 💰 +{reward:,}원 지급!
 📍 오늘 남은 횟수: {remaining}회
@@ -142,7 +142,7 @@ class Messages:
 내일 다시 시청해주세요.
 (1일 최대 {max_ads}회)"""
 
-    STOCK_PRICE = """📊 **{name}** ({code})
+    STOCK_PRICE = """📊 {name} ({code})
 
 💵 현재가: {price:,}원
 📈 전일대비: {change:+.2f}%
@@ -151,7 +151,7 @@ class Messages:
 
     STOCK_NOT_FOUND = "❌ '{query}' 종목을 찾을 수 없습니다."
 
-    BUY_SUCCESS = """✅ **매수 완료!**
+    BUY_SUCCESS = """✅ 매수 완료!
 
 📈 {name} {quantity:,}주
 💵 체결가: {price:,}원
@@ -160,7 +160,7 @@ class Messages:
 
 잔여 현금: {cash:,}원"""
 
-    SELL_SUCCESS = """✅ **매도 완료!**
+    SELL_SUCCESS = """✅ 매도 완료!
 
 📉 {name} {quantity:,}주
 💵 체결가: {price:,}원
@@ -170,36 +170,36 @@ class Messages:
 
 잔여 현금: {cash:,}원"""
 
-    NOT_ENOUGH_CASH = """❌ **잔고가 부족합니다!**
+    NOT_ENOUGH_CASH = """❌ 잔고가 부족합니다!
 
 필요 금액: {required:,}원
 보유 현금: {cash:,}원
 부족 금액: {shortage:,}원"""
 
-    NOT_ENOUGH_STOCK = """❌ **보유 수량이 부족합니다!**
+    NOT_ENOUGH_STOCK = """❌ 보유 수량이 부족합니다!
 
 매도 요청: {requested:,}주
 보유 수량: {holding:,}주"""
 
-    BALANCE = """💰 **내 잔고**
+    BALANCE = """💰 내 잔고
 
 현금: {cash:,}원"""
 
-    PORTFOLIO = """💼 **내 포트폴리오**
+    PORTFOLIO = """💼 내 포트폴리오
 
 💰 보유 현금: {cash:,}원
 
-📈 **보유 주식**
+📈 보유 주식
 {holdings}
 
-📊 **총 자산: {total:,}원**
-📈 **총 수익률: {profit_rate:+.2f}%**"""
+📊 총 자산: {total:,}원
+📈 총 수익률: {profit_rate:+.2f}%"""
 
-    RANKING = """🏆 **수익률 랭킹 TOP 10**
+    RANKING = """🏆 수익률 랭킹 TOP 10
 
 {ranking_list}"""
 
-    MY_RANK = """📍 **내 순위**
+    MY_RANK = """📍 내 순위
 
 🏆 {rank}위 / 전체 {total}명
 📈 수익률: {profit_rate:+.2f}%
