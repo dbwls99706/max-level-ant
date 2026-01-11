@@ -2,8 +2,7 @@
 데이터베이스 연결 및 세션 관리
 """
 from sqlalchemy import create_engine
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.orm import sessionmaker, declarative_base
 from config import DATABASE_URL
 
 # SQLite를 사용할 경우 check_same_thread 옵션 필요
