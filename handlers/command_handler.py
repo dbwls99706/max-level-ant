@@ -108,8 +108,9 @@ class CommandHandler:
             return KakaoResponse.quick_replies(
                 welcome_msg,
                 [
+                    {"label": "📈 매수", "action": "message", "messageText": "/시세 삼성전자"},
+                    {"label": "📉 매도", "action": "message", "messageText": "/포트폴리오"},
                     {"label": "📅 출석", "action": "message", "messageText": "/출석"},
-                    {"label": "💰 잔고", "action": "message", "messageText": "/잔고"},
                     {"label": "📖 도움말", "action": "message", "messageText": "/도움말"}
                 ]
             )
@@ -232,12 +233,12 @@ class CommandHandler:
         if data.get("mission_reward"):
             mr = data["mission_reward"]
             bonus_text = " (보너스 요일!)" if mr.get("is_bonus_day") else ""
-            msg += f"\n\n🎯 **일간 미션 완료!**{bonus_text}\n💰 +{mr['reward']:,}원 획득!"
+            msg += f"\n\n🎯 일간 미션 완료!{bonus_text}\n💰 +{mr['reward']:,}원 획득!"
 
         # 업적 달성 알림
         if data.get("new_achievements"):
             for ach in data["new_achievements"]:
-                msg += f"\n\n🏆 **업적 달성: {ach['name']}!**\n💰 +{ach['reward']:,}원 획득!"
+                msg += f"\n\n🏆 업적 달성: {ach['name']}!\n💰 +{ach['reward']:,}원 획득!"
 
         return KakaoResponse.quick_replies(
             msg,
@@ -296,12 +297,12 @@ class CommandHandler:
         if data.get("mission_reward"):
             mr = data["mission_reward"]
             bonus_text = " (보너스 요일!)" if mr.get("is_bonus_day") else ""
-            msg += f"\n\n🎯 **일간 미션 완료!**{bonus_text}\n💰 +{mr['reward']:,}원 획득!"
+            msg += f"\n\n🎯 일간 미션 완료!{bonus_text}\n💰 +{mr['reward']:,}원 획득!"
 
         # 업적 달성 알림
         if data.get("new_achievements"):
             for ach in data["new_achievements"]:
-                msg += f"\n\n🏆 **업적 달성: {ach['name']}!**\n💰 +{ach['reward']:,}원 획득!"
+                msg += f"\n\n🏆 업적 달성: {ach['name']}!\n💰 +{ach['reward']:,}원 획득!"
 
         return KakaoResponse.quick_replies(
             msg,
@@ -496,7 +497,7 @@ class CommandHandler:
         if not stocks:
             return KakaoResponse.simple_text("거래량 데이터를 조회할 수 없습니다.")
 
-        msg = "📊 **거래량 TOP 10**\n"
+        msg = "📊 거래량 TOP 10\n"
         for i, s in enumerate(stocks, 1):
             emoji = "📈" if s["change"] >= 0 else "📉"
             msg += f"\n{i}. {s['name']}"
@@ -517,7 +518,7 @@ class CommandHandler:
         if not transactions:
             return KakaoResponse.simple_text("거래 내역이 없습니다.\n\n/시세 [종목명] 으로 주식을 검색해보세요!")
 
-        msg = "📜 **최근 거래 내역**\n"
+        msg = "📜 최근 거래 내역\n"
         for t in transactions:
             emoji = "📈" if t.trade_type == "BUY" else "📉"
             trade_type_str = "매수" if t.trade_type == "BUY" else "매도"
@@ -547,7 +548,7 @@ class CommandHandler:
         if not stocks:
             return KakaoResponse.simple_text("급등주 데이터를 조회할 수 없습니다.")
 
-        msg = "🚀 **오늘의 급등주 TOP 10**\n"
+        msg = "🚀 오늘의 급등주 TOP 10\n"
         for i, s in enumerate(stocks, 1):
             msg += f"\n{i}. {s['name']}"
             msg += f"\n   {s['price']:,}원 (📈 {s['change']:+.2f}%)"
@@ -568,7 +569,7 @@ class CommandHandler:
         if not stocks:
             return KakaoResponse.simple_text("급락주 데이터를 조회할 수 없습니다.")
 
-        msg = "📉 **오늘의 급락주 TOP 10**\n"
+        msg = "📉 오늘의 급락주 TOP 10\n"
         for i, s in enumerate(stocks, 1):
             msg += f"\n{i}. {s['name']}"
             msg += f"\n   {s['price']:,}원 (🔻 {s['change']:+.2f}%)"
@@ -589,18 +590,18 @@ class CommandHandler:
         if not market:
             return KakaoResponse.simple_text("시장 데이터를 조회할 수 없습니다.")
 
-        msg = "📈 **시장 현황**\n"
+        msg = "📈 시장 현황\n"
 
         if "kospi" in market:
             k = market["kospi"]
             emoji = "🔺" if k["change"] >= 0 else "🔻"
-            msg += f"\n🇰🇷 **KOSPI**"
+            msg += f"\n🇰🇷 KOSPI"
             msg += f"\n   {k['price']:,.2f} ({k['change']:+.2f}%) {emoji}\n"
 
         if "kosdaq" in market:
             k = market["kosdaq"]
             emoji = "🔺" if k["change"] >= 0 else "🔻"
-            msg += f"\n💹 **KOSDAQ**"
+            msg += f"\n💹 KOSDAQ"
             msg += f"\n   {k['price']:,.2f} ({k['change']:+.2f}%) {emoji}\n"
 
         return KakaoResponse.quick_replies(
@@ -624,7 +625,7 @@ class CommandHandler:
         # 주간 보너스 체크
         bonus_text = ""
         if status["is_bonus_day"]:
-            bonus_text = f"\n\n🎉 **오늘은 보너스 요일!** (보상 {status['bonus_multiplier']}배)"
+            bonus_text = f"\n\n🎉 오늘은 보너스 요일! (보상 {status['bonus_multiplier']}배)"
 
         # 미션 상태
         if mission["completed"]:
@@ -632,9 +633,9 @@ class CommandHandler:
         else:
             mission_status = f"{mission['progress']}/{mission['target']}회"
 
-        msg = f"""📋 **일간 미션**{bonus_text}
+        msg = f"""📋 일간 미션{bonus_text}
 
-🎯 **오늘의 미션**: {GameConfig.DAILY_MISSION_TRADE_COUNT}회 거래하기
+🎯 오늘의 미션: {GameConfig.DAILY_MISSION_TRADE_COUNT}회 거래하기
 📊 진행 상황: {mission_status}
 💰 보상: {mission['reward']:,}원
 
@@ -657,20 +658,20 @@ class CommandHandler:
 
         status = MissionService.get_mission_status(self.db, self.kakao_id)
 
-        msg = f"""🏆 **업적 현황
+        msg = f"""🏆 업적 현황
 달성: {status['achievements_completed']}/{status['achievements_total']}개
 
 """
         # 달성한 업적
         if status["achievements"]:
-            msg += "**✅ 달성한 업적**\n"
+            msg += "✅ 달성한 업적\n"
             for ach in status["achievements"]:
                 msg += f"{ach['icon']} {ach['name']}\n"
             msg += "\n"
 
         # 미달성 업적 (처음 3개만)
         if status["available_achievements"]:
-            msg += "**🎯 도전 중**\n"
+            msg += "🎯 도전 중\n"
             for ach in status["available_achievements"][:3]:
                 msg += f"⬜ {ach['name']}: {ach['description']}\n"
                 msg += f"   보상: {ach['reward']:,}원\n"
