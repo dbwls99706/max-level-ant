@@ -49,6 +49,19 @@ if DATABASE_URL.startswith("postgres://"):
 
 
 # ===========================================
+# 한국투자증권 KIS API 설정
+# ===========================================
+class KISConfig:
+    APP_KEY = os.getenv("KIS_APP_KEY", "")
+    APP_SECRET = os.getenv("KIS_APP_SECRET", "")
+    BASE_URL = os.getenv("KIS_BASE_URL", "https://openapi.koreainvestment.com:9443")
+
+    @classmethod
+    def is_configured(cls) -> bool:
+        return bool(cls.APP_KEY and cls.APP_SECRET)
+
+
+# ===========================================
 # 게임 설정
 # ===========================================
 class GameConfig:

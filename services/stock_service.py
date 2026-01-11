@@ -1,29 +1,247 @@
 """
 주식 시세 조회 서비스
-- 네이버 금융 API를 사용하여 실시간 시세 조회
-- pykrx 백업 사용
-- 종목 검색
-- 캐싱
+- 한국투자증권 KIS API 사용 (공식 API)
+- 실시간 주가, 거래량, 등락률 조회
 """
 from datetime import datetime, timedelta
 from typing import Optional, Dict, List
 from cachetools import TTLCache
 import requests
-import traceback
+import json
 
-from config import CacheConfig
+from config import CacheConfig, KISConfig
 
-# pykrx 임포트
-try:
-    from pykrx import stock
-    PYKRX_AVAILABLE = True
-    print("✅ pykrx 모듈 로드 성공")
-except ImportError as e:
-    PYKRX_AVAILABLE = False
-    print(f"⚠️ pykrx ImportError: {e}")
-except Exception as e:
-    PYKRX_AVAILABLE = False
-    print(f"⚠️ pykrx 로드 실패: {type(e).__name__}: {e}")
+
+class KISAPIClient:
+    """한국투자증권 API 클라이언트"""
+
+    _access_token = None
+    _token_expires_at = None
+
+    @classmethod
+    def get_access_token(cls) -> Optional[str]:
+        """OAuth 접근 토큰 발급 (24시간 유효)"""
+        if not KISConfig.is_configured():
+            print("❌ KIS API 설정이 없습니다. 환경변수를 확인하세요.")
+            return None
+
+        # 토큰이 아직 유효하면 재사용
+        if cls._access_token and cls._token_expires_at:
+            if datetime.now() < cls._token_expires_at:
+                return cls._access_token
+
+        try:
+            url = f"{KISConfig.BASE_URL}/oauth2/tokenP"
+            headers = {"Content-Type": "application/json"}
+            body = {
+                "grant_type": "client_credentials",
+                "appkey": KISConfig.APP_KEY,
+                "appsecret": KISConfig.APP_SECRET
+            }
+
+            resp = requests.post(url, headers=headers, json=body, timeout=10)
+
+            if resp.status_code == 200:
+                data = resp.json()
+                cls._access_token = data.get("access_token")
+                # 토큰 만료시간 설정 (23시간 - 여유 1시간)
+                cls._token_expires_at = datetime.now() + timedelta(hours=23)
+                print("✅ KIS API 토큰 발급 성공")
+                return cls._access_token
+            else:
+                print(f"❌ KIS 토큰 발급 실패: {resp.status_code} - {resp.text}")
+                return None
+
+        except Exception as e:
+            print(f"❌ KIS 토큰 발급 에러: {e}")
+            return None
+
+    @classmethod
+    def _get_headers(cls, tr_id: str) -> Optional[Dict]:
+        """API 요청 헤더 생성"""
+        token = cls.get_access_token()
+        if not token:
+            return None
+
+        return {
+            "Content-Type": "application/json; charset=utf-8",
+            "authorization": f"Bearer {token}",
+            "appkey": KISConfig.APP_KEY,
+            "appsecret": KISConfig.APP_SECRET,
+            "tr_id": tr_id,
+        }
+
+    @classmethod
+    def get_stock_price(cls, stock_code: str) -> Optional[Dict]:
+        """
+        주식 현재가 조회
+        tr_id: FHKST01010100
+        """
+        headers = cls._get_headers("FHKST01010100")
+        if not headers:
+            return None
+
+        try:
+            url = f"{KISConfig.BASE_URL}/uapi/domestic-stock/v1/quotations/inquire-price"
+            params = {
+                "FID_COND_MRKT_DIV_CODE": "J",  # 주식
+                "FID_INPUT_ISCD": stock_code
+            }
+
+            resp = requests.get(url, headers=headers, params=params, timeout=10)
+
+            if resp.status_code == 200:
+                data = resp.json()
+                if data.get("rt_cd") == "0":  # 성공
+                    output = data.get("output", {})
+                    return {
+                        "code": stock_code,
+                        "name": output.get("hts_kor_isnm", stock_code),
+                        "price": int(output.get("stck_prpr", 0)),
+                        "change": float(output.get("prdy_ctrt", 0)),
+                        "open": int(output.get("stck_oprc", 0)),
+                        "high": int(output.get("stck_hgpr", 0)),
+                        "low": int(output.get("stck_lwpr", 0)),
+                        "volume": int(output.get("acml_vol", 0)),
+                    }
+                else:
+                    print(f"❌ KIS API 에러: {data.get('msg1')}")
+
+        except Exception as e:
+            print(f"❌ 주식 시세 조회 실패 ({stock_code}): {e}")
+
+        return None
+
+    @classmethod
+    def get_volume_rank(cls, market: str = "J") -> List[Dict]:
+        """
+        거래량 순위 조회
+        tr_id: FHPST01710000
+        """
+        headers = cls._get_headers("FHPST01710000")
+        if not headers:
+            return []
+
+        try:
+            url = f"{KISConfig.BASE_URL}/uapi/domestic-stock/v1/quotations/volume-rank"
+            params = {
+                "FID_COND_MRKT_DIV_CODE": market,
+                "FID_COND_SCR_DIV_CODE": "20101",
+                "FID_INPUT_ISCD": "0000",
+                "FID_DIV_CLS_CODE": "0",
+                "FID_BLNG_CLS_CODE": "0",
+                "FID_TRGT_CLS_CODE": "111111111",
+                "FID_TRGT_EXLS_CLS_CODE": "000000",
+                "FID_INPUT_PRICE_1": "",
+                "FID_INPUT_PRICE_2": "",
+                "FID_VOL_CNT": "",
+                "FID_INPUT_DATE_1": "",
+            }
+
+            resp = requests.get(url, headers=headers, params=params, timeout=10)
+
+            if resp.status_code == 200:
+                data = resp.json()
+                if data.get("rt_cd") == "0":
+                    results = []
+                    for item in data.get("output", [])[:10]:
+                        results.append({
+                            "code": item.get("mksc_shrn_iscd", ""),
+                            "name": item.get("hts_kor_isnm", ""),
+                            "price": int(item.get("stck_prpr", 0)),
+                            "change": float(item.get("prdy_ctrt", 0)),
+                            "volume": int(item.get("acml_vol", 0)),
+                        })
+                    return results
+
+        except Exception as e:
+            print(f"❌ 거래량 순위 조회 실패: {e}")
+
+        return []
+
+    @classmethod
+    def get_fluctuation_rank(cls, sort: str = "1") -> List[Dict]:
+        """
+        등락률 순위 조회
+        sort: 1=상승, 2=하락
+        tr_id: FHPST01700000
+        """
+        headers = cls._get_headers("FHPST01700000")
+        if not headers:
+            return []
+
+        try:
+            url = f"{KISConfig.BASE_URL}/uapi/domestic-stock/v1/quotations/chk-fluctuation-detail"
+            params = {
+                "fid_cond_mrkt_div_code": "J",
+                "fid_cond_scr_div_code": "16174",
+                "fid_input_iscd": "0000",
+                "fid_rank_sort_cls_code": sort,  # 1:상승, 2:하락
+                "fid_input_cnt_1": "0",
+                "fid_prc_cls_code": "0",
+                "fid_input_price_1": "",
+                "fid_input_price_2": "",
+                "fid_vol_cnt": "",
+                "fid_trgt_cls_code": "0",
+                "fid_trgt_exls_cls_code": "0",
+                "fid_div_cls_code": "0",
+                "fid_rsfl_rate1": "",
+                "fid_rsfl_rate2": "",
+            }
+
+            resp = requests.get(url, headers=headers, params=params, timeout=10)
+
+            if resp.status_code == 200:
+                data = resp.json()
+                if data.get("rt_cd") == "0":
+                    results = []
+                    for item in data.get("output", [])[:10]:
+                        results.append({
+                            "code": item.get("stck_shrn_iscd", ""),
+                            "name": item.get("hts_kor_isnm", ""),
+                            "price": int(item.get("stck_prpr", 0)),
+                            "change": float(item.get("prdy_ctrt", 0)),
+                            "volume": int(item.get("acml_vol", 0)),
+                        })
+                    return results
+
+        except Exception as e:
+            print(f"❌ 등락률 순위 조회 실패: {e}")
+
+        return []
+
+    @classmethod
+    def get_market_index(cls, index_code: str) -> Optional[Dict]:
+        """
+        시장 지수 조회 (KOSPI: 0001, KOSDAQ: 1001)
+        tr_id: FHPUP02100000
+        """
+        headers = cls._get_headers("FHPUP02100000")
+        if not headers:
+            return None
+
+        try:
+            url = f"{KISConfig.BASE_URL}/uapi/domestic-stock/v1/quotations/inquire-index-price"
+            params = {
+                "FID_COND_MRKT_DIV_CODE": "U",
+                "FID_INPUT_ISCD": index_code
+            }
+
+            resp = requests.get(url, headers=headers, params=params, timeout=10)
+
+            if resp.status_code == 200:
+                data = resp.json()
+                if data.get("rt_cd") == "0":
+                    output = data.get("output", {})
+                    return {
+                        "price": float(output.get("bstp_nmix_prpr", 0)),
+                        "change": float(output.get("bstp_nmix_prdy_ctrt", 0)),
+                    }
+
+        except Exception as e:
+            print(f"❌ 지수 조회 실패 ({index_code}): {e}")
+
+        return None
 
 
 class StockService:
@@ -32,223 +250,116 @@ class StockService:
     # 시세 캐시 (TTL: 1분)
     _price_cache = TTLCache(maxsize=500, ttl=CacheConfig.STOCK_PRICE_TTL)
 
-    # 종목 코드-이름 매핑 캐시
-    _ticker_cache = None
-    _ticker_cache_date = None
-
-    # HTTP 요청 헤더
-    HEADERS = {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+    # 종목 코드-이름 매핑 (주요 종목)
+    # 공개 정보로 KRX에서 제공하는 종목 코드
+    STOCK_LIST = {
+        # 시가총액 상위
+        "005930": "삼성전자",
+        "000660": "SK하이닉스",
+        "373220": "LG에너지솔루션",
+        "207940": "삼성바이오로직스",
+        "005380": "현대차",
+        "006400": "삼성SDI",
+        "051910": "LG화학",
+        "000270": "기아",
+        "035420": "NAVER",
+        "005490": "POSCO홀딩스",
+        "035720": "카카오",
+        "055550": "신한지주",
+        "105560": "KB금융",
+        "012330": "현대모비스",
+        "068270": "셀트리온",
+        "028260": "삼성물산",
+        "003670": "포스코퓨처엠",
+        "066570": "LG전자",
+        "086790": "하나금융지주",
+        "003550": "LG",
+        "032830": "삼성생명",
+        "015760": "한국전력",
+        "034730": "SK",
+        "096770": "SK이노베이션",
+        "017670": "SK텔레콤",
+        "009150": "삼성전기",
+        "018260": "삼성에스디에스",
+        "030200": "KT",
+        "033780": "KT&G",
+        "010130": "고려아연",
+        "259960": "크래프톤",
+        "000810": "삼성화재",
+        "034220": "LG디스플레이",
+        "011200": "HMM",
+        "010950": "S-Oil",
+        "316140": "우리금융지주",
+        "024110": "기업은행",
+        "003490": "대한항공",
+        "009540": "HD한국조선해양",
+        "010140": "삼성중공업",
+        "036570": "엔씨소프트",
+        "035250": "강원랜드",
+        "090430": "아모레퍼시픽",
+        "011170": "롯데케미칼",
+        "005850": "에스엘",
+        "000720": "현대건설",
+        "047050": "포스코인터내셔널",
+        "051900": "LG생활건강",
+        "326030": "SK바이오팜",
+        "377300": "카카오페이",
+        "352820": "하이브",
+        "263750": "펄어비스",
+        "041510": "에스엠",
+        "112040": "위메이드",
+        "293490": "카카오게임즈",
     }
 
-    @classmethod
-    def _fetch_naver_stock_list(cls) -> Dict[str, str]:
-        """
-        네이버 금융에서 종목 리스트 가져오기
-        Returns: {종목코드: 종목명}
-        """
-        tickers = {}
-
-        try:
-            # KOSPI 종목
-            kospi_url = "https://m.stock.naver.com/api/stocks/marketValue/KOSPI?page=1&pageSize=2000"
-            resp = requests.get(kospi_url, headers=cls.HEADERS, timeout=10)
-            if resp.status_code == 200:
-                data = resp.json()
-                for item in data.get("stocks", []):
-                    code = item.get("stockCode", "")
-                    name = item.get("stockName", "")
-                    if code and name:
-                        tickers[code] = name
-                print(f"✅ KOSPI 종목 로드: {len(tickers)}개")
-        except Exception as e:
-            print(f"❌ KOSPI 종목 로드 실패: {e}")
-
-        try:
-            # KOSDAQ 종목
-            kosdaq_url = "https://m.stock.naver.com/api/stocks/marketValue/KOSDAQ?page=1&pageSize=2000"
-            resp = requests.get(kosdaq_url, headers=cls.HEADERS, timeout=10)
-            if resp.status_code == 200:
-                data = resp.json()
-                kosdaq_count = 0
-                for item in data.get("stocks", []):
-                    code = item.get("stockCode", "")
-                    name = item.get("stockName", "")
-                    if code and name:
-                        tickers[code] = name
-                        kosdaq_count += 1
-                print(f"✅ KOSDAQ 종목 로드: {kosdaq_count}개")
-        except Exception as e:
-            print(f"❌ KOSDAQ 종목 로드 실패: {e}")
-
-        return tickers
-
-    @classmethod
-    def _fetch_naver_price(cls, code: str) -> Optional[Dict]:
-        """
-        네이버 금융에서 개별 종목 시세 가져오기
-        """
-        try:
-            url = f"https://m.stock.naver.com/api/stock/{code}/basic"
-            resp = requests.get(url, headers=cls.HEADERS, timeout=10)
-
-            if resp.status_code != 200:
-                return None
-
-            data = resp.json()
-
-            # 현재가 파싱
-            close_price = data.get("closePrice", "0").replace(",", "")
-            open_price = data.get("openPrice", "0").replace(",", "")
-            high_price = data.get("highPrice", "0").replace(",", "")
-            low_price = data.get("lowPrice", "0").replace(",", "")
-            volume = data.get("accumulatedTradingVolume", "0").replace(",", "")
-
-            # 등락률
-            compare_price = data.get("compareToPreviousClosePrice", "0").replace(",", "")
-            fluctuations_ratio = data.get("fluctuationsRatio", "0").replace(",", "")
-
-            return {
-                "code": code,
-                "name": data.get("stockName", code),
-                "price": int(close_price) if close_price else 0,
-                "change": float(fluctuations_ratio) if fluctuations_ratio else 0.0,
-                "open": int(open_price) if open_price else 0,
-                "high": int(high_price) if high_price else 0,
-                "low": int(low_price) if low_price else 0,
-                "volume": int(volume) if volume else 0
-            }
-
-        except Exception as e:
-            print(f"❌ 네이버 시세 조회 실패 ({code}): {e}")
-            return None
-
-    @classmethod
-    def _fetch_pykrx_tickers(cls) -> Dict[str, str]:
-        """
-        pykrx에서 종목 리스트 가져오기
-        """
-        if not PYKRX_AVAILABLE:
-            return {}
-
-        try:
-            # 최근 거래일 찾기
-            today = datetime.now()
-            trading_date = None
-
-            for i in range(10):
-                check_date = (today - timedelta(days=i)).strftime("%Y%m%d")
-                try:
-                    tickers = stock.get_market_ticker_list(check_date, market="KOSPI")
-                    if tickers:
-                        trading_date = check_date
-                        break
-                except:
-                    continue
-
-            if not trading_date:
-                print("❌ pykrx 거래일 찾기 실패")
-                return {}
-
-            kospi = stock.get_market_ticker_and_name(trading_date, market="KOSPI")
-            kosdaq = stock.get_market_ticker_and_name(trading_date, market="KOSDAQ")
-
-            result = {**kospi, **kosdaq}
-            print(f"✅ pykrx 종목 로드: {len(result)}개 (기준일: {trading_date})")
-            return result
-
-        except Exception as e:
-            print(f"❌ pykrx 종목 로드 실패: {e}")
-            traceback.print_exc()
-            return {}
-
-    @classmethod
-    def _get_tickers(cls) -> Dict[str, str]:
-        """
-        종목 코드-이름 매핑 조회 (캐싱)
-        Returns: {종목코드: 종목명}
-        """
-        today = datetime.now().date()
-
-        # 캐시가 유효하면 반환
-        if cls._ticker_cache and cls._ticker_cache_date == today:
-            return cls._ticker_cache
-
-        # 1. 네이버 금융 API 시도
-        tickers = cls._fetch_naver_stock_list()
-
-        # 2. 네이버 실패시 pykrx 시도
-        if not tickers:
-            print("⚠️ 네이버 API 실패, pykrx 시도...")
-            tickers = cls._fetch_pykrx_tickers()
-
-        if tickers:
-            cls._ticker_cache = tickers
-            cls._ticker_cache_date = today
-            print(f"✅ 총 종목 로드 완료: {len(tickers)}개")
-        else:
-            print("❌ 종목 로드 실패 - 모든 소스 실패")
-            cls._ticker_cache = {}
-
-        return cls._ticker_cache
+    # 이름 -> 코드 역매핑
+    _name_to_code = {v: k for k, v in STOCK_LIST.items()}
 
     @classmethod
     def search_stock(cls, query: str) -> Optional[Dict]:
         """
         종목 검색 (이름 또는 코드)
-        Returns: {"code": "005930", "name": "삼성전자"} or None
         """
         query = query.strip()
-        tickers = cls._get_tickers()
-
-        if not tickers:
-            return None
 
         # 1. 정확한 코드 매칭
-        if query in tickers:
-            return {"code": query, "name": tickers[query]}
+        if query in cls.STOCK_LIST:
+            return {"code": query, "name": cls.STOCK_LIST[query]}
 
         # 2. 정확한 이름 매칭
-        for code, name in tickers.items():
-            if name == query:
-                return {"code": code, "name": name}
+        if query in cls._name_to_code:
+            code = cls._name_to_code[query]
+            return {"code": code, "name": query}
 
-        # 3. 부분 이름 매칭 (첫 번째 결과)
-        for code, name in tickers.items():
+        # 3. 부분 이름 매칭
+        for code, name in cls.STOCK_LIST.items():
             if query in name:
                 return {"code": code, "name": name}
 
-        # 4. 공백 제거하고 다시 검색
-        query_no_space = query.replace(" ", "")
-        for code, name in tickers.items():
-            if query_no_space in name.replace(" ", ""):
+        # 4. 공백 제거 후 검색
+        query_clean = query.replace(" ", "")
+        for code, name in cls.STOCK_LIST.items():
+            if query_clean in name.replace(" ", ""):
                 return {"code": code, "name": name}
 
         return None
 
     @classmethod
     def search_similar_stocks(cls, query: str, limit: int = 5) -> List[Dict]:
-        """
-        유사 종목 검색 (부분 매칭)
-        """
+        """유사 종목 검색"""
         query = query.strip().replace(" ", "")
-        tickers = cls._get_tickers()
-
         results = []
 
-        # 부분 매칭
-        for code, name in tickers.items():
+        for code, name in cls.STOCK_LIST.items():
             name_clean = name.replace(" ", "")
-            if query in name_clean or any(char in name_clean for char in query if char):
+            if query in name_clean or any(c in name_clean for c in query):
                 results.append({"code": code, "name": name})
                 if len(results) >= limit:
                     break
 
-        # 결과가 없으면 첫 글자로 시작하는 종목 찾기
-        if not results and len(query) > 0:
-            first_char = query[0]
-            for code, name in tickers.items():
-                if name.startswith(first_char):
+        # 첫 글자로 시작하는 종목
+        if not results and query:
+            for code, name in cls.STOCK_LIST.items():
+                if name.startswith(query[0]):
                     results.append({"code": code, "name": name})
                     if len(results) >= limit:
                         break
@@ -257,15 +368,12 @@ class StockService:
 
     @classmethod
     def search_stocks(cls, query: str, limit: int = 10) -> List[Dict]:
-        """
-        종목 검색 (여러 결과)
-        """
+        """종목 검색 (여러 결과)"""
         query = query.strip().lower()
-        tickers = cls._get_tickers()
-
         results = []
-        for code, name in tickers.items():
-            if query in name.lower() or query in code.lower():
+
+        for code, name in cls.STOCK_LIST.items():
+            if query in name.lower() or query in code:
                 results.append({"code": code, "name": name})
                 if len(results) >= limit:
                     break
@@ -274,201 +382,53 @@ class StockService:
 
     @classmethod
     def get_price(cls, code_or_name: str) -> Optional[Dict]:
-        """
-        주식 시세 조회
-        """
-        # 종목 검색
+        """주식 시세 조회"""
         stock_info = cls.search_stock(code_or_name)
         if not stock_info:
             return None
 
         code = stock_info["code"]
-        name = stock_info["name"]
 
         # 캐시 확인
         if code in cls._price_cache:
             return cls._price_cache[code]
 
-        # 1. 네이버 금융 API 시도
-        result = cls._fetch_naver_price(code)
+        # KIS API 조회
+        result = KISAPIClient.get_stock_price(code)
 
-        # 2. 네이버 실패시 pykrx 시도
-        if not result and PYKRX_AVAILABLE:
-            try:
-                today = datetime.now()
-                today_str = today.strftime("%Y%m%d")
-                start_date = (today - timedelta(days=7)).strftime("%Y%m%d")
-
-                df = stock.get_market_ohlcv(start_date, today_str, code)
-
-                if not df.empty:
-                    latest = df.iloc[-1]
-
-                    if len(df) >= 2:
-                        prev_close = df.iloc[-2]["종가"]
-                        change = ((latest["종가"] - prev_close) / prev_close) * 100
-                    else:
-                        change = 0.0
-
-                    result = {
-                        "code": code,
-                        "name": name,
-                        "price": int(latest["종가"]),
-                        "change": round(change, 2),
-                        "open": int(latest["시가"]),
-                        "high": int(latest["고가"]),
-                        "low": int(latest["저가"]),
-                        "volume": int(latest["거래량"])
-                    }
-            except Exception as e:
-                print(f"❌ pykrx 시세 조회 실패 ({code}): {e}")
-
-        # 캐시 저장
         if result:
             cls._price_cache[code] = result
+            return result
 
-        return result
+        return None
 
     @classmethod
     def get_top_volume(cls, market: str = "KOSPI", limit: int = 10) -> List[Dict]:
-        """
-        거래량 상위 종목
-        """
-        try:
-            # 네이버 금융 API
-            url = f"https://m.stock.naver.com/api/stocks/tradingVolume/{market}?page=1&pageSize={limit}"
-            resp = requests.get(url, headers=cls.HEADERS, timeout=10)
-
-            if resp.status_code == 200:
-                data = resp.json()
-                results = []
-                for item in data.get("stocks", []):
-                    close_price = item.get("closePrice", "0").replace(",", "")
-                    volume = item.get("accumulatedTradingVolume", "0").replace(",", "")
-                    change = item.get("fluctuationsRatio", "0").replace(",", "")
-
-                    results.append({
-                        "code": item.get("stockCode", ""),
-                        "name": item.get("stockName", ""),
-                        "price": int(close_price) if close_price else 0,
-                        "volume": int(volume) if volume else 0,
-                        "change": float(change) if change else 0.0
-                    })
-                return results
-
-        except Exception as e:
-            print(f"❌ 거래량 상위 조회 실패: {e}")
-
-        return []
+        """거래량 상위 종목"""
+        market_code = "J" if market == "KOSPI" else "Q"
+        return KISAPIClient.get_volume_rank(market_code)[:limit]
 
     @classmethod
     def get_top_gainers(cls, limit: int = 10) -> List[Dict]:
-        """
-        급등주 (상승률 상위)
-        """
-        try:
-            # 네이버 금융 API - 상승률 상위
-            url = f"https://m.stock.naver.com/api/stocks/fluctuation/KOSPI?page=1&pageSize={limit}&sosok=KOSPI"
-            resp = requests.get(url, headers=cls.HEADERS, timeout=10)
-
-            if resp.status_code == 200:
-                data = resp.json()
-                results = []
-                for item in data.get("stocks", []):
-                    close_price = item.get("closePrice", "0").replace(",", "")
-                    volume = item.get("accumulatedTradingVolume", "0").replace(",", "")
-                    change = item.get("fluctuationsRatio", "0").replace(",", "")
-
-                    results.append({
-                        "code": item.get("stockCode", ""),
-                        "name": item.get("stockName", ""),
-                        "price": int(close_price) if close_price else 0,
-                        "volume": int(volume) if volume else 0,
-                        "change": float(change) if change else 0.0
-                    })
-                return results
-
-        except Exception as e:
-            print(f"❌ 급등주 조회 실패: {e}")
-
-        return []
+        """급등주 (상승률 상위)"""
+        return KISAPIClient.get_fluctuation_rank(sort="1")[:limit]
 
     @classmethod
     def get_top_losers(cls, limit: int = 10) -> List[Dict]:
-        """
-        급락주 (하락률 상위)
-        """
-        try:
-            # 네이버 금융 API - 하락률 상위
-            url = f"https://m.stock.naver.com/api/stocks/fluctuation/KOSPI?page=1&pageSize={limit}&order=desc"
-            resp = requests.get(url, headers=cls.HEADERS, timeout=10)
-
-            if resp.status_code == 200:
-                data = resp.json()
-                results = []
-                for item in data.get("stocks", []):
-                    close_price = item.get("closePrice", "0").replace(",", "")
-                    volume = item.get("accumulatedTradingVolume", "0").replace(",", "")
-                    change = item.get("fluctuationsRatio", "0").replace(",", "")
-
-                    # 하락 종목만 필터 (음수)
-                    change_val = float(change) if change else 0.0
-                    if change_val >= 0:
-                        continue
-
-                    results.append({
-                        "code": item.get("stockCode", ""),
-                        "name": item.get("stockName", ""),
-                        "price": int(close_price) if close_price else 0,
-                        "volume": int(volume) if volume else 0,
-                        "change": change_val
-                    })
-
-                    if len(results) >= limit:
-                        break
-
-                return results
-
-        except Exception as e:
-            print(f"❌ 급락주 조회 실패: {e}")
-
-        return []
+        """급락주 (하락률 상위)"""
+        return KISAPIClient.get_fluctuation_rank(sort="2")[:limit]
 
     @classmethod
     def get_market_overview(cls) -> Dict:
-        """
-        시장 전체 현황 (KOSPI/KOSDAQ 지수)
-        """
+        """시장 현황 (KOSPI/KOSDAQ 지수)"""
         result = {}
 
-        try:
-            # KOSPI 지수
-            kospi_url = "https://m.stock.naver.com/api/index/KOSPI/basic"
-            resp = requests.get(kospi_url, headers=cls.HEADERS, timeout=10)
-            if resp.status_code == 200:
-                data = resp.json()
-                close_price = data.get("closePrice", "0").replace(",", "")
-                change = data.get("fluctuationsRatio", "0").replace(",", "")
-                result["kospi"] = {
-                    "price": float(close_price) if close_price else 0.0,
-                    "change": float(change) if change else 0.0
-                }
-        except Exception as e:
-            print(f"❌ KOSPI 지수 조회 실패: {e}")
+        kospi = KISAPIClient.get_market_index("0001")
+        if kospi:
+            result["kospi"] = kospi
 
-        try:
-            # KOSDAQ 지수
-            kosdaq_url = "https://m.stock.naver.com/api/index/KOSDAQ/basic"
-            resp = requests.get(kosdaq_url, headers=cls.HEADERS, timeout=10)
-            if resp.status_code == 200:
-                data = resp.json()
-                close_price = data.get("closePrice", "0").replace(",", "")
-                change = data.get("fluctuationsRatio", "0").replace(",", "")
-                result["kosdaq"] = {
-                    "price": float(close_price) if close_price else 0.0,
-                    "change": float(change) if change else 0.0
-                }
-        except Exception as e:
-            print(f"❌ KOSDAQ 지수 조회 실패: {e}")
+        kosdaq = KISAPIClient.get_market_index("1001")
+        if kosdaq:
+            result["kosdaq"] = kosdaq
 
         return result
