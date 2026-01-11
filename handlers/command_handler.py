@@ -657,8 +657,7 @@ class CommandHandler:
 
         status = MissionService.get_mission_status(self.db, self.kakao_id)
 
-        msg = f"""🏆 **업적 현황**
-
+        msg = f"""🏆 **업적 현황
 달성: {status['achievements_completed']}/{status['achievements_total']}개
 
 """
