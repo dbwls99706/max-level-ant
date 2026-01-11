@@ -247,3 +247,126 @@ class StockService:
         except Exception as e:
             print(f"❌ 거래량 상위 조회 실패: {e}")
             return []
+
+    @classmethod
+    def get_top_gainers(cls, limit: int = 10) -> List[Dict]:
+        """
+        급등주 (상승률 상위)
+        """
+        if not PYKRX_AVAILABLE:
+            return []
+
+        try:
+            trading_date = cls._get_recent_trading_date()
+
+            # KOSPI + KOSDAQ 합쳐서 조회
+            kospi_df = stock.get_market_ohlcv(trading_date, market="KOSPI")
+            kosdaq_df = stock.get_market_ohlcv(trading_date, market="KOSDAQ")
+
+            df = pd.concat([kospi_df, kosdaq_df])
+
+            if df.empty:
+                return []
+
+            # 상승률 기준 정렬 (상위)
+            df = df.sort_values("등락률", ascending=False).head(limit)
+
+            tickers = cls._get_tickers()
+            results = []
+
+            for code in df.index:
+                name = tickers.get(code, code)
+                row = df.loc[code]
+                results.append({
+                    "code": code,
+                    "name": name,
+                    "price": int(row["종가"]),
+                    "volume": int(row["거래량"]),
+                    "change": float(row["등락률"])
+                })
+
+            return results
+
+        except Exception as e:
+            print(f"❌ 급등주 조회 실패: {e}")
+            return []
+
+    @classmethod
+    def get_top_losers(cls, limit: int = 10) -> List[Dict]:
+        """
+        급락주 (하락률 상위)
+        """
+        if not PYKRX_AVAILABLE:
+            return []
+
+        try:
+            trading_date = cls._get_recent_trading_date()
+
+            # KOSPI + KOSDAQ 합쳐서 조회
+            kospi_df = stock.get_market_ohlcv(trading_date, market="KOSPI")
+            kosdaq_df = stock.get_market_ohlcv(trading_date, market="KOSDAQ")
+
+            df = pd.concat([kospi_df, kosdaq_df])
+
+            if df.empty:
+                return []
+
+            # 하락률 기준 정렬 (하위)
+            df = df.sort_values("등락률", ascending=True).head(limit)
+
+            tickers = cls._get_tickers()
+            results = []
+
+            for code in df.index:
+                name = tickers.get(code, code)
+                row = df.loc[code]
+                results.append({
+                    "code": code,
+                    "name": name,
+                    "price": int(row["종가"]),
+                    "volume": int(row["거래량"]),
+                    "change": float(row["등락률"])
+                })
+
+            return results
+
+        except Exception as e:
+            print(f"❌ 급락주 조회 실패: {e}")
+            return []
+
+    @classmethod
+    def get_market_overview(cls) -> Dict:
+        """
+        시장 전체 현황 (KOSPI/KOSDAQ 지수)
+        """
+        if not PYKRX_AVAILABLE:
+            return {}
+
+        try:
+            trading_date = cls._get_recent_trading_date()
+
+            # 지수 조회
+            kospi = stock.get_index_ohlcv(trading_date, trading_date, "1001")  # KOSPI
+            kosdaq = stock.get_index_ohlcv(trading_date, trading_date, "2001")  # KOSDAQ
+
+            result = {}
+
+            if not kospi.empty:
+                kospi_row = kospi.iloc[-1]
+                result["kospi"] = {
+                    "price": float(kospi_row["종가"]),
+                    "change": float(kospi_row["등락률"]) if "등락률" in kospi_row else 0.0
+                }
+
+            if not kosdaq.empty:
+                kosdaq_row = kosdaq.iloc[-1]
+                result["kosdaq"] = {
+                    "price": float(kosdaq_row["종가"]),
+                    "change": float(kosdaq_row["등락률"]) if "등락률" in kosdaq_row else 0.0
+                }
+
+            return result
+
+        except Exception as e:
+            print(f"❌ 시장 현황 조회 실패: {e}")
+            return {}

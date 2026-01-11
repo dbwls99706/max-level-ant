@@ -36,7 +36,17 @@ class User(Base):
     # 광고 관련
     last_ad_date = Column(Date, nullable=True)
     ad_count_today = Column(Integer, default=0)
-    
+
+    # 일간 미션 관련
+    last_mission_date = Column(Date, nullable=True)
+    daily_trade_count = Column(Integer, default=0)
+    mission_completed = Column(Integer, default=0)  # 0: 미완료, 1: 완료
+
+    # 업적 관련 (JSON 문자열로 저장)
+    achievements = Column(String(1000), default="[]")
+    total_profit_realized = Column(BigInteger, default=0)  # 실현 수익 누적
+    total_trades = Column(Integer, default=0)  # 총 거래 횟수
+
     # 관계 설정
     holdings = relationship("Holding", back_populates="user", cascade="all, delete-orphan")
     transactions = relationship("Transaction", back_populates="user", cascade="all, delete-orphan")
