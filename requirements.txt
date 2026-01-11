@@ -12,6 +12,7 @@ pandas
 
 # HTTP
 httpx==0.26.0
+requests>=2.31.0
 
 # Utils
 python-dotenv==1.0.0

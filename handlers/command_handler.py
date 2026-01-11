@@ -844,7 +844,7 @@ class CommandHandler:
         elif result["multiplier"] > 0:
             effect = "✨ WIN! ✨"
         else:
-            effect = "💨"
+            effect = "💨 실패..."
 
         if result["profit"] >= 0:
             profit_text = f"📈 +{result['profit']:,}원"
