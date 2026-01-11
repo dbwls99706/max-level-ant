@@ -1,23 +1,29 @@
 """
 주식 시세 조회 서비스
-- pykrx를 사용하여 실시간 시세 조회
+- 네이버 금융 API를 사용하여 실시간 시세 조회
+- pykrx 백업 사용
 - 종목 검색
 - 캐싱
 """
 from datetime import datetime, timedelta
 from typing import Optional, Dict, List
 from cachetools import TTLCache
-import pandas as pd
+import requests
+import traceback
 
-# pykrx 임포트 (설치 필요: pip install pykrx)
+from config import CacheConfig
+
+# pykrx 임포트
 try:
     from pykrx import stock
     PYKRX_AVAILABLE = True
-except ImportError:
+    print("✅ pykrx 모듈 로드 성공")
+except ImportError as e:
     PYKRX_AVAILABLE = False
-    print("⚠️ pykrx가 설치되지 않았습니다. pip install pykrx")
-
-from config import CacheConfig
+    print(f"⚠️ pykrx ImportError: {e}")
+except Exception as e:
+    PYKRX_AVAILABLE = False
+    print(f"⚠️ pykrx 로드 실패: {type(e).__name__}: {e}")
 
 
 class StockService:
@@ -30,62 +36,131 @@ class StockService:
     _ticker_cache = None
     _ticker_cache_date = None
 
-    # 인기 종목 백업 (pykrx 실패 시 사용)
-    POPULAR_STOCKS = {
-        "005930": "삼성전자",
-        "000660": "SK하이닉스",
-        "035420": "NAVER",
-        "035720": "카카오",
-        "051910": "LG화학",
-        "006400": "삼성SDI",
-        "005380": "현대차",
-        "000270": "기아",
-        "068270": "셀트리온",
-        "207940": "삼성바이오로직스",
-        "005490": "POSCO홀딩스",
-        "003670": "포스코퓨처엠",
-        "028260": "삼성물산",
-        "105560": "KB금융",
-        "055550": "신한지주",
-        "066570": "LG전자",
-        "032830": "삼성생명",
-        "003550": "LG",
-        "096770": "SK이노베이션",
-        "034730": "SK",
-        "012330": "현대모비스",
-        "259960": "크래프톤",
-        "086790": "하나금융지주",
-        "015760": "한국전력",
-        "009150": "삼성전기",
-        "017670": "SK텔레콤",
-        "030200": "KT",
-        "018260": "삼성에스디에스",
-        "033780": "KT&G",
-        "010130": "고려아연",
+    # HTTP 요청 헤더
+    HEADERS = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
     }
-    
+
     @classmethod
-    def _get_recent_trading_date(cls) -> str:
+    def _fetch_naver_stock_list(cls) -> Dict[str, str]:
         """
-        최근 거래일 조회 (주말/공휴일 대비)
+        네이버 금융에서 종목 리스트 가져오기
+        Returns: {종목코드: 종목명}
         """
-        today = datetime.now()
+        tickers = {}
 
-        # 최근 10일 내에서 거래일 찾기
-        for i in range(10):
-            check_date = today - timedelta(days=i)
-            date_str = check_date.strftime("%Y%m%d")
+        try:
+            # KOSPI 종목
+            kospi_url = "https://m.stock.naver.com/api/stocks/marketValue/KOSPI?page=1&pageSize=2000"
+            resp = requests.get(kospi_url, headers=cls.HEADERS, timeout=10)
+            if resp.status_code == 200:
+                data = resp.json()
+                for item in data.get("stocks", []):
+                    code = item.get("stockCode", "")
+                    name = item.get("stockName", "")
+                    if code and name:
+                        tickers[code] = name
+                print(f"✅ KOSPI 종목 로드: {len(tickers)}개")
+        except Exception as e:
+            print(f"❌ KOSPI 종목 로드 실패: {e}")
 
-            try:
-                # 해당 날짜에 데이터가 있는지 확인
-                df = stock.get_market_ohlcv(date_str, market="KOSPI")
-                if not df.empty:
-                    return date_str
-            except:
-                continue
+        try:
+            # KOSDAQ 종목
+            kosdaq_url = "https://m.stock.naver.com/api/stocks/marketValue/KOSDAQ?page=1&pageSize=2000"
+            resp = requests.get(kosdaq_url, headers=cls.HEADERS, timeout=10)
+            if resp.status_code == 200:
+                data = resp.json()
+                kosdaq_count = 0
+                for item in data.get("stocks", []):
+                    code = item.get("stockCode", "")
+                    name = item.get("stockName", "")
+                    if code and name:
+                        tickers[code] = name
+                        kosdaq_count += 1
+                print(f"✅ KOSDAQ 종목 로드: {kosdaq_count}개")
+        except Exception as e:
+            print(f"❌ KOSDAQ 종목 로드 실패: {e}")
 
-        # 못 찾으면 오늘 날짜 반환
-        return today.strftime("%Y%m%d")
+        return tickers
+
+    @classmethod
+    def _fetch_naver_price(cls, code: str) -> Optional[Dict]:
+        """
+        네이버 금융에서 개별 종목 시세 가져오기
+        """
+        try:
+            url = f"https://m.stock.naver.com/api/stock/{code}/basic"
+            resp = requests.get(url, headers=cls.HEADERS, timeout=10)
+
+            if resp.status_code != 200:
+                return None
+
+            data = resp.json()
+
+            # 현재가 파싱
+            close_price = data.get("closePrice", "0").replace(",", "")
+            open_price = data.get("openPrice", "0").replace(",", "")
+            high_price = data.get("highPrice", "0").replace(",", "")
+            low_price = data.get("lowPrice", "0").replace(",", "")
+            volume = data.get("accumulatedTradingVolume", "0").replace(",", "")
+
+            # 등락률
+            compare_price = data.get("compareToPreviousClosePrice", "0").replace(",", "")
+            fluctuations_ratio = data.get("fluctuationsRatio", "0").replace(",", "")
+
+            return {
+                "code": code,
+                "name": data.get("stockName", code),
+                "price": int(close_price) if close_price else 0,
+                "change": float(fluctuations_ratio) if fluctuations_ratio else 0.0,
+                "open": int(open_price) if open_price else 0,
+                "high": int(high_price) if high_price else 0,
+                "low": int(low_price) if low_price else 0,
+                "volume": int(volume) if volume else 0
+            }
+
+        except Exception as e:
+            print(f"❌ 네이버 시세 조회 실패 ({code}): {e}")
+            return None
+
+    @classmethod
+    def _fetch_pykrx_tickers(cls) -> Dict[str, str]:
+        """
+        pykrx에서 종목 리스트 가져오기
+        """
+        if not PYKRX_AVAILABLE:
+            return {}
+
+        try:
+            # 최근 거래일 찾기
+            today = datetime.now()
+            trading_date = None
+
+            for i in range(10):
+                check_date = (today - timedelta(days=i)).strftime("%Y%m%d")
+                try:
+                    tickers = stock.get_market_ticker_list(check_date, market="KOSPI")
+                    if tickers:
+                        trading_date = check_date
+                        break
+                except:
+                    continue
+
+            if not trading_date:
+                print("❌ pykrx 거래일 찾기 실패")
+                return {}
+
+            kospi = stock.get_market_ticker_and_name(trading_date, market="KOSPI")
+            kosdaq = stock.get_market_ticker_and_name(trading_date, market="KOSDAQ")
+
+            result = {**kospi, **kosdaq}
+            print(f"✅ pykrx 종목 로드: {len(result)}개 (기준일: {trading_date})")
+            return result
+
+        except Exception as e:
+            print(f"❌ pykrx 종목 로드 실패: {e}")
+            traceback.print_exc()
+            return {}
 
     @classmethod
     def _get_tickers(cls) -> Dict[str, str]:
@@ -95,39 +170,28 @@ class StockService:
         """
         today = datetime.now().date()
 
-        # 캐시가 없거나 날짜가 다르면 새로 조회
-        if cls._ticker_cache is None or cls._ticker_cache_date != today:
-            if not PYKRX_AVAILABLE:
-                # pykrx 없으면 백업 데이터 사용
-                cls._ticker_cache = cls.POPULAR_STOCKS.copy()
-                cls._ticker_cache_date = today
-                print(f"⚠️ pykrx 없음 - 백업 종목 사용: {len(cls._ticker_cache)}개")
-                return cls._ticker_cache
+        # 캐시가 유효하면 반환
+        if cls._ticker_cache and cls._ticker_cache_date == today:
+            return cls._ticker_cache
 
-            try:
-                # 최근 거래일 기준으로 종목 조회 (주말/공휴일 대비)
-                trading_date = cls._get_recent_trading_date()
-                kospi = stock.get_market_ticker_and_name(trading_date, market="KOSPI")
-                kosdaq = stock.get_market_ticker_and_name(trading_date, market="KOSDAQ")
+        # 1. 네이버 금융 API 시도
+        tickers = cls._fetch_naver_stock_list()
 
-                # 합치기
-                cls._ticker_cache = {**kospi, **kosdaq}
-                cls._ticker_cache_date = today
+        # 2. 네이버 실패시 pykrx 시도
+        if not tickers:
+            print("⚠️ 네이버 API 실패, pykrx 시도...")
+            tickers = cls._fetch_pykrx_tickers()
 
-                # 비어있으면 백업 사용
-                if not cls._ticker_cache:
-                    cls._ticker_cache = cls.POPULAR_STOCKS.copy()
-                    print(f"⚠️ pykrx 빈 결과 - 백업 종목 사용: {len(cls._ticker_cache)}개")
-                else:
-                    print(f"✅ 종목 목록 로드 완료: {len(cls._ticker_cache)}개 (기준일: {trading_date})")
-            except Exception as e:
-                print(f"❌ 종목 목록 로드 실패: {e}")
-                # 실패시 백업 데이터 사용
-                cls._ticker_cache = cls.POPULAR_STOCKS.copy()
-                print(f"⚠️ 백업 종목 사용: {len(cls._ticker_cache)}개")
+        if tickers:
+            cls._ticker_cache = tickers
+            cls._ticker_cache_date = today
+            print(f"✅ 총 종목 로드 완료: {len(tickers)}개")
+        else:
+            print("❌ 종목 로드 실패 - 모든 소스 실패")
+            cls._ticker_cache = {}
 
         return cls._ticker_cache
-    
+
     @classmethod
     def search_stock(cls, query: str) -> Optional[Dict]:
         """
@@ -136,6 +200,9 @@ class StockService:
         """
         query = query.strip()
         tickers = cls._get_tickers()
+
+        if not tickers:
+            return None
 
         # 1. 정확한 코드 매칭
         if query in tickers:
@@ -163,7 +230,6 @@ class StockService:
     def search_similar_stocks(cls, query: str, limit: int = 5) -> List[Dict]:
         """
         유사 종목 검색 (부분 매칭)
-        Returns: [{"code": "...", "name": "..."}, ...]
         """
         query = query.strip().replace(" ", "")
         tickers = cls._get_tickers()
@@ -188,298 +254,221 @@ class StockService:
                         break
 
         return results
-    
+
     @classmethod
     def search_stocks(cls, query: str, limit: int = 10) -> List[Dict]:
         """
         종목 검색 (여러 결과)
-        Returns: [{"code": "...", "name": "..."}, ...]
         """
         query = query.strip().lower()
         tickers = cls._get_tickers()
-        
+
         results = []
         for code, name in tickers.items():
             if query in name.lower() or query in code.lower():
                 results.append({"code": code, "name": name})
                 if len(results) >= limit:
                     break
-        
+
         return results
-    
+
     @classmethod
     def get_price(cls, code_or_name: str) -> Optional[Dict]:
         """
         주식 시세 조회
-        Returns: {
-            "code": "005930",
-            "name": "삼성전자",
-            "price": 58200,
-            "change": 1.2,
-            "open": 57800,
-            "high": 58500,
-            "low": 57600,
-            "volume": 12345678
-        }
         """
         # 종목 검색
         stock_info = cls.search_stock(code_or_name)
         if not stock_info:
             return None
-        
+
         code = stock_info["code"]
         name = stock_info["name"]
-        
+
         # 캐시 확인
         if code in cls._price_cache:
             return cls._price_cache[code]
-        
-        # 인기 종목별 기본 시세 (백업용)
-        DEFAULT_PRICES = {
-            "005930": 55000,   # 삼성전자
-            "000660": 180000,  # SK하이닉스
-            "035420": 180000,  # NAVER
-            "035720": 40000,   # 카카오
-            "051910": 350000,  # LG화학
-            "006400": 400000,  # 삼성SDI
-            "005380": 180000,  # 현대차
-            "000270": 85000,   # 기아
-            "068270": 170000,  # 셀트리온
-            "207940": 750000,  # 삼성바이오
-        }
 
-        def get_dummy_price():
-            """더미 시세 생성"""
-            import random
-            base_price = DEFAULT_PRICES.get(code, 50000)
-            # ±5% 랜덤 변동
-            variation = random.uniform(-0.05, 0.05)
-            price = int(base_price * (1 + variation))
-            change = round(variation * 100, 2)
-            return {
-                "code": code,
-                "name": name,
-                "price": price,
-                "change": change,
-                "open": int(price * 0.99),
-                "high": int(price * 1.02),
-                "low": int(price * 0.98),
-                "volume": random.randint(100000, 10000000)
-            }
+        # 1. 네이버 금융 API 시도
+        result = cls._fetch_naver_price(code)
 
-        if not PYKRX_AVAILABLE:
-            # pykrx 없으면 더미 데이터 반환
-            result = get_dummy_price()
+        # 2. 네이버 실패시 pykrx 시도
+        if not result and PYKRX_AVAILABLE:
+            try:
+                today = datetime.now()
+                today_str = today.strftime("%Y%m%d")
+                start_date = (today - timedelta(days=7)).strftime("%Y%m%d")
+
+                df = stock.get_market_ohlcv(start_date, today_str, code)
+
+                if not df.empty:
+                    latest = df.iloc[-1]
+
+                    if len(df) >= 2:
+                        prev_close = df.iloc[-2]["종가"]
+                        change = ((latest["종가"] - prev_close) / prev_close) * 100
+                    else:
+                        change = 0.0
+
+                    result = {
+                        "code": code,
+                        "name": name,
+                        "price": int(latest["종가"]),
+                        "change": round(change, 2),
+                        "open": int(latest["시가"]),
+                        "high": int(latest["고가"]),
+                        "low": int(latest["저가"]),
+                        "volume": int(latest["거래량"])
+                    }
+            except Exception as e:
+                print(f"❌ pykrx 시세 조회 실패 ({code}): {e}")
+
+        # 캐시 저장
+        if result:
             cls._price_cache[code] = result
-            return result
 
-        try:
-            # 오늘 날짜
-            today = datetime.now()
-            today_str = today.strftime("%Y%m%d")
+        return result
 
-            # 최근 5일 데이터 조회 (주말/공휴일 대비)
-            start_date = (today - timedelta(days=7)).strftime("%Y%m%d")
-
-            df = stock.get_market_ohlcv(start_date, today_str, code)
-
-            if df.empty:
-                # pykrx 데이터 없으면 더미 반환
-                result = get_dummy_price()
-                cls._price_cache[code] = result
-                return result
-            
-            # 가장 최근 데이터
-            latest = df.iloc[-1]
-            
-            # 전일 대비 등락률
-            if len(df) >= 2:
-                prev_close = df.iloc[-2]["종가"]
-                change = ((latest["종가"] - prev_close) / prev_close) * 100
-            else:
-                change = 0.0
-            
-            result = {
-                "code": code,
-                "name": name,
-                "price": int(latest["종가"]),
-                "change": round(change, 2),
-                "open": int(latest["시가"]),
-                "high": int(latest["고가"]),
-                "low": int(latest["저가"]),
-                "volume": int(latest["거래량"])
-            }
-            
-            # 캐시 저장
-            cls._price_cache[code] = result
-            
-            return result
-            
-        except Exception as e:
-            print(f"❌ 시세 조회 실패 ({code}): {e}")
-            # 실패해도 더미 데이터 반환
-            result = get_dummy_price()
-            cls._price_cache[code] = result
-            return result
-    
     @classmethod
     def get_top_volume(cls, market: str = "KOSPI", limit: int = 10) -> List[Dict]:
         """
         거래량 상위 종목
         """
-        if not PYKRX_AVAILABLE:
-            return []
-
         try:
-            # 최근 거래일 기준 (주말/공휴일 대비)
-            trading_date = cls._get_recent_trading_date()
-            df = stock.get_market_ohlcv(trading_date, market=market)
-            
-            if df.empty:
-                return []
-            
-            # 거래량 기준 정렬
-            df = df.sort_values("거래량", ascending=False).head(limit)
-            
-            tickers = cls._get_tickers()
-            results = []
-            
-            for code in df.index:
-                name = tickers.get(code, code)
-                row = df.loc[code]
-                results.append({
-                    "code": code,
-                    "name": name,
-                    "price": int(row["종가"]),
-                    "volume": int(row["거래량"]),
-                    "change": float(row["등락률"])
-                })
-            
-            return results
-            
+            # 네이버 금융 API
+            url = f"https://m.stock.naver.com/api/stocks/tradingVolume/{market}?page=1&pageSize={limit}"
+            resp = requests.get(url, headers=cls.HEADERS, timeout=10)
+
+            if resp.status_code == 200:
+                data = resp.json()
+                results = []
+                for item in data.get("stocks", []):
+                    close_price = item.get("closePrice", "0").replace(",", "")
+                    volume = item.get("accumulatedTradingVolume", "0").replace(",", "")
+                    change = item.get("fluctuationsRatio", "0").replace(",", "")
+
+                    results.append({
+                        "code": item.get("stockCode", ""),
+                        "name": item.get("stockName", ""),
+                        "price": int(close_price) if close_price else 0,
+                        "volume": int(volume) if volume else 0,
+                        "change": float(change) if change else 0.0
+                    })
+                return results
+
         except Exception as e:
             print(f"❌ 거래량 상위 조회 실패: {e}")
-            return []
+
+        return []
 
     @classmethod
     def get_top_gainers(cls, limit: int = 10) -> List[Dict]:
         """
         급등주 (상승률 상위)
         """
-        if not PYKRX_AVAILABLE:
-            return []
-
         try:
-            trading_date = cls._get_recent_trading_date()
+            # 네이버 금융 API - 상승률 상위
+            url = f"https://m.stock.naver.com/api/stocks/fluctuation/KOSPI?page=1&pageSize={limit}&sosok=KOSPI"
+            resp = requests.get(url, headers=cls.HEADERS, timeout=10)
 
-            # KOSPI + KOSDAQ 합쳐서 조회
-            kospi_df = stock.get_market_ohlcv(trading_date, market="KOSPI")
-            kosdaq_df = stock.get_market_ohlcv(trading_date, market="KOSDAQ")
+            if resp.status_code == 200:
+                data = resp.json()
+                results = []
+                for item in data.get("stocks", []):
+                    close_price = item.get("closePrice", "0").replace(",", "")
+                    volume = item.get("accumulatedTradingVolume", "0").replace(",", "")
+                    change = item.get("fluctuationsRatio", "0").replace(",", "")
 
-            df = pd.concat([kospi_df, kosdaq_df])
-
-            if df.empty:
-                return []
-
-            # 상승률 기준 정렬 (상위)
-            df = df.sort_values("등락률", ascending=False).head(limit)
-
-            tickers = cls._get_tickers()
-            results = []
-
-            for code in df.index:
-                name = tickers.get(code, code)
-                row = df.loc[code]
-                results.append({
-                    "code": code,
-                    "name": name,
-                    "price": int(row["종가"]),
-                    "volume": int(row["거래량"]),
-                    "change": float(row["등락률"])
-                })
-
-            return results
+                    results.append({
+                        "code": item.get("stockCode", ""),
+                        "name": item.get("stockName", ""),
+                        "price": int(close_price) if close_price else 0,
+                        "volume": int(volume) if volume else 0,
+                        "change": float(change) if change else 0.0
+                    })
+                return results
 
         except Exception as e:
             print(f"❌ 급등주 조회 실패: {e}")
-            return []
+
+        return []
 
     @classmethod
     def get_top_losers(cls, limit: int = 10) -> List[Dict]:
         """
         급락주 (하락률 상위)
         """
-        if not PYKRX_AVAILABLE:
-            return []
-
         try:
-            trading_date = cls._get_recent_trading_date()
+            # 네이버 금융 API - 하락률 상위
+            url = f"https://m.stock.naver.com/api/stocks/fluctuation/KOSPI?page=1&pageSize={limit}&order=desc"
+            resp = requests.get(url, headers=cls.HEADERS, timeout=10)
 
-            # KOSPI + KOSDAQ 합쳐서 조회
-            kospi_df = stock.get_market_ohlcv(trading_date, market="KOSPI")
-            kosdaq_df = stock.get_market_ohlcv(trading_date, market="KOSDAQ")
+            if resp.status_code == 200:
+                data = resp.json()
+                results = []
+                for item in data.get("stocks", []):
+                    close_price = item.get("closePrice", "0").replace(",", "")
+                    volume = item.get("accumulatedTradingVolume", "0").replace(",", "")
+                    change = item.get("fluctuationsRatio", "0").replace(",", "")
 
-            df = pd.concat([kospi_df, kosdaq_df])
+                    # 하락 종목만 필터 (음수)
+                    change_val = float(change) if change else 0.0
+                    if change_val >= 0:
+                        continue
 
-            if df.empty:
-                return []
+                    results.append({
+                        "code": item.get("stockCode", ""),
+                        "name": item.get("stockName", ""),
+                        "price": int(close_price) if close_price else 0,
+                        "volume": int(volume) if volume else 0,
+                        "change": change_val
+                    })
 
-            # 하락률 기준 정렬 (하위)
-            df = df.sort_values("등락률", ascending=True).head(limit)
+                    if len(results) >= limit:
+                        break
 
-            tickers = cls._get_tickers()
-            results = []
-
-            for code in df.index:
-                name = tickers.get(code, code)
-                row = df.loc[code]
-                results.append({
-                    "code": code,
-                    "name": name,
-                    "price": int(row["종가"]),
-                    "volume": int(row["거래량"]),
-                    "change": float(row["등락률"])
-                })
-
-            return results
+                return results
 
         except Exception as e:
             print(f"❌ 급락주 조회 실패: {e}")
-            return []
+
+        return []
 
     @classmethod
     def get_market_overview(cls) -> Dict:
         """
         시장 전체 현황 (KOSPI/KOSDAQ 지수)
         """
-        if not PYKRX_AVAILABLE:
-            return {}
+        result = {}
 
         try:
-            trading_date = cls._get_recent_trading_date()
-
-            # 지수 조회
-            kospi = stock.get_index_ohlcv(trading_date, trading_date, "1001")  # KOSPI
-            kosdaq = stock.get_index_ohlcv(trading_date, trading_date, "2001")  # KOSDAQ
-
-            result = {}
-
-            if not kospi.empty:
-                kospi_row = kospi.iloc[-1]
+            # KOSPI 지수
+            kospi_url = "https://m.stock.naver.com/api/index/KOSPI/basic"
+            resp = requests.get(kospi_url, headers=cls.HEADERS, timeout=10)
+            if resp.status_code == 200:
+                data = resp.json()
+                close_price = data.get("closePrice", "0").replace(",", "")
+                change = data.get("fluctuationsRatio", "0").replace(",", "")
                 result["kospi"] = {
-                    "price": float(kospi_row["종가"]),
-                    "change": float(kospi_row["등락률"]) if "등락률" in kospi_row else 0.0
+                    "price": float(close_price) if close_price else 0.0,
+                    "change": float(change) if change else 0.0
                 }
-
-            if not kosdaq.empty:
-                kosdaq_row = kosdaq.iloc[-1]
-                result["kosdaq"] = {
-                    "price": float(kosdaq_row["종가"]),
-                    "change": float(kosdaq_row["등락률"]) if "등락률" in kosdaq_row else 0.0
-                }
-
-            return result
-
         except Exception as e:
-            print(f"❌ 시장 현황 조회 실패: {e}")
-            return {}
+            print(f"❌ KOSPI 지수 조회 실패: {e}")
+
+        try:
+            # KOSDAQ 지수
+            kosdaq_url = "https://m.stock.naver.com/api/index/KOSDAQ/basic"
+            resp = requests.get(kosdaq_url, headers=cls.HEADERS, timeout=10)
+            if resp.status_code == 200:
+                data = resp.json()
+                close_price = data.get("closePrice", "0").replace(",", "")
+                change = data.get("fluctuationsRatio", "0").replace(",", "")
+                result["kosdaq"] = {
+                    "price": float(close_price) if close_price else 0.0,
+                    "change": float(change) if change else 0.0
+                }
+        except Exception as e:
+            print(f"❌ KOSDAQ 지수 조회 실패: {e}")
+
+        return result
