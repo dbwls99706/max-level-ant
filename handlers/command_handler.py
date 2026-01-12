@@ -44,8 +44,9 @@ class CommandHandler:
         elif cmd.startswith("/출석") or cmd.startswith("/ㅊㅅ"):
             return self.handle_attendance()
         
+        # 광고 기능 비활성화 (수익 발생 방지)
         elif cmd.startswith("/광고") or cmd.startswith("/ㄱㄱ"):
-            return self.handle_ad()
+            return KakaoResponse.simple_text("🚫 광고 기능은 현재 비활성화되어 있습니다.")
         
         elif cmd.startswith("/시세") or cmd.startswith("/ㅅㅅ"):
             return self.handle_price()
@@ -164,7 +165,7 @@ class CommandHandler:
 
         buttons = [
             {"label": "🚀 급등주", "action": "message", "messageText": "/급등"},
-            {"label": "📺 광고 +150만", "action": "message", "messageText": "/광고"},
+            {"label": "🎫 복권", "action": "message", "messageText": "/복권"},
         ]
         buttons.extend(self._get_game_buttons())
         return KakaoResponse.quick_replies(msg, buttons)
@@ -897,21 +898,24 @@ class CommandHandler:
         else:
             effect = ""
 
+        remaining = result.get("remaining", 0)
         msg = f"""🎫 복권 긁기 {effect}
 
 {tier}! {result['message']}
 
 💰 당첨금: +{result['reward']:,}원
+📍 오늘 남은 횟수: {remaining}회
 💵 현재 잔고: {result['cash']:,}원"""
 
-        return KakaoResponse.quick_replies(
-            msg,
-            [
-                {"label": "🎰 슬롯머신", "action": "message", "messageText": "/슬롯 50000"},
-                {"label": "🚀 급등주", "action": "message", "messageText": "/급등"},
-                {"label": "💼 포트폴리오", "action": "message", "messageText": "/포트폴리오"}
-            ]
-        )
+        buttons = []
+        if remaining > 0:
+            buttons.append({"label": "🎫 한번 더!", "action": "message", "messageText": "/복권"})
+        buttons.extend([
+            {"label": "🎰 슬롯머신", "action": "message", "messageText": "/슬롯 50000"},
+            {"label": "🚀 급등주", "action": "message", "messageText": "/급등"},
+        ])
+
+        return KakaoResponse.quick_replies(msg, buttons)
 
     def handle_slot(self) -> Dict:
         """슬롯머신"""

@@ -28,26 +28,35 @@ class GameService:
         "🍒🍒🍒": 2,          # 체리 2배
     }
 
+    # 복권 1일 최대 횟수
+    MAX_LOTTERY_PER_DAY = 3
+
     @classmethod
     def play_lottery(cls, db: Session, kakao_id: str) -> Dict:
         """
-        복권 긁기 (1일 1회 무료)
+        복권 긁기 (1일 3회 무료)
         Returns: {"success": bool, "reward": int, "message": str}
         """
         user = db.query(User).filter(User.kakao_id == kakao_id).first()
         if not user:
             return {"success": False, "message": "먼저 /시작 으로 게임을 시작해주세요."}
 
-        # 오늘 이미 했는지 체크
+        # 날짜가 바뀌었으면 카운트 리셋
         today = date.today()
-        if user.last_lottery_date == today:
+        if user.last_lottery_date != today:
+            user.last_lottery_date = today
+            user.lottery_count_today = 0
+
+        # 오늘 최대 횟수 체크
+        if user.lottery_count_today >= cls.MAX_LOTTERY_PER_DAY:
             return {
                 "success": False,
-                "message": "🎫 오늘 복권은 이미 긁었어요!\n내일 다시 도전하세요 🍀"
+                "message": f"🎫 오늘 복권은 모두 긁었어요! ({cls.MAX_LOTTERY_PER_DAY}회)\n내일 다시 도전하세요 🍀"
             }
 
         # 복권 사용 기록
-        user.last_lottery_date = today
+        user.lottery_count_today += 1
+        remaining = cls.MAX_LOTTERY_PER_DAY - user.lottery_count_today
 
         # 복권 확률 (도파민용 - 작은 당첨 자주, 큰 당첨 드물게)
         roll = random.random()
@@ -85,7 +94,8 @@ class GameService:
             "reward": reward,
             "tier": tier,
             "message": msg,
-            "cash": user.cash
+            "cash": user.cash,
+            "remaining": remaining
         }
 
     @classmethod
