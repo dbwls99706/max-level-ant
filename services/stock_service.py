@@ -203,15 +203,10 @@ class KISAPIClient:
                     else:  # 하락률순
                         items = sorted(items, key=lambda x: float(x.get("prdy_ctrt", 0) or 0))
 
+                    # 휴장일(주말/공휴일)에도 데이터 표시
                     results = []
-                    for item in items[:10]:
+                    for item in items[:5]:
                         change = float(item.get("prdy_ctrt", 0) or 0)
-                        # 상승주는 양수만, 하락주는 음수만
-                        if sort == "1" and change <= 0:
-                            continue
-                        if sort == "2" and change >= 0:
-                            continue
-
                         results.append({
                             "code": item.get("mksc_shrn_iscd", ""),
                             "name": item.get("hts_kor_isnm", ""),
@@ -219,9 +214,6 @@ class KISAPIClient:
                             "change": change,
                             "volume": int(item.get("acml_vol", 0) or 0),
                         })
-
-                        if len(results) >= 5:
-                            break
 
                     print(f"등락률 결과: {len(results)}개")
                     return results
