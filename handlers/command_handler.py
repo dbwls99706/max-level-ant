@@ -27,10 +27,9 @@ class CommandHandler:
         self.nickname = nickname
 
     def _get_game_buttons(self) -> list:
-        """장 마감 시간에만 게임 버튼 반환"""
+        """장 마감 시간에만 게임 버튼 반환 (복권 제외 - 중복 방지)"""
         if is_market_closed():
             return [
-                {"label": "🎫 복권", "action": "message", "messageText": "/복권"},
                 {"label": "🎰 게임", "action": "message", "messageText": "/게임"}
             ]
         return []
@@ -351,7 +350,7 @@ class CommandHandler:
                     msg,
                     [
                         {"label": "📅 출석체크", "action": "message", "messageText": "/출석"},
-                        {"label": "🎰 복권", "action": "message", "messageText": "/복권"},
+                        {"label": "🎫 복권", "action": "message", "messageText": "/복권"},
                         {"label": "🎯 미션확인", "action": "message", "messageText": "/미션"}
                     ]
                 )
@@ -536,7 +535,7 @@ class CommandHandler:
                     result["message"],
                     [
                         {"label": "📅 출석체크", "action": "message", "messageText": "/출석"},
-                        {"label": "🎰 복권", "action": "message", "messageText": "/복권"},
+                        {"label": "🎫 복권", "action": "message", "messageText": "/복권"},
                         {"label": "🎯 미션확인", "action": "message", "messageText": "/미션"}
                     ]
                 )
