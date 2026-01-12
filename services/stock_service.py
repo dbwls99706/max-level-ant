@@ -162,79 +162,23 @@ class KISAPIClient:
     @classmethod
     def get_fluctuation_rank(cls, sort: str = "1") -> List[Dict]:
         """
-        등락률 순위 조회 (거래량 순위 API 활용)
+        등락률 순위 조회 (거래량 순위 데이터를 등락률로 재정렬)
         sort: 1=상승률순, 2=하락률순
         """
-        # 거래량 순위 API로 데이터 가져온 후 등락률로 정렬
-        headers = cls._get_headers("FHPST01710000")
-        if not headers:
-            print("❌ 등락률 순위: 헤더 생성 실패")
+        # 거래량 순위 데이터를 가져와서 등락률로 정렬
+        items = cls.get_volume_rank("J")
+        print(f"등락률용 거래량 데이터: {len(items)}개")
+
+        if not items:
             return []
 
-        try:
-            url = f"{KISConfig.BASE_URL}/uapi/domestic-stock/v1/quotations/volume-rank"
-            params = {
-                "FID_COND_MRKT_DIV_CODE": "J",
-                "FID_COND_SCR_DIV_CODE": "20101",
-                "FID_INPUT_ISCD": "0000",
-                "FID_DIV_CLS_CODE": "0",
-                "FID_BLNG_CLS_CODE": "0",
-                "FID_TRGT_CLS_CODE": "111111111",
-                "FID_TRGT_EXLS_CLS_CODE": "000000",
-                "FID_INPUT_PRICE_1": "",
-                "FID_INPUT_PRICE_2": "",
-                "FID_VOL_CNT": "",
-                "FID_INPUT_DATE_1": "",
-            }
+        # 등락률로 정렬
+        if sort == "1":  # 상승률순
+            items = sorted(items, key=lambda x: x.get("change", 0), reverse=True)
+        else:  # 하락률순
+            items = sorted(items, key=lambda x: x.get("change", 0))
 
-            resp = requests.get(url, headers=headers, params=params, timeout=10)
-            print(f"등락률 API 응답: {resp.status_code}")
-
-            if resp.status_code == 200:
-                data = resp.json()
-                print(f"등락률 API 결과: rt_cd={data.get('rt_cd')}, msg={data.get('msg1')}")
-                print(f"등락률 API 키들: {list(data.keys())}")
-
-                if data.get("rt_cd") == "0":
-                    # output 또는 output1 또는 output2 확인
-                    items = data.get("output", [])
-                    if not items:
-                        items = data.get("output1", [])
-                    if not items:
-                        items = data.get("output2", [])
-                    print(f"등락률 데이터 개수: {len(items)}")
-
-                    # 등락률로 정렬
-                    if sort == "1":  # 상승률순
-                        items = sorted(items, key=lambda x: float(x.get("prdy_ctrt", 0) or 0), reverse=True)
-                    else:  # 하락률순
-                        items = sorted(items, key=lambda x: float(x.get("prdy_ctrt", 0) or 0))
-
-                    # 휴장일(주말/공휴일)에도 데이터 표시
-                    results = []
-                    for item in items[:5]:
-                        change = float(item.get("prdy_ctrt", 0) or 0)
-                        results.append({
-                            "code": item.get("mksc_shrn_iscd", ""),
-                            "name": item.get("hts_kor_isnm", ""),
-                            "price": int(item.get("stck_prpr", 0) or 0),
-                            "change": change,
-                            "volume": int(item.get("acml_vol", 0) or 0),
-                        })
-
-                    print(f"등락률 결과: {len(results)}개")
-                    return results
-                else:
-                    print(f"❌ 등락률 API 에러: {data.get('msg1')}")
-            else:
-                print(f"❌ 등락률 HTTP 에러: {resp.status_code} - {resp.text[:200]}")
-
-        except Exception as e:
-            print(f"❌ 등락률 순위 조회 실패: {e}")
-            import traceback
-            traceback.print_exc()
-
-        return []
+        return items[:5]
 
     @classmethod
     def get_market_index(cls, index_code: str) -> Optional[Dict]:
