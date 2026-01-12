@@ -168,45 +168,56 @@ class KISAPIClient:
         """
         headers = cls._get_headers("FHPST01700000")
         if not headers:
+            print("❌ 등락률 순위: 헤더 생성 실패")
             return []
 
         try:
             url = f"{KISConfig.BASE_URL}/uapi/domestic-stock/v1/quotations/chk-fluctuation-detail"
             params = {
-                "fid_cond_mrkt_div_code": "J",
-                "fid_cond_scr_div_code": "16174",
-                "fid_input_iscd": "0000",
-                "fid_rank_sort_cls_code": sort,  # 1:상승, 2:하락
-                "fid_input_cnt_1": "0",
-                "fid_prc_cls_code": "0",
-                "fid_input_price_1": "",
-                "fid_input_price_2": "",
-                "fid_vol_cnt": "",
-                "fid_trgt_cls_code": "0",
-                "fid_trgt_exls_cls_code": "0",
-                "fid_div_cls_code": "0",
-                "fid_rsfl_rate1": "",
-                "fid_rsfl_rate2": "",
+                "FID_COND_MRKT_DIV_CODE": "J",
+                "FID_COND_SCR_DIV_CODE": "16174",
+                "FID_INPUT_ISCD": "0000",
+                "FID_RANK_SORT_CLS_CODE": sort,  # 1:상승, 2:하락
+                "FID_INPUT_CNT_1": "0",
+                "FID_PRC_CLS_CODE": "0",
+                "FID_INPUT_PRICE_1": "",
+                "FID_INPUT_PRICE_2": "",
+                "FID_VOL_CNT": "",
+                "FID_TRGT_CLS_CODE": "0",
+                "FID_TRGT_EXLS_CLS_CODE": "0",
+                "FID_DIV_CLS_CODE": "0",
+                "FID_RSFL_RATE1": "",
+                "FID_RSFL_RATE2": "",
             }
 
             resp = requests.get(url, headers=headers, params=params, timeout=10)
+            print(f"등락률 API 응답: {resp.status_code}")
 
             if resp.status_code == 200:
                 data = resp.json()
+                print(f"등락률 API 결과: rt_cd={data.get('rt_cd')}, msg={data.get('msg1')}")
+
                 if data.get("rt_cd") == "0":
                     results = []
                     for item in data.get("output", [])[:10]:
                         results.append({
                             "code": item.get("stck_shrn_iscd", ""),
                             "name": item.get("hts_kor_isnm", ""),
-                            "price": int(item.get("stck_prpr", 0)),
-                            "change": float(item.get("prdy_ctrt", 0)),
-                            "volume": int(item.get("acml_vol", 0)),
+                            "price": int(item.get("stck_prpr", 0) or 0),
+                            "change": float(item.get("prdy_ctrt", 0) or 0),
+                            "volume": int(item.get("acml_vol", 0) or 0),
                         })
+                    print(f"등락률 결과: {len(results)}개")
                     return results
+                else:
+                    print(f"❌ 등락률 API 에러: {data.get('msg1')}")
+            else:
+                print(f"❌ 등락률 HTTP 에러: {resp.status_code} - {resp.text[:200]}")
 
         except Exception as e:
             print(f"❌ 등락률 순위 조회 실패: {e}")
+            import traceback
+            traceback.print_exc()
 
         return []
 
