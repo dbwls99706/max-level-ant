@@ -29,17 +29,17 @@ class GameService:
         "🍒🍒🍒": 1.5,        # 체리 1.5배
     }
 
-    # 슬롯 확률 (기대값 90%, 고배율일수록 희귀)
+    # 슬롯 확률 (잭팟/다이아/로켓은 희귀하게 유지)
     SLOT_PROBABILITIES = [
-        ("7️⃣", 50, 0.0005),   # 0.05% - 잭팟 (매우 희귀)
-        ("💎", 20, 0.0015),    # 0.15%
-        ("🚀", 10, 0.003),     # 0.3%
-        ("🍇", 5, 0.008),      # 0.8%
-        ("🍊", 3, 0.02),       # 2%
+        ("7️⃣", 50, 0.0005),   # 0.05% - 잭팟 (희귀)
+        ("💎", 20, 0.0015),    # 0.15% (희귀)
+        ("🚀", 10, 0.003),     # 0.3% (희귀)
+        ("🍇", 5, 0.012),      # 1.2%
+        ("🍊", 3, 0.025),      # 2.5%
         ("🍋", 2, 0.0575),     # 5.75%
         ("🍒", 1.5, 0.10),     # 10%
-        ("MATCH2", 1, 0.45),   # 45% - 2개 일치 (본전)
-        ("LOSE", 0, 0.3595),   # 35.95% - 꽝
+        ("MATCH2", 1, 0.35),   # 35% - 2개 일치 (본전)
+        ("LOSE", 0, 0.4505),   # 45.05% - 꽝
     ]
 
     # 복권 1일 최대 횟수
@@ -86,26 +86,26 @@ class GameService:
         user.lottery_count_today += 1
         remaining = cls.MAX_LOTTERY_PER_DAY - user.lottery_count_today
 
-        # 복권 확률 (기준: 복권 1장 10,000원, 5회 수행 시 기대값 100%)
+        # 복권 확률 (기준: 복권 1장 10,000원, 기대값 90%)
         roll = random.random()
 
-        if roll < 0.0025:  # 0.25% - 1등 (50~100배)
+        if roll < 0.002:  # 0.2% - 1등 (50~100배)
             reward = random.randint(500_000, 1_000_000)
             tier = "🥇 1등"
             msg = "대박! 축하합니다!"
-        elif roll < 0.025:  # 2.25% - 2등 (5~10배)
+        elif roll < 0.02:  # 1.8% - 2등 (5~10배)
             reward = random.randint(50_000, 100_000)
             tier = "🥈 2등"
             msg = "좋아요!"
-        elif roll < 0.09:  # 6.5% - 3등 (1.5~3배)
+        elif roll < 0.07:  # 5% - 3등 (1.5~3배)
             reward = random.randint(15_000, 30_000)
             tier = "🥉 3등"
             msg = "괜찮네요!"
-        elif roll < 0.23:  # 14% - 4등 (0.8~1.2배)
+        elif roll < 0.17:  # 10% - 4등 (0.8~1.2배)
             reward = random.randint(8_000, 12_000)
             tier = "🎁 4등"
             msg = "조금이나마..."
-        elif roll < 0.57:  # 34% - 5등 (본전 1배)
+        elif roll < 0.47:  # 30% - 5등 (본전 1배)
             reward = 10_000
             tier = "💫 5등"
             msg = "본전!"
@@ -214,8 +214,9 @@ class GameService:
     def play_roulette(cls, db: Session, kakao_id: str, bet: int, choice: str) -> Dict:
         """
         룰렛 (빨강/검정/초록)
-        - 빨강/검정: 2배
-        - 초록(0): 14배
+        - 빨강/검정: 2배 (45% 확률)
+        - 초록: 9배 (10% 확률)
+        - 기대값 90%
         """
         # 장 마감 시간에만 가능
         if not is_market_closed():
@@ -240,13 +241,13 @@ class GameService:
             }
 
         choice = choice.lower()
-        if choice not in ["빨강", "검정", "초록", "red", "black", "green"]:
+        if choice not in ["빨강", "검정", "초록", "red", "black", "green", "빨", "검", "초"]:
             return {"success": False, "message": "빨강, 검정, 초록 중 선택해주세요."}
 
         # 정규화
-        if choice in ["red", "빨강"]:
+        if choice in ["red", "빨강", "빨"]:
             choice = "빨강"
-        elif choice in ["black", "검정"]:
+        elif choice in ["black", "검정", "검"]:
             choice = "검정"
         else:
             choice = "초록"
@@ -254,27 +255,26 @@ class GameService:
         # 배팅금 차감
         user.cash -= bet
 
-        # 룰렛 돌리기 (0-36)
-        number = random.randint(0, 36)
-
-        if number == 0:
-            result = "초록"
-            emoji = "🟢"
-        elif number % 2 == 0:
+        # 룰렛 결과 (기대값 90%: 빨강 45%, 검정 45%, 초록 10%)
+        roll = random.random()
+        if roll < 0.45:
             result = "빨강"
             emoji = "🔴"
-        else:
+        elif roll < 0.90:
             result = "검정"
             emoji = "⚫"
+        else:
+            result = "초록"
+            emoji = "🟢"
 
         # 당첨 확인
         won = (choice == result)
 
         if won:
             if result == "초록":
-                multiplier = 14
+                multiplier = 9  # 10% × 9 = 90% EV
             else:
-                multiplier = 2
+                multiplier = 2  # 45% × 2 = 90% EV
             winnings = bet * multiplier
         else:
             multiplier = 0
@@ -285,7 +285,6 @@ class GameService:
 
         return {
             "success": True,
-            "number": number,
             "result": result,
             "emoji": emoji,
             "choice": choice,
@@ -302,7 +301,7 @@ class GameService:
         """
         하이로우 게임
         - 1-100 숫자 중 50보다 높은지 낮은지
-        - 맞추면 1.9배
+        - 맞추면 1.8배 (기대값 90%)
         """
         # 장 마감 시간에만 가능
         if not is_market_closed():
@@ -362,7 +361,7 @@ class GameService:
         won = (choice == actual)
 
         if won:
-            multiplier = 1.9
+            multiplier = 1.8  # 50% × 1.8 = 90% EV
             winnings = int(bet * multiplier)
         else:
             multiplier = 0
@@ -388,7 +387,7 @@ class GameService:
     def play_coin_flip(cls, db: Session, kakao_id: str, bet: int, choice: str) -> Dict:
         """
         동전 던지기
-        - 앞/뒤 맞추면 1.95배
+        - 앞/뒤 맞추면 1.8배 (기대값 90%)
         """
         # 장 마감 시간에만 가능
         if not is_market_closed():
@@ -432,7 +431,7 @@ class GameService:
         won = (choice == result)
 
         if won:
-            multiplier = 1.95
+            multiplier = 1.8  # 50% × 1.8 = 90% EV
             winnings = int(bet * multiplier)
         else:
             multiplier = 0
