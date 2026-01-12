@@ -118,6 +118,9 @@ class CommandHandler:
         elif cmd.startswith("/게임") or cmd.startswith("/미니게임"):
             return self.handle_game_menu()
 
+        elif cmd.startswith("/닉네임") or cmd.startswith("/ㄴㄴ"):
+            return self.handle_nickname()
+
         elif cmd.startswith("/도움말") or cmd.startswith("/help") or cmd.startswith("/ㄷㅇㅁ"):
             return self.handle_help()
 
@@ -1085,6 +1088,38 @@ class CommandHandler:
                 {"label": "🔼 높!", "action": "message", "messageText": f"/하이로우 {bet} 높"},
                 {"label": "🔽 낮!", "action": "message", "messageText": f"/하이로우 {bet} 낮"},
                 {"label": "🚀 급등주", "action": "message", "messageText": "/급등"}
+            ]
+        )
+
+    def handle_nickname(self) -> Dict:
+        """닉네임 설정"""
+        parts = self.utterance.split(maxsplit=1)
+
+        user = UserService.get_user(self.db, self.kakao_id)
+        if not user:
+            return KakaoResponse.simple_text("먼저 /시작 으로 게임을 시작해주세요.")
+
+        if len(parts) < 2:
+            current = user.nickname if user.nickname else "없음"
+            return KakaoResponse.simple_text(
+                f"🏷️ 닉네임 설정\n\n현재 닉네임: {current}\n\n사용법: /닉네임 [새 닉네임]\n예: /닉네임 주식왕"
+            )
+
+        new_nickname = parts[1].strip()
+
+        # 닉네임 유효성 검사
+        if len(new_nickname) < 2 or len(new_nickname) > 10:
+            return KakaoResponse.simple_text("❌ 닉네임은 2~10자로 설정해주세요.")
+
+        # 닉네임 업데이트
+        user.nickname = new_nickname
+        self.db.commit()
+
+        return KakaoResponse.quick_replies(
+            f"✅ 닉네임이 '{new_nickname}'(으)로 설정되었습니다!",
+            [
+                {"label": "🏆 랭킹", "action": "message", "messageText": "/랭킹"},
+                {"label": "💼 포트폴리오", "action": "message", "messageText": "/포트폴리오"}
             ]
         )
 
