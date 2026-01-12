@@ -19,6 +19,9 @@ class User(Base):
     
     # 닉네임 (카카오에서 제공되면 사용)
     nickname = Column(String(100), nullable=True)
+
+    # 닉네임 변경 여부 (한 번 설정하면 변경 불가)
+    nickname_set = Column(Integer, default=0)  # 0: 미설정, 1: 설정완료
     
     # 보유 현금
     cash = Column(BigInteger, default=5_000_000)

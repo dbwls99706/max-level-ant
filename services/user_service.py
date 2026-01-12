@@ -135,18 +135,23 @@ class UserService:
     @staticmethod
     def update_nickname(db: Session, kakao_id: str, new_nickname: str) -> Tuple[bool, str]:
         """
-        닉네임 업데이트 (중복 검사 포함)
+        닉네임 업데이트 (중복 검사 포함, 한 번 설정하면 변경 불가)
         Returns: (success, message)
         """
         user = UserService.get_user(db, kakao_id)
         if not user:
             return False, "유저를 찾을 수 없습니다."
 
+        # 이미 닉네임이 설정된 경우 변경 불가
+        if hasattr(user, 'nickname_set') and user.nickname_set == 1:
+            return False, f"❌ 닉네임은 한 번만 설정할 수 있습니다.\n현재 닉네임: {user.nickname}"
+
         # 중복 확인
         if UserService.is_nickname_taken(db, new_nickname, kakao_id):
             return False, f"❌ '{new_nickname}'은(는) 이미 사용 중인 닉네임입니다."
 
         user.nickname = new_nickname
+        user.nickname_set = 1  # 닉네임 설정 완료 표시
         db.commit()
 
-        return True, f"✅ 닉네임이 '{new_nickname}'(으)로 설정되었습니다!"
+        return True, f"✅ 닉네임이 '{new_nickname}'(으)로 설정되었습니다!\n⚠️ 닉네임은 변경할 수 없으니 신중히 선택하세요."

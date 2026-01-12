@@ -565,18 +565,24 @@ class CommandHandler:
     def handle_my_rank(self) -> Dict:
         """내 순위 조회"""
         rank_info = RankingService.get_my_rank(self.db, self.kakao_id)
-        
+
         if rank_info is None:
             return KakaoResponse.simple_text("먼저 /시작 으로 게임을 시작해주세요.")
-        
+
         msg = Messages.MY_RANK.format(
             rank=rank_info["rank"],
             total=rank_info["total"],
             profit_rate=rank_info["profit_rate"],
             total_asset=rank_info["total_asset"]
         )
-        
-        return KakaoResponse.simple_text(msg)
+
+        buttons = [
+            {"label": "🏆 전체 랭킹", "action": "message", "messageText": "/랭킹"},
+            {"label": "💼 포트폴리오", "action": "message", "messageText": "/포트폴리오"},
+            {"label": "🚀 급등주", "action": "message", "messageText": "/급등"},
+        ]
+
+        return KakaoResponse.quick_replies(msg, buttons)
     
     def handle_search(self) -> Dict:
         """종목 검색"""
