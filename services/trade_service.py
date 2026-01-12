@@ -74,10 +74,13 @@ class TradeService:
         stock_info = StockService.get_price(stock_query)
         if not stock_info:
             return {"success": False, "message": f"'{stock_query}' 종목을 찾을 수 없습니다."}
-        
+
         code = stock_info["code"]
         name = stock_info["name"]
         price = stock_info["price"]
+
+        # 종목 캐시 저장 (서버 재시작 후에도 찾을 수 있도록)
+        StockService._cache_stock(code, name)
         
         # 총 금액 계산 (수수료 포함)
         total_amount = price * quantity

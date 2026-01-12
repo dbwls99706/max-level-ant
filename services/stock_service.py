@@ -10,6 +10,7 @@ import requests
 import json
 
 from config import CacheConfig, KISConfig
+from database import SessionLocal
 
 
 class KISAPIClient:
@@ -289,13 +290,58 @@ class StockService:
     # API에서 가져온 종목 캐시 (급등주/급락주 등)
     _dynamic_stocks_by_name = {}  # {name: code}
     _dynamic_stocks_by_code = {}  # {code: name}
+    _cache_loaded = False  # DB 캐시 로드 여부
+
+    @classmethod
+    def load_stock_cache(cls):
+        """서버 시작 시 DB에서 종목 캐시 로드"""
+        if cls._cache_loaded:
+            return
+
+        try:
+            from models import StockCache
+            db = SessionLocal()
+            try:
+                cached_stocks = db.query(StockCache).all()
+                for stock in cached_stocks:
+                    cls._dynamic_stocks_by_name[stock.stock_name] = stock.stock_code
+                    cls._dynamic_stocks_by_code[stock.stock_code] = stock.stock_name
+                cls._cache_loaded = True
+                print(f"✅ 종목 캐시 로드 완료: {len(cached_stocks)}개")
+            finally:
+                db.close()
+        except Exception as e:
+            print(f"⚠️ 종목 캐시 로드 실패: {e}")
 
     @classmethod
     def _cache_stock(cls, code: str, name: str):
-        """API에서 가져온 종목 캐시 (양방향)"""
-        if name and code:
-            cls._dynamic_stocks_by_name[name] = code
-            cls._dynamic_stocks_by_code[code] = name
+        """종목 캐시 (메모리 + DB 영구 저장)"""
+        if not name or not code:
+            return
+
+        # 메모리 캐시
+        cls._dynamic_stocks_by_name[name] = code
+        cls._dynamic_stocks_by_code[code] = name
+
+        # DB 영구 저장 (비동기적으로)
+        try:
+            from models import StockCache
+            db = SessionLocal()
+            try:
+                existing = db.query(StockCache).filter(StockCache.stock_code == code).first()
+                if existing:
+                    if existing.stock_name != name:
+                        existing.stock_name = name
+                        db.commit()
+                else:
+                    new_cache = StockCache(stock_code=code, stock_name=name)
+                    db.add(new_cache)
+                    db.commit()
+            finally:
+                db.close()
+        except Exception as e:
+            # DB 저장 실패해도 메모리 캐시는 유지
+            pass
 
     @classmethod
     def search_stock(cls, query: str) -> Optional[Dict]:

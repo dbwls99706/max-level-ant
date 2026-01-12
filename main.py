@@ -10,7 +10,7 @@ from contextlib import asynccontextmanager
 from database import get_db, init_db, reset_db
 from handlers import CommandHandler
 from utils import KakaoResponse
-from services.stock_service import KISAPIClient
+from services.stock_service import KISAPIClient, StockService
 
 
 # ===========================================
@@ -22,6 +22,9 @@ async def lifespan(app: FastAPI):
     # 시작 시
     print("🚀 주식왕 봇 서버 시작!")
     init_db()  # DB 테이블 생성
+
+    # 종목 캐시 로드 (DB에서 메모리로)
+    StockService.load_stock_cache()
 
     # KIS API 토큰 미리 발급 (타임아웃 방지)
     token = KISAPIClient.get_access_token()
