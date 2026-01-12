@@ -81,11 +81,11 @@ class GameService:
             reward = random.randint(20_000, 80_000)
             tier = "🎁 4등"
             msg = "조금이나마..."
-        elif roll < 0.45:  # 25% - 5등 (본전)
+        elif roll < 0.40:  # 20% - 5등 (본전)
             reward = random.randint(5_000, 15_000)
             tier = "💫 5등"
             msg = "본전이라도..."
-        else:  # 55% - 꽝
+        else:  # 60% - 꽝
             reward = random.randint(100, 2_000)
             tier = "😅 꽝"
             msg = "다음 기회에..."
