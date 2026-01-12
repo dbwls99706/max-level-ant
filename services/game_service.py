@@ -30,7 +30,7 @@ class GameService:
     }
 
     # 복권 1일 최대 횟수
-    MAX_LOTTERY_PER_DAY = 3
+    MAX_LOTTERY_PER_DAY = 5
 
     # 복권 가격
     LOTTERY_COST = 10_000
@@ -38,17 +38,10 @@ class GameService:
     @classmethod
     def play_lottery(cls, db: Session, kakao_id: str) -> Dict:
         """
-        복권 긁기 (1일 3회, 1장 10,000원)
+        복권 긁기 (1일 5회, 1장 10,000원)
+        - 일일 제한이 있으므로 장 시간 무관하게 가능
         Returns: {"success": bool, "reward": int, "message": str}
         """
-        # 장 마감 시간에만 가능
-        if not is_market_closed():
-            status_msg = get_market_status_message()
-            return {
-                "success": False,
-                "message": f"🎫 미니게임은 장 마감 후에만 가능해요!\n\n{status_msg}\n\n🎮 게임 가능 시간:\n• 평일 18:00 이후\n• 평일 08:30 이전\n• 주말/공휴일 종일"
-            }
-
         user = db.query(User).filter(User.kakao_id == kakao_id).first()
         if not user:
             return {"success": False, "message": "먼저 /시작 으로 게임을 시작해주세요."}
