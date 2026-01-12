@@ -287,13 +287,15 @@ class StockService:
     _name_to_code = {v: k for k, v in STOCK_LIST.items()}
 
     # API에서 가져온 종목 캐시 (급등주/급락주 등)
-    _dynamic_stocks = {}  # {name: code}
+    _dynamic_stocks_by_name = {}  # {name: code}
+    _dynamic_stocks_by_code = {}  # {code: name}
 
     @classmethod
     def _cache_stock(cls, code: str, name: str):
-        """API에서 가져온 종목 캐시"""
+        """API에서 가져온 종목 캐시 (양방향)"""
         if name and code:
-            cls._dynamic_stocks[name] = code
+            cls._dynamic_stocks_by_name[name] = code
+            cls._dynamic_stocks_by_code[code] = name
 
     @classmethod
     def search_stock(cls, query: str) -> Optional[Dict]:
@@ -306,30 +308,41 @@ class StockService:
         if query in cls.STOCK_LIST:
             return {"code": query, "name": cls.STOCK_LIST[query]}
 
-        # 2. 정확한 이름 매칭 (STOCK_LIST)
+        # 2. 정확한 코드 매칭 (동적 캐시)
+        if query in cls._dynamic_stocks_by_code:
+            return {"code": query, "name": cls._dynamic_stocks_by_code[query]}
+
+        # 3. 정확한 이름 매칭 (STOCK_LIST)
         if query in cls._name_to_code:
             code = cls._name_to_code[query]
             return {"code": code, "name": query}
 
-        # 3. 동적 캐시에서 검색 (API에서 가져온 종목)
-        if query in cls._dynamic_stocks:
-            return {"code": cls._dynamic_stocks[query], "name": query}
+        # 4. 정확한 이름 매칭 (동적 캐시)
+        if query in cls._dynamic_stocks_by_name:
+            return {"code": cls._dynamic_stocks_by_name[query], "name": query}
 
-        # 4. 부분 이름 매칭 (STOCK_LIST)
+        # 5. 부분 이름 매칭 (STOCK_LIST)
         for code, name in cls.STOCK_LIST.items():
             if query in name:
                 return {"code": code, "name": name}
 
-        # 5. 부분 이름 매칭 (동적 캐시)
-        for name, code in cls._dynamic_stocks.items():
+        # 6. 부분 이름 매칭 (동적 캐시)
+        for name, code in cls._dynamic_stocks_by_name.items():
             if query in name:
                 return {"code": code, "name": name}
 
-        # 6. 공백 제거 후 검색
+        # 7. 공백 제거 후 검색
         query_clean = query.replace(" ", "")
         for code, name in cls.STOCK_LIST.items():
             if query_clean in name.replace(" ", ""):
                 return {"code": code, "name": name}
+
+        # 8. 6자리 숫자면 직접 API 조회 시도
+        if query.isdigit() and len(query) == 6:
+            result = KISAPIClient.get_stock_price(query)
+            if result and result.get("price", 0) > 0:
+                cls._cache_stock(query, result.get("name", query))
+                return {"code": query, "name": result.get("name", query)}
 
         return None
 
@@ -338,13 +351,28 @@ class StockService:
         """유사 종목 검색"""
         query = query.strip().replace(" ", "")
         results = []
+        seen_codes = set()
 
+        # STOCK_LIST에서 검색
         for code, name in cls.STOCK_LIST.items():
             name_clean = name.replace(" ", "")
             if query in name_clean or any(c in name_clean for c in query):
                 results.append({"code": code, "name": name})
+                seen_codes.add(code)
                 if len(results) >= limit:
                     break
+
+        # 동적 캐시에서도 검색
+        if len(results) < limit:
+            for name, code in cls._dynamic_stocks_by_name.items():
+                if code in seen_codes:
+                    continue
+                name_clean = name.replace(" ", "")
+                if query in name_clean or any(c in name_clean for c in query):
+                    results.append({"code": code, "name": name})
+                    seen_codes.add(code)
+                    if len(results) >= limit:
+                        break
 
         # 첫 글자로 시작하는 종목
         if not results and query:
@@ -361,12 +389,25 @@ class StockService:
         """종목 검색 (여러 결과)"""
         query = query.strip().lower()
         results = []
+        seen_codes = set()
 
+        # STOCK_LIST에서 검색
         for code, name in cls.STOCK_LIST.items():
             if query in name.lower() or query in code:
                 results.append({"code": code, "name": name})
+                seen_codes.add(code)
                 if len(results) >= limit:
                     break
+
+        # 동적 캐시에서도 검색
+        if len(results) < limit:
+            for name, code in cls._dynamic_stocks_by_name.items():
+                if code in seen_codes:
+                    continue
+                if query in name.lower() or query in code:
+                    results.append({"code": code, "name": name})
+                    if len(results) >= limit:
+                        break
 
         return results
 
