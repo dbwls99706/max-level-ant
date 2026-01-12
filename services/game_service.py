@@ -86,26 +86,26 @@ class GameService:
         user.lottery_count_today += 1
         remaining = cls.MAX_LOTTERY_PER_DAY - user.lottery_count_today
 
-        # 복권 확률 (기준: 복권 1장 10,000원, 5회 수행 시 기대값 100%)
+        # 복권 확률 (기준: 복권 1장 10,000원, 기대값 90%)
         roll = random.random()
 
-        if roll < 0.0025:  # 0.25% - 1등 (50~100배)
+        if roll < 0.002:  # 0.2% - 1등 (50~100배)
             reward = random.randint(500_000, 1_000_000)
             tier = "🥇 1등"
             msg = "대박! 축하합니다!"
-        elif roll < 0.025:  # 2.25% - 2등 (5~10배)
+        elif roll < 0.02:  # 1.8% - 2등 (5~10배)
             reward = random.randint(50_000, 100_000)
             tier = "🥈 2등"
             msg = "좋아요!"
-        elif roll < 0.09:  # 6.5% - 3등 (1.5~3배)
+        elif roll < 0.07:  # 5% - 3등 (1.5~3배)
             reward = random.randint(15_000, 30_000)
             tier = "🥉 3등"
             msg = "괜찮네요!"
-        elif roll < 0.23:  # 14% - 4등 (0.8~1.2배)
+        elif roll < 0.17:  # 10% - 4등 (0.8~1.2배)
             reward = random.randint(8_000, 12_000)
             tier = "🎁 4등"
             msg = "조금이나마..."
-        elif roll < 0.57:  # 34% - 5등 (본전 1배)
+        elif roll < 0.47:  # 30% - 5등 (본전 1배)
             reward = 10_000
             tier = "💫 5등"
             msg = "본전!"
@@ -301,7 +301,7 @@ class GameService:
         """
         하이로우 게임
         - 1-100 숫자 중 50보다 높은지 낮은지
-        - 맞추면 1.9배
+        - 맞추면 1.8배 (기대값 90%)
         """
         # 장 마감 시간에만 가능
         if not is_market_closed():
@@ -361,7 +361,7 @@ class GameService:
         won = (choice == actual)
 
         if won:
-            multiplier = 1.9
+            multiplier = 1.8  # 50% × 1.8 = 90% EV
             winnings = int(bet * multiplier)
         else:
             multiplier = 0
@@ -387,7 +387,7 @@ class GameService:
     def play_coin_flip(cls, db: Session, kakao_id: str, bet: int, choice: str) -> Dict:
         """
         동전 던지기
-        - 앞/뒤 맞추면 1.95배
+        - 앞/뒤 맞추면 1.8배 (기대값 90%)
         """
         # 장 마감 시간에만 가능
         if not is_market_closed():
@@ -431,7 +431,7 @@ class GameService:
         won = (choice == result)
 
         if won:
-            multiplier = 1.95
+            multiplier = 1.8  # 50% × 1.8 = 90% EV
             winnings = int(bet * multiplier)
         else:
             multiplier = 0
