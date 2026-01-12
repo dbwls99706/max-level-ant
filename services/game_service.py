@@ -38,8 +38,16 @@ class GameService:
         if not user:
             return {"success": False, "message": "먼저 /시작 으로 게임을 시작해주세요."}
 
-        # 오늘 이미 했는지 체크 (last_ad_date 재활용하거나 새 필드 필요)
-        # 일단 항상 가능하게 (나중에 제한 추가 가능)
+        # 오늘 이미 했는지 체크
+        today = date.today()
+        if user.last_lottery_date == today:
+            return {
+                "success": False,
+                "message": "🎫 오늘 복권은 이미 긁었어요!\n내일 다시 도전하세요 🍀"
+            }
+
+        # 복권 사용 기록
+        user.last_lottery_date = today
 
         # 복권 확률 (도파민용 - 작은 당첨 자주, 큰 당첨 드물게)
         roll = random.random()

@@ -78,6 +78,7 @@ def _migrate_db():
         'achievements': "VARCHAR(1000) DEFAULT '[]'",
         'total_profit_realized': 'BIGINT DEFAULT 0',
         'total_trades': 'INTEGER DEFAULT 0',
+        'last_lottery_date': 'DATE',
     }
 
     with engine.connect() as conn:
