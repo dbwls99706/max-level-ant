@@ -120,6 +120,7 @@ class KISAPIClient:
         """
         headers = cls._get_headers("FHPST01710000")
         if not headers:
+            print("❌ 거래량 순위: 헤더 생성 실패")
             return []
 
         try:
@@ -139,20 +140,37 @@ class KISAPIClient:
             }
 
             resp = requests.get(url, headers=headers, params=params, timeout=10)
+            print(f"📊 거래량순위 API: {resp.status_code}")
 
             if resp.status_code == 200:
                 data = resp.json()
+                print(f"📊 거래량순위 결과: rt_cd={data.get('rt_cd')}, msg={data.get('msg1')}")
+
                 if data.get("rt_cd") == "0":
+                    output = data.get("output", [])
+                    print(f"📊 거래량순위 데이터: {len(output)}개")
+
+                    # 첫 번째 항목 구조 확인
+                    if output:
+                        print(f"📊 첫 항목 키: {list(output[0].keys())[:5]}")
+
                     results = []
-                    for item in data.get("output", [])[:10]:
-                        results.append({
-                            "code": item.get("mksc_shrn_iscd", ""),
-                            "name": item.get("hts_kor_isnm", ""),
-                            "price": int(item.get("stck_prpr", 0)),
-                            "change": float(item.get("prdy_ctrt", 0)),
-                            "volume": int(item.get("acml_vol", 0)),
-                        })
+                    for item in output[:10]:
+                        try:
+                            results.append({
+                                "code": item.get("mksc_shrn_iscd", "") or item.get("stck_shrn_iscd", ""),
+                                "name": item.get("hts_kor_isnm", ""),
+                                "price": int(item.get("stck_prpr", 0) or 0),
+                                "change": float(item.get("prdy_ctrt", 0) or 0),
+                                "volume": int(item.get("acml_vol", 0) or 0),
+                            })
+                        except Exception as e:
+                            print(f"❌ 항목 파싱 실패: {e}, item={item}")
                     return results
+                else:
+                    print(f"❌ 거래량순위 API 에러: {data.get('msg1')}")
+            else:
+                print(f"❌ 거래량순위 HTTP 에러: {resp.status_code}")
 
         except Exception as e:
             print(f"❌ 거래량 순위 조회 실패: {e}")
