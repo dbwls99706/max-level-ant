@@ -34,6 +34,11 @@ def is_market_closed() -> bool:
 
     return False
 
+
+def is_market_open() -> bool:
+    """장이 열려있는지 확인"""
+    return not is_market_closed()
+
 # ===========================================
 # 데이터베이스 설정
 # ===========================================

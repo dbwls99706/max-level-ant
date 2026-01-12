@@ -1495,12 +1495,17 @@ class CommandHandler:
         if result.get("finished"):
             change_emoji = "📈" if result["price_change"] >= 0 else "📉"
 
+            # 장 마감으로 종료된 경우
+            market_note = ""
+            if result.get("market_closed"):
+                market_note = "\n⏰ (장 마감으로 조기 종료)"
+
             # 승패 여부에 따른 강조 표시
             if result['winner'] == "무승부":
                 result_header = "🤝 무승부!"
                 result_detail = "주가 변동 없음 - 배팅금 반환"
             else:
-                result_header = f"🎊🎊🎊 배틀 종료! 🎊🎊🎊"
+                result_header = f"🎊🎊🎊 배틀 종료!{market_note} 🎊🎊🎊"
                 result_detail = f"🏆 승자: {result['winner']}"
 
             msg = f"""⚔️ 배틀 결과
