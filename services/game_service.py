@@ -1,7 +1,7 @@
 """
 미니게임 서비스
-- 복권, 룰렛, 슬롯, 주가예측
-- 24시간 플레이 가능
+- 복권, 슬롯, 동전, 하이로우
+- 장 마감 시간에만 플레이 가능 (18:00 이후, 08:30 이전, 주말, 공휴일)
 """
 import random
 from datetime import date, datetime
@@ -9,6 +9,7 @@ from typing import Dict, Tuple, Optional
 from sqlalchemy.orm import Session
 
 from models import User
+from config import is_market_closed, get_market_status_message
 
 
 class GameService:
@@ -40,6 +41,14 @@ class GameService:
         복권 긁기 (1일 3회, 1장 10,000원)
         Returns: {"success": bool, "reward": int, "message": str}
         """
+        # 장 마감 시간에만 가능
+        if not is_market_closed():
+            status_msg = get_market_status_message()
+            return {
+                "success": False,
+                "message": f"🎫 미니게임은 장 마감 후에만 가능해요!\n\n{status_msg}\n\n🎮 게임 가능 시간:\n• 평일 18:00 이후\n• 평일 08:30 이전\n• 주말/공휴일 종일"
+            }
+
         user = db.query(User).filter(User.kakao_id == kakao_id).first()
         if not user:
             return {"success": False, "message": "먼저 /시작 으로 게임을 시작해주세요."}
@@ -121,6 +130,14 @@ class GameService:
         """
         슬롯머신 (배팅 금액 필요)
         """
+        # 장 마감 시간에만 가능
+        if not is_market_closed():
+            status_msg = get_market_status_message()
+            return {
+                "success": False,
+                "message": f"🎰 미니게임은 장 마감 후에만 가능해요!\n\n{status_msg}\n\n🎮 게임 가능 시간:\n• 평일 18:00 이후\n• 평일 08:30 이전\n• 주말/공휴일 종일"
+            }
+
         user = db.query(User).filter(User.kakao_id == kakao_id).first()
         if not user:
             return {"success": False, "message": "먼저 /시작 으로 게임을 시작해주세요."}
@@ -174,6 +191,14 @@ class GameService:
         - 빨강/검정: 2배
         - 초록(0): 14배
         """
+        # 장 마감 시간에만 가능
+        if not is_market_closed():
+            status_msg = get_market_status_message()
+            return {
+                "success": False,
+                "message": f"🎡 미니게임은 장 마감 후에만 가능해요!\n\n{status_msg}\n\n🎮 게임 가능 시간:\n• 평일 18:00 이후\n• 평일 08:30 이전\n• 주말/공휴일 종일"
+            }
+
         user = db.query(User).filter(User.kakao_id == kakao_id).first()
         if not user:
             return {"success": False, "message": "먼저 /시작 으로 게임을 시작해주세요."}
@@ -253,6 +278,14 @@ class GameService:
         - 1-100 숫자 중 50보다 높은지 낮은지
         - 맞추면 1.9배
         """
+        # 장 마감 시간에만 가능
+        if not is_market_closed():
+            status_msg = get_market_status_message()
+            return {
+                "success": False,
+                "message": f"🎲 미니게임은 장 마감 후에만 가능해요!\n\n{status_msg}\n\n🎮 게임 가능 시간:\n• 평일 18:00 이후\n• 평일 08:30 이전\n• 주말/공휴일 종일"
+            }
+
         user = db.query(User).filter(User.kakao_id == kakao_id).first()
         if not user:
             return {"success": False, "message": "먼저 /시작 으로 게임을 시작해주세요."}
@@ -331,6 +364,14 @@ class GameService:
         동전 던지기
         - 앞/뒤 맞추면 1.95배
         """
+        # 장 마감 시간에만 가능
+        if not is_market_closed():
+            status_msg = get_market_status_message()
+            return {
+                "success": False,
+                "message": f"🪙 미니게임은 장 마감 후에만 가능해요!\n\n{status_msg}\n\n🎮 게임 가능 시간:\n• 평일 18:00 이후\n• 평일 08:30 이전\n• 주말/공휴일 종일"
+            }
+
         user = db.query(User).filter(User.kakao_id == kakao_id).first()
         if not user:
             return {"success": False, "message": "먼저 /시작 으로 게임을 시작해주세요."}

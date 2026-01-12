@@ -1,5 +1,7 @@
 """
 배틀 서비스 - 2인 주가 예측 대결
+- 장 열릴 때만 생성/참가 가능
+- 장 마감 시 마감가 기준으로 결과 처리
 """
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional
@@ -7,6 +9,7 @@ from sqlalchemy.orm import Session
 
 from models import Battle, User
 from services.stock_service import StockService
+from config import is_market_open, is_market_closed, get_market_status_message
 
 
 class BattleService:
@@ -32,6 +35,14 @@ class BattleService:
         배틀 생성 (도전장 던지기)
         prediction: "상승" or "하락"
         """
+        # 장이 열려있을 때만 가능 (정규장)
+        if not is_market_open():
+            status_msg = get_market_status_message()
+            return {
+                "success": False,
+                "message": f"⚔️ 배틀은 정규장 시간에만 가능해요!\n\n{status_msg}\n\n⏰ 배틀 가능 시간:\n• 평일 09:00~15:30\n\n🎮 장 마감 후에는 미니게임을 즐겨보세요!"
+            }
+
         # 유저 확인
         user = db.query(User).filter(User.kakao_id == challenger_id).first()
         if not user:
@@ -98,6 +109,14 @@ class BattleService:
     @classmethod
     def join_battle(cls, db: Session, opponent_id: str, battle_id: int) -> Dict:
         """배틀 참가 (도전 수락)"""
+        # 장이 열려있을 때만 가능 (정규장)
+        if not is_market_open():
+            status_msg = get_market_status_message()
+            return {
+                "success": False,
+                "message": f"⚔️ 배틀은 정규장 시간에만 가능해요!\n\n{status_msg}\n\n⏰ 배틀 가능 시간:\n• 평일 09:00~15:30\n\n🎮 장 마감 후에는 미니게임을 즐겨보세요!"
+            }
+
         # 유저 확인
         user = db.query(User).filter(User.kakao_id == opponent_id).first()
         if not user:
@@ -179,6 +198,10 @@ class BattleService:
             # 이미 종료된 배틀 결과 반환
             return cls._get_finished_result(db, battle)
 
+        # 장 마감 시 즉시 종료 (마감가 기준)
+        if is_market_closed():
+            return cls._finish_battle(db, battle, reason="market_close")
+
         # 배틀 종료 시간 확인
         end_time = battle.started_at + timedelta(minutes=battle.duration_minutes)
         if datetime.utcnow() < end_time:
@@ -194,7 +217,7 @@ class BattleService:
         return cls._finish_battle(db, battle)
 
     @classmethod
-    def _finish_battle(cls, db: Session, battle: Battle) -> Dict:
+    def _finish_battle(cls, db: Session, battle: Battle, reason: str = None) -> Dict:
         """배틀 종료 및 결과 처리"""
         # 현재 가격 조회
         stock_info = StockService.get_stock_price(battle.stock_name)
@@ -234,7 +257,13 @@ class BattleService:
         battle.status = "FINISHED"
         db.commit()
 
-        return cls._get_finished_result(db, battle)
+        result = cls._get_finished_result(db, battle)
+
+        # 장 마감으로 인한 종료 시 메시지 추가
+        if reason == "market_close":
+            result["market_closed"] = True
+
+        return result
 
     @classmethod
     def _get_finished_result(cls, db: Session, battle: Battle) -> Dict:
