@@ -247,7 +247,8 @@ class CommandHandler:
                 # 포트폴리오에서 찾음 - 종목코드로 시세 조회
                 stock_info = StockService.get_price(holding.stock_code)
                 if stock_info:
-                    # 동적 캐시에 다시 저장
+                    # 포트폴리오의 종목명 사용 (API 이름이 코드일 수 있음)
+                    stock_info["name"] = holding.stock_name
                     StockService._cache_stock(holding.stock_code, holding.stock_name)
 
         if not stock_info:

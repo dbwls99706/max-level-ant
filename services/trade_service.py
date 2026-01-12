@@ -72,6 +72,17 @@ class TradeService:
         
         # 종목 시세 조회
         stock_info = StockService.get_price(stock_query)
+
+        # 못 찾으면 포트폴리오에서 종목 코드 찾아서 재시도
+        if not stock_info:
+            holding = TradeService.find_holding_by_name(db, kakao_id, stock_query)
+            if holding:
+                stock_info = StockService.get_price(holding.stock_code)
+                if stock_info:
+                    # 포트폴리오의 종목명 사용 (API 응답 이름이 코드일 수 있음)
+                    stock_info["name"] = holding.stock_name
+                    StockService._cache_stock(holding.stock_code, holding.stock_name)
+
         if not stock_info:
             return {"success": False, "message": f"'{stock_query}' 종목을 찾을 수 없습니다."}
 
@@ -296,22 +307,33 @@ class TradeService:
         user = UserService.get_user(db, kakao_id)
         if not user:
             return {"success": False, "message": "먼저 /시작 으로 게임을 시작해주세요."}
-        
+
         stock_info = StockService.get_price(stock_query)
+
+        # 못 찾으면 포트폴리오에서 종목 코드 찾아서 재시도
+        if not stock_info:
+            holding = TradeService.find_holding_by_name(db, user.kakao_id, stock_query)
+            if holding:
+                stock_info = StockService.get_price(holding.stock_code)
+                if stock_info:
+                    stock_info["name"] = holding.stock_name
+                    StockService._cache_stock(holding.stock_code, holding.stock_name)
+
         if not stock_info:
             return {"success": False, "message": f"'{stock_query}' 종목을 찾을 수 없습니다."}
-        
+
         price = stock_info["price"]
-        
+
         # 수수료 포함 계산
         # cash >= price * qty * (1 + fee_rate)
         # qty <= cash / (price * (1 + fee_rate))
         max_qty = int(user.cash / (price * (1 + GameConfig.TRADE_FEE_RATE)))
-        
+
         if max_qty < 1:
             return {"success": False, "message": "잔고가 부족합니다."}
-        
-        return TradeService.buy_stock(db, kakao_id, stock_query, max_qty)
+
+        # 종목명 사용 (stock_query가 코드일 수도 있으므로)
+        return TradeService.buy_stock(db, kakao_id, stock_info["name"], max_qty)
     
     @staticmethod
     def sell_all(db: Session, kakao_id: str, stock_query: str) -> Dict:
