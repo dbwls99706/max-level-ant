@@ -78,27 +78,27 @@ class GameService:
             reward = random.randint(5_000_000, 10_000_000)
             tier = "🎊 대박"
             msg = "축하합니다!!! 전설의 대박!!!"
-        elif roll < 0.005:  # 0.45% - 1등 (100~300배)
+        elif roll < 0.0025:  # 0.2% - 1등 (100~300배)
             reward = random.randint(1_000_000, 3_000_000)
             tier = "🥇 1등"
             msg = "대단해요!"
-        elif roll < 0.025:  # 2% - 2등 (20~50배)
+        elif roll < 0.025:  # 2.25% - 2등 (20~50배)
             reward = random.randint(200_000, 500_000)
             tier = "🥈 2등"
             msg = "좋아요!"
-        elif roll < 0.075:  # 5% - 3등 (5~15배)
+        elif roll < 0.09:  # 6.5% - 3등 (5~15배)
             reward = random.randint(50_000, 150_000)
             tier = "🥉 3등"
             msg = "괜찮네요!"
-        elif roll < 0.20:  # 12.5% - 4등 (2~5배)
+        elif roll < 0.23:  # 14% - 4등 (2~5배)
             reward = random.randint(20_000, 50_000)
             tier = "🎁 4등"
             msg = "조금이나마..."
-        elif roll < 0.40:  # 20% - 5등 (본전 1배)
+        elif roll < 0.45:  # 22% - 5등 (본전 1배)
             reward = 10_000
             tier = "💫 5등"
             msg = "본전!"
-        else:  # 60% - 꽝
+        else:  # 55% - 꽝
             reward = random.randint(0, 2_000)
             tier = "😅 꽝"
             msg = "다음 기회에..."
