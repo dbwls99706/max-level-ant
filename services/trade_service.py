@@ -125,23 +125,24 @@ class TradeService:
         ).first()
         
         if holding:
-            # 기존 보유 → 평균 단가 계산
+            # 기존 보유 → 평균 단가 계산 (수수료 포함)
             total_qty = holding.quantity + quantity
-            total_invested = holding.total_invested + total_amount
+            total_invested = holding.total_invested + total_amount + fee
             avg_price = total_invested // total_qty
-            
+
             holding.quantity = total_qty
             holding.total_invested = total_invested
             holding.avg_price = avg_price
         else:
-            # 신규 매수
+            # 신규 매수 (수수료 포함 평단가)
+            total_invested = total_amount + fee
             holding = Holding(
                 kakao_id=kakao_id,
                 stock_code=code,
                 stock_name=name,
                 quantity=quantity,
-                avg_price=price,
-                total_invested=total_amount
+                avg_price=total_invested // quantity,
+                total_invested=total_invested
             )
             db.add(holding)
         
