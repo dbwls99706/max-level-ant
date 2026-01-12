@@ -8,6 +8,10 @@ from .ranking_service import RankingService
 from .mission_service import MissionService
 from .game_service import GameService
 from .news_service import NewsService
+from .battle_service import BattleService
+from .challenge_service import ChallengeService
+from .milestone_service import MilestoneService
+from .asset_service import AssetService
 
 __all__ = [
     "UserService",
@@ -16,5 +20,9 @@ __all__ = [
     "RankingService",
     "MissionService",
     "GameService",
-    "NewsService"
+    "NewsService",
+    "BattleService",
+    "ChallengeService",
+    "MilestoneService",
+    "AssetService"
 ]

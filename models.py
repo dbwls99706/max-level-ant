@@ -21,10 +21,10 @@ class User(Base):
     nickname = Column(String(100), nullable=True)
     
     # 보유 현금
-    cash = Column(BigInteger, default=10_000_000)
-    
+    cash = Column(BigInteger, default=5_000_000)
+
     # 초기 자금 (수익률 계산용)
-    initial_cash = Column(BigInteger, default=10_000_000)
+    initial_cash = Column(BigInteger, default=5_000_000)
     
     # 생성일
     created_at = Column(DateTime, default=datetime.utcnow)
@@ -127,3 +127,161 @@ class Transaction(Base):
     
     def __repr__(self):
         return f"<Transaction({self.trade_type} {self.stock_name} {self.quantity}주 @ {self.price:,})>"
+
+
+class Battle(Base):
+    """배틀 테이블 - 2인 주가 예측 대결"""
+    __tablename__ = "battles"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+
+    # 도전자 (배틀 생성자)
+    challenger_id = Column(String(100), ForeignKey("users.kakao_id"), nullable=False)
+
+    # 상대방 (배틀 수락자)
+    opponent_id = Column(String(100), ForeignKey("users.kakao_id"), nullable=True)
+
+    # 배틀 대상 종목
+    stock_code = Column(String(20), nullable=False)
+    stock_name = Column(String(100), nullable=False)
+
+    # 배틀 시작 시점 가격
+    start_price = Column(Integer, nullable=True)
+
+    # 배팅 금액
+    bet_amount = Column(BigInteger, default=100_000)
+
+    # 예측 (UP / DOWN)
+    challenger_prediction = Column(String(10), nullable=False)  # UP or DOWN
+    opponent_prediction = Column(String(10), nullable=True)
+
+    # 배틀 상태 (WAITING, ACTIVE, FINISHED, CANCELLED)
+    status = Column(String(20), default="WAITING")
+
+    # 최종 결과 가격
+    end_price = Column(Integer, nullable=True)
+
+    # 승자 kakao_id (무승부시 None)
+    winner_id = Column(String(100), nullable=True)
+
+    # 시간 정보
+    created_at = Column(DateTime, default=datetime.utcnow)
+    started_at = Column(DateTime, nullable=True)
+    ended_at = Column(DateTime, nullable=True)
+
+    # 배틀 지속 시간 (분)
+    duration_minutes = Column(Integer, default=60)
+
+    def __repr__(self):
+        return f"<Battle(id={self.id}, {self.stock_name}, status={self.status})>"
+
+
+class WeeklyChallenge(Base):
+    """주간 챌린지 테이블"""
+    __tablename__ = "weekly_challenges"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+
+    # 챌린지 주차 (예: 2024-W01)
+    week_id = Column(String(20), nullable=False, unique=True)
+
+    # 챌린지 타입 (TRADE_COUNT, PROFIT_RATE, ASSET_GROWTH, STREAK 등)
+    challenge_type = Column(String(50), nullable=False)
+
+    # 챌린지 목표 값
+    target_value = Column(Integer, nullable=False)
+
+    # 챌린지 설명
+    description = Column(String(500), nullable=False)
+
+    # 보상 금액
+    reward = Column(BigInteger, default=5_000_000)
+
+    # 챌린지 시작/종료일
+    start_date = Column(Date, nullable=False)
+    end_date = Column(Date, nullable=False)
+
+    def __repr__(self):
+        return f"<WeeklyChallenge({self.week_id}, {self.challenge_type})>"
+
+
+class UserChallenge(Base):
+    """유저별 챌린지 진행 현황"""
+    __tablename__ = "user_challenges"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+
+    kakao_id = Column(String(100), ForeignKey("users.kakao_id"), nullable=False)
+    challenge_id = Column(Integer, ForeignKey("weekly_challenges.id"), nullable=False)
+
+    # 현재 진행값
+    current_value = Column(Integer, default=0)
+
+    # 완료 여부
+    completed = Column(Integer, default=0)  # 0: 미완료, 1: 완료
+
+    # 보상 수령 여부
+    reward_claimed = Column(Integer, default=0)
+
+    __table_args__ = (
+        UniqueConstraint('kakao_id', 'challenge_id', name='unique_user_challenge'),
+    )
+
+    def __repr__(self):
+        return f"<UserChallenge(user={self.kakao_id}, challenge={self.challenge_id})>"
+
+
+class Milestone(Base):
+    """마일스톤 달성 기록"""
+    __tablename__ = "milestones"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+
+    kakao_id = Column(String(100), ForeignKey("users.kakao_id"), nullable=False)
+
+    # 마일스톤 타입 (ASSET_10M, ASSET_50M, ASSET_100M, TRADE_100, etc.)
+    milestone_type = Column(String(50), nullable=False)
+
+    # 달성 시점 자산
+    asset_at_achievement = Column(BigInteger, nullable=True)
+
+    # 달성 시간
+    achieved_at = Column(DateTime, default=datetime.utcnow)
+
+    # 보상 지급 여부
+    reward_claimed = Column(Integer, default=0)
+
+    __table_args__ = (
+        UniqueConstraint('kakao_id', 'milestone_type', name='unique_user_milestone'),
+    )
+
+    def __repr__(self):
+        return f"<Milestone(user={self.kakao_id}, type={self.milestone_type})>"
+
+
+class AssetHistory(Base):
+    """자산 히스토리 (차트용)"""
+    __tablename__ = "asset_history"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+
+    kakao_id = Column(String(100), ForeignKey("users.kakao_id"), nullable=False)
+
+    # 기록 날짜
+    record_date = Column(Date, nullable=False)
+
+    # 해당 시점 총 자산
+    total_asset = Column(BigInteger, nullable=False)
+
+    # 현금
+    cash = Column(BigInteger, nullable=False)
+
+    # 주식 평가액
+    stock_value = Column(BigInteger, default=0)
+
+    __table_args__ = (
+        UniqueConstraint('kakao_id', 'record_date', name='unique_user_date_asset'),
+    )
+
+    def __repr__(self):
+        return f"<AssetHistory(user={self.kakao_id}, date={self.record_date}, asset={self.total_asset:,})>"

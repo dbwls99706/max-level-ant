@@ -109,12 +109,44 @@ class UserService:
         user = UserService.get_user(db, kakao_id)
         if not user:
             return False
-        
+
         new_cash = user.cash + amount
         if new_cash < 0:
             return False
-        
+
         user.cash = new_cash
         db.commit()
-        
+
         return True
+
+    @staticmethod
+    def is_nickname_taken(db: Session, nickname: str, exclude_kakao_id: str = None) -> bool:
+        """
+        닉네임 중복 확인
+        exclude_kakao_id: 자기 자신은 제외 (닉네임 변경 시)
+        """
+        query = db.query(User).filter(User.nickname == nickname)
+
+        if exclude_kakao_id:
+            query = query.filter(User.kakao_id != exclude_kakao_id)
+
+        return query.first() is not None
+
+    @staticmethod
+    def update_nickname(db: Session, kakao_id: str, new_nickname: str) -> Tuple[bool, str]:
+        """
+        닉네임 업데이트 (중복 검사 포함)
+        Returns: (success, message)
+        """
+        user = UserService.get_user(db, kakao_id)
+        if not user:
+            return False, "유저를 찾을 수 없습니다."
+
+        # 중복 확인
+        if UserService.is_nickname_taken(db, new_nickname, kakao_id):
+            return False, f"❌ '{new_nickname}'은(는) 이미 사용 중인 닉네임입니다."
+
+        user.nickname = new_nickname
+        db.commit()
+
+        return True, f"✅ 닉네임이 '{new_nickname}'(으)로 설정되었습니다!"

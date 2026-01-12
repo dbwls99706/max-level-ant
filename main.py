@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 import uvicorn
 from contextlib import asynccontextmanager
 
-from database import get_db, init_db
+from database import get_db, init_db, reset_db
 from handlers import CommandHandler
 from utils import KakaoResponse
 from services.stock_service import KISAPIClient
@@ -147,6 +147,40 @@ async def debug_skill(request: Request, db: Session = Depends(get_db)):
         
     except Exception as e:
         return {"error": str(e)}
+
+
+# ===========================================
+# 관리자 엔드포인트
+# ===========================================
+@app.post("/admin/reset-db")
+async def admin_reset_db(request: Request):
+    """
+    데이터베이스 초기화 (모든 데이터 삭제)
+
+    curl -X POST http://localhost:8000/admin/reset-db \
+         -H "Content-Type: application/json" \
+         -d '{"confirm": "DELETE_ALL_DATA"}'
+    """
+    try:
+        body = await request.json()
+        confirm = body.get("confirm", "")
+
+        if confirm != "DELETE_ALL_DATA":
+            return {
+                "success": False,
+                "message": "초기화를 확인하려면 confirm 필드에 'DELETE_ALL_DATA'를 입력하세요."
+            }
+
+        # 데이터베이스 초기화
+        reset_db()
+
+        return {
+            "success": True,
+            "message": "🗑️ 데이터베이스가 초기화되었습니다. 모든 유저 데이터가 삭제되었습니다."
+        }
+
+    except Exception as e:
+        return {"success": False, "error": str(e)}
 
 
 # ===========================================
