@@ -286,6 +286,15 @@ class StockService:
     # 이름 -> 코드 역매핑
     _name_to_code = {v: k for k, v in STOCK_LIST.items()}
 
+    # API에서 가져온 종목 캐시 (급등주/급락주 등)
+    _dynamic_stocks = {}  # {name: code}
+
+    @classmethod
+    def _cache_stock(cls, code: str, name: str):
+        """API에서 가져온 종목 캐시"""
+        if name and code:
+            cls._dynamic_stocks[name] = code
+
     @classmethod
     def search_stock(cls, query: str) -> Optional[Dict]:
         """
@@ -293,21 +302,30 @@ class StockService:
         """
         query = query.strip()
 
-        # 1. 정확한 코드 매칭
+        # 1. 정확한 코드 매칭 (STOCK_LIST)
         if query in cls.STOCK_LIST:
             return {"code": query, "name": cls.STOCK_LIST[query]}
 
-        # 2. 정확한 이름 매칭
+        # 2. 정확한 이름 매칭 (STOCK_LIST)
         if query in cls._name_to_code:
             code = cls._name_to_code[query]
             return {"code": code, "name": query}
 
-        # 3. 부분 이름 매칭
+        # 3. 동적 캐시에서 검색 (API에서 가져온 종목)
+        if query in cls._dynamic_stocks:
+            return {"code": cls._dynamic_stocks[query], "name": query}
+
+        # 4. 부분 이름 매칭 (STOCK_LIST)
         for code, name in cls.STOCK_LIST.items():
             if query in name:
                 return {"code": code, "name": name}
 
-        # 4. 공백 제거 후 검색
+        # 5. 부분 이름 매칭 (동적 캐시)
+        for name, code in cls._dynamic_stocks.items():
+            if query in name:
+                return {"code": code, "name": name}
+
+        # 6. 공백 제거 후 검색
         query_clean = query.replace(" ", "")
         for code, name in cls.STOCK_LIST.items():
             if query_clean in name.replace(" ", ""):
@@ -381,17 +399,29 @@ class StockService:
     def get_top_volume(cls, market: str = "KOSPI", limit: int = 10) -> List[Dict]:
         """거래량 상위 종목"""
         market_code = "J" if market == "KOSPI" else "Q"
-        return KISAPIClient.get_volume_rank(market_code)[:limit]
+        stocks = KISAPIClient.get_volume_rank(market_code)[:limit]
+        # 캐시에 저장
+        for s in stocks:
+            cls._cache_stock(s.get("code"), s.get("name"))
+        return stocks
 
     @classmethod
     def get_top_gainers(cls, limit: int = 10) -> List[Dict]:
         """급등주 (상승률 상위)"""
-        return KISAPIClient.get_fluctuation_rank(sort="1")[:limit]
+        stocks = KISAPIClient.get_fluctuation_rank(sort="1")[:limit]
+        # 캐시에 저장
+        for s in stocks:
+            cls._cache_stock(s.get("code"), s.get("name"))
+        return stocks
 
     @classmethod
     def get_top_losers(cls, limit: int = 10) -> List[Dict]:
         """급락주 (하락률 상위)"""
-        return KISAPIClient.get_fluctuation_rank(sort="2")[:limit]
+        stocks = KISAPIClient.get_fluctuation_rank(sort="2")[:limit]
+        # 캐시에 저장
+        for s in stocks:
+            cls._cache_stock(s.get("code"), s.get("name"))
+        return stocks
 
     @classmethod
     def get_market_overview(cls) -> Dict:

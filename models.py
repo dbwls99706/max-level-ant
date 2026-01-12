@@ -37,6 +37,9 @@ class User(Base):
     last_ad_date = Column(Date, nullable=True)
     ad_count_today = Column(Integer, default=0)
 
+    # 복권 관련 (1일 1회)
+    last_lottery_date = Column(Date, nullable=True)
+
     # 일간 미션 관련
     last_mission_date = Column(Date, nullable=True)
     daily_trade_count = Column(Integer, default=0)

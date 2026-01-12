@@ -129,18 +129,20 @@ class CommandHandler:
         if is_new:
             welcome_msg = Messages.WELCOME.format(initial_cash=GameConfig.INITIAL_CASH)
             buttons = [
-                {"label": "🚀 급등주", "action": "message", "messageText": "/급등"},
                 {"label": "📅 출석 +200만", "action": "message", "messageText": "/출석"},
+                {"label": "🎫 무료복권", "action": "message", "messageText": "/복권"},
+                {"label": "🚀 급등주", "action": "message", "messageText": "/급등"},
             ]
-            buttons.extend(self._get_game_buttons())
             return KakaoResponse.quick_replies(welcome_msg, buttons)
         else:
             buttons = [
-                {"label": "🚀 급등주", "action": "message", "messageText": "/급등"},
                 {"label": "📅 출석", "action": "message", "messageText": "/출석"},
+                {"label": "🎫 복권", "action": "message", "messageText": "/복권"},
                 {"label": "💼 포폴", "action": "message", "messageText": "/포트폴리오"},
+                {"label": "🚀 급등주", "action": "message", "messageText": "/급등"},
+                {"label": "📰 뉴스", "action": "message", "messageText": "/뉴스"},
+                {"label": "🔍 검색", "action": "message", "messageText": "/검색"},
             ]
-            buttons.extend(self._get_game_buttons())
             return KakaoResponse.quick_replies("이미 가입했어요! 바로 플레이 👇", buttons)
     
     def handle_attendance(self) -> Dict:
