@@ -127,7 +127,7 @@ class KISAPIClient:
             url = f"{KISConfig.BASE_URL}/uapi/domestic-stock/v1/quotations/volume-rank"
             params = {
                 "FID_COND_MRKT_DIV_CODE": market,
-                "FID_COND_SCR_DIV_CODE": "20101",
+                "FID_COND_SCR_DIV_CODE": "20171",
                 "FID_INPUT_ISCD": "0000",
                 "FID_DIV_CLS_CODE": "0",
                 "FID_BLNG_CLS_CODE": "0",
