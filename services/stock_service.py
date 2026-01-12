@@ -162,32 +162,29 @@ class KISAPIClient:
     @classmethod
     def get_fluctuation_rank(cls, sort: str = "1") -> List[Dict]:
         """
-        등락률 순위 조회
-        sort: 1=상승, 2=하락
-        tr_id: FHPST01700000
+        등락률 순위 조회 (거래량 순위 API 활용)
+        sort: 1=상승률순, 2=하락률순
         """
-        headers = cls._get_headers("FHPST01700000")
+        # 거래량 순위 API로 데이터 가져온 후 등락률로 정렬
+        headers = cls._get_headers("FHPST01710000")
         if not headers:
             print("❌ 등락률 순위: 헤더 생성 실패")
             return []
 
         try:
-            url = f"{KISConfig.BASE_URL}/uapi/domestic-stock/v1/quotations/chk-fluctuation-detail"
+            url = f"{KISConfig.BASE_URL}/uapi/domestic-stock/v1/quotations/volume-rank"
             params = {
                 "FID_COND_MRKT_DIV_CODE": "J",
-                "FID_COND_SCR_DIV_CODE": "16174",
+                "FID_COND_SCR_DIV_CODE": "20101",
                 "FID_INPUT_ISCD": "0000",
-                "FID_RANK_SORT_CLS_CODE": sort,  # 1:상승, 2:하락
-                "FID_INPUT_CNT_1": "0",
-                "FID_PRC_CLS_CODE": "0",
+                "FID_DIV_CLS_CODE": "0",
+                "FID_BLNG_CLS_CODE": "0",
+                "FID_TRGT_CLS_CODE": "111111111",
+                "FID_TRGT_EXLS_CLS_CODE": "000000",
                 "FID_INPUT_PRICE_1": "",
                 "FID_INPUT_PRICE_2": "",
                 "FID_VOL_CNT": "",
-                "FID_TRGT_CLS_CODE": "0",
-                "FID_TRGT_EXLS_CLS_CODE": "0",
-                "FID_DIV_CLS_CODE": "0",
-                "FID_RSFL_RATE1": "",
-                "FID_RSFL_RATE2": "",
+                "FID_INPUT_DATE_1": "",
             }
 
             resp = requests.get(url, headers=headers, params=params, timeout=10)
@@ -198,15 +195,34 @@ class KISAPIClient:
                 print(f"등락률 API 결과: rt_cd={data.get('rt_cd')}, msg={data.get('msg1')}")
 
                 if data.get("rt_cd") == "0":
+                    items = data.get("output", [])
+
+                    # 등락률로 정렬
+                    if sort == "1":  # 상승률순
+                        items = sorted(items, key=lambda x: float(x.get("prdy_ctrt", 0) or 0), reverse=True)
+                    else:  # 하락률순
+                        items = sorted(items, key=lambda x: float(x.get("prdy_ctrt", 0) or 0))
+
                     results = []
-                    for item in data.get("output", [])[:10]:
+                    for item in items[:10]:
+                        change = float(item.get("prdy_ctrt", 0) or 0)
+                        # 상승주는 양수만, 하락주는 음수만
+                        if sort == "1" and change <= 0:
+                            continue
+                        if sort == "2" and change >= 0:
+                            continue
+
                         results.append({
-                            "code": item.get("stck_shrn_iscd", ""),
+                            "code": item.get("mksc_shrn_iscd", ""),
                             "name": item.get("hts_kor_isnm", ""),
                             "price": int(item.get("stck_prpr", 0) or 0),
-                            "change": float(item.get("prdy_ctrt", 0) or 0),
+                            "change": change,
                             "volume": int(item.get("acml_vol", 0) or 0),
                         })
+
+                        if len(results) >= 5:
+                            break
+
                     print(f"등락률 결과: {len(results)}개")
                     return results
                 else:
