@@ -110,7 +110,7 @@ class CommandHandler:
         elif cmd.startswith("/복권") or cmd.startswith("/ㅂㄱ"):
             return self.handle_lottery()
 
-        elif cmd.startswith("/슬롯") or cmd.startswith("/ㅅㄹ"):
+        elif cmd.startswith("/슬롯머신") or cmd.startswith("/ㅅㄹㅁ"):
             return self.handle_slot()
 
         elif cmd.startswith("/동전") or cmd.startswith("/코인"):
@@ -1020,7 +1020,7 @@ class CommandHandler:
 주식 쉬는 시간? 게임으로 돈 벌자!
 
 🎫 /복권 - 무료 복권 (운빨 테스트)
-🎰 /슬롯 [금액] - 슬롯머신 (777 잭팟!)
+🎰 /슬롯머신 [금액] - 슬롯머신 (777 잭팟!)
 🪙 /동전 [금액] [앞/뒤] - 동전던지기 (x1.95)
 🎲 /하이로우 [금액] [높/낮] - 숫자게임 (x1.9)"""
 
@@ -1028,7 +1028,7 @@ class CommandHandler:
             msg,
             [
                 {"label": "🎫 무료복권", "action": "message", "messageText": "/복권"},
-                {"label": "🎰 슬롯 5만", "action": "message", "messageText": "/슬롯 50000"},
+                {"label": "🎰 슬롯 5만", "action": "message", "messageText": "/슬롯머신 50000"},
                 {"label": "🪙 동전 10만", "action": "message", "messageText": "/동전 100000 앞"},
                 {"label": "🚀 급등주", "action": "message", "messageText": "/급등"}
             ]
@@ -1043,7 +1043,7 @@ class CommandHandler:
             return KakaoResponse.quick_replies(
                 result["message"],
                 [
-                    {"label": "🎰 슬롯머신", "action": "message", "messageText": "/슬롯 10000"},
+                    {"label": "🎰 슬롯머신", "action": "message", "messageText": "/슬롯머신 10000"},
                     {"label": "🪙 동전던지기", "action": "message", "messageText": "/동전 10000"},
                     {"label": "🚀 급등주", "action": "message", "messageText": "/급등"}
                 ]
@@ -1082,7 +1082,7 @@ class CommandHandler:
         if remaining > 0:
             buttons.append({"label": "🎫 한번 더!", "action": "message", "messageText": "/복권"})
         buttons.extend([
-            {"label": "🎰 슬롯머신", "action": "message", "messageText": "/슬롯 50000"},
+            {"label": "🎰 슬롯머신", "action": "message", "messageText": "/슬롯머신 50000"},
             {"label": "🚀 급등주", "action": "message", "messageText": "/급등"},
         ])
 
@@ -1099,11 +1099,11 @@ class CommandHandler:
                 bet = int(parts[1].replace(",", ""))
             except ValueError:
                 return KakaoResponse.quick_replies(
-                    "배팅금은 숫자로 입력해주세요.\n예: /슬롯 50000",
+                    "배팅금은 숫자로 입력해주세요.\n예: /슬롯머신 50000",
                     [
-                        {"label": "🎰 1만원", "action": "message", "messageText": "/슬롯 10000"},
-                        {"label": "🎰 5만원", "action": "message", "messageText": "/슬롯 50000"},
-                        {"label": "🎰 10만원", "action": "message", "messageText": "/슬롯 100000"}
+                        {"label": "🎰 1만원", "action": "message", "messageText": "/슬롯머신 10000"},
+                        {"label": "🎰 5만원", "action": "message", "messageText": "/슬롯머신 50000"},
+                        {"label": "🎰 10만원", "action": "message", "messageText": "/슬롯머신 100000"}
                     ]
                 )
 
@@ -1150,8 +1150,8 @@ class CommandHandler:
         return KakaoResponse.quick_replies(
             msg,
             [
-                {"label": "🎰 한번 더!", "action": "message", "messageText": f"/슬롯 {bet}"},
-                {"label": "🎰 2배 배팅", "action": "message", "messageText": f"/슬롯 {bet * 2}"},
+                {"label": "🎰 한번 더!", "action": "message", "messageText": f"/슬롯머신 {bet}"},
+                {"label": "🎰 2배 배팅", "action": "message", "messageText": f"/슬롯머신 {bet * 2}"},
                 {"label": "🚀 급등주", "action": "message", "messageText": "/급등"}
             ]
         )
