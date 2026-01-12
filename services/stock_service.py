@@ -140,20 +140,11 @@ class KISAPIClient:
             }
 
             resp = requests.get(url, headers=headers, params=params, timeout=10)
-            print(f"📊 거래량순위 API: {resp.status_code}")
 
             if resp.status_code == 200:
                 data = resp.json()
-                print(f"📊 거래량순위 결과: rt_cd={data.get('rt_cd')}, msg={data.get('msg1')}")
-
                 if data.get("rt_cd") == "0":
                     output = data.get("output", [])
-                    print(f"📊 거래량순위 데이터: {len(output)}개")
-
-                    # 첫 번째 항목 구조 확인
-                    if output:
-                        print(f"📊 첫 항목 키: {list(output[0].keys())[:5]}")
-
                     results = []
                     for item in output[:10]:
                         try:
@@ -164,13 +155,9 @@ class KISAPIClient:
                                 "change": float(item.get("prdy_ctrt", 0) or 0),
                                 "volume": int(item.get("acml_vol", 0) or 0),
                             })
-                        except Exception as e:
-                            print(f"❌ 항목 파싱 실패: {e}, item={item}")
+                        except:
+                            pass
                     return results
-                else:
-                    print(f"❌ 거래량순위 API 에러: {data.get('msg1')}")
-            else:
-                print(f"❌ 거래량순위 HTTP 에러: {resp.status_code}")
 
         except Exception as e:
             print(f"❌ 거래량 순위 조회 실패: {e}")
@@ -183,10 +170,7 @@ class KISAPIClient:
         등락률 순위 조회 (거래량 순위 데이터를 등락률로 재정렬)
         sort: 1=상승률순, 2=하락률순
         """
-        # 거래량 순위 데이터를 가져와서 등락률로 정렬
         items = cls.get_volume_rank("J")
-        print(f"등락률용 거래량 데이터: {len(items)}개")
-
         if not items:
             return []
 
@@ -196,7 +180,7 @@ class KISAPIClient:
         else:  # 하락률순
             items = sorted(items, key=lambda x: x.get("change", 0))
 
-        return items[:5]
+        return items[:3]
 
     @classmethod
     def get_market_index(cls, index_code: str) -> Optional[Dict]:
