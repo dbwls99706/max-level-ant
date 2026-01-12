@@ -94,3 +94,21 @@ def _migrate_db():
                     print(f"⚠️ 컬럼 추가 실패 ({col_name}): {e}")
 
     print("✅ 데이터베이스 마이그레이션 완료!")
+
+
+def reset_db():
+    """
+    데이터베이스 초기화 (모든 데이터 삭제)
+    주의: 모든 유저 데이터가 삭제됩니다!
+    """
+    from models import User, Holding, Transaction
+
+    # 모든 테이블 삭제
+    Base.metadata.drop_all(bind=engine)
+    print("🗑️ 모든 테이블 삭제 완료!")
+
+    # 테이블 재생성
+    Base.metadata.create_all(bind=engine)
+    print("✅ 테이블 재생성 완료!")
+
+    return True

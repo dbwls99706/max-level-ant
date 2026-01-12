@@ -17,24 +17,27 @@ class GameService:
     # 슬롯머신 심볼
     SLOT_SYMBOLS = ["🍒", "🍋", "🍊", "🍇", "💎", "7️⃣", "🚀"]
 
-    # 슬롯 배당률
+    # 슬롯 배당률 (매우 낮은 배당 - 잭팟 희귀)
     SLOT_PAYOUTS = {
-        "7️⃣7️⃣7️⃣": 50,      # 잭팟 50배
-        "💎💎💎": 30,         # 다이아 30배
-        "🚀🚀🚀": 20,         # 로켓 20배
-        "🍇🍇🍇": 10,         # 포도 10배
-        "🍊🍊🍊": 5,          # 오렌지 5배
-        "🍋🍋🍋": 3,          # 레몬 3배
-        "🍒🍒🍒": 2,          # 체리 2배
+        "7️⃣7️⃣7️⃣": 50,      # 잭팟 50배 (희귀 - 1/343 = 0.29%)
+        "💎💎💎": 20,         # 다이아 20배
+        "🚀🚀🚀": 10,         # 로켓 10배
+        "🍇🍇🍇": 5,          # 포도 5배
+        "🍊🍊🍊": 3,          # 오렌지 3배
+        "🍋🍋🍋": 2,          # 레몬 2배
+        "🍒🍒🍒": 1.5,        # 체리 1.5배
     }
 
     # 복권 1일 최대 횟수
     MAX_LOTTERY_PER_DAY = 3
 
+    # 복권 가격
+    LOTTERY_COST = 10_000
+
     @classmethod
     def play_lottery(cls, db: Session, kakao_id: str) -> Dict:
         """
-        복권 긁기 (1일 3회 무료)
+        복권 긁기 (1일 3회, 1장 10,000원)
         Returns: {"success": bool, "reward": int, "message": str}
         """
         user = db.query(User).filter(User.kakao_id == kakao_id).first()
@@ -54,44 +57,63 @@ class GameService:
                 "message": f"🎫 오늘 복권은 모두 긁었어요! ({cls.MAX_LOTTERY_PER_DAY}회)\n내일 다시 도전하세요 🍀"
             }
 
+        # 잔액 확인
+        if user.cash < cls.LOTTERY_COST:
+            return {
+                "success": False,
+                "message": f"❌ 잔액 부족!\n복권 가격: {cls.LOTTERY_COST:,}원\n보유: {user.cash:,}원"
+            }
+
+        # 복권 구매 (비용 차감)
+        user.cash -= cls.LOTTERY_COST
+
         # 복권 사용 기록
         user.lottery_count_today += 1
         remaining = cls.MAX_LOTTERY_PER_DAY - user.lottery_count_today
 
-        # 복권 확률 (도파민용 - 작은 당첨 자주, 큰 당첨 드물게)
+        # 복권 확률 (기준: 복권 1장 10,000원)
         roll = random.random()
 
-        if roll < 0.01:  # 1% - 대박
+        if roll < 0.0005:  # 0.05% - 대박 (500~1000배)
             reward = random.randint(5_000_000, 10_000_000)
             tier = "🎊 대박"
-            msg = "축하합니다!!!"
-        elif roll < 0.05:  # 4% - 1등
+            msg = "축하합니다!!! 전설의 대박!!!"
+        elif roll < 0.0025:  # 0.2% - 1등 (100~300배)
             reward = random.randint(1_000_000, 3_000_000)
             tier = "🥇 1등"
             msg = "대단해요!"
-        elif roll < 0.15:  # 10% - 2등
-            reward = random.randint(500_000, 1_000_000)
+        elif roll < 0.025:  # 2.25% - 2등 (20~50배)
+            reward = random.randint(200_000, 500_000)
             tier = "🥈 2등"
             msg = "좋아요!"
-        elif roll < 0.35:  # 20% - 3등
-            reward = random.randint(100_000, 500_000)
+        elif roll < 0.09:  # 6.5% - 3등 (5~15배)
+            reward = random.randint(50_000, 150_000)
             tier = "🥉 3등"
             msg = "괜찮네요!"
-        elif roll < 0.65:  # 30% - 4등
-            reward = random.randint(10_000, 100_000)
+        elif roll < 0.23:  # 14% - 4등 (2~5배)
+            reward = random.randint(20_000, 50_000)
             tier = "🎁 4등"
-            msg = "아쉽지만..."
-        else:  # 35% - 꽝
-            reward = random.randint(1_000, 10_000)
+            msg = "조금이나마..."
+        elif roll < 0.45:  # 22% - 5등 (본전 1배)
+            reward = 10_000
+            tier = "💫 5등"
+            msg = "본전!"
+        else:  # 55% - 꽝
+            reward = random.randint(0, 2_000)
             tier = "😅 꽝"
             msg = "다음 기회에..."
 
         user.cash += reward
         db.commit()
 
+        # 순이익 계산
+        profit = reward - cls.LOTTERY_COST
+
         return {
             "success": True,
+            "cost": cls.LOTTERY_COST,
             "reward": reward,
+            "profit": profit,
             "tier": tier,
             "message": msg,
             "cash": user.cash,
@@ -128,8 +150,8 @@ class GameService:
         if result in cls.SLOT_PAYOUTS:
             multiplier = cls.SLOT_PAYOUTS[result]
         elif slot1 == slot2 or slot2 == slot3 or slot1 == slot3:
-            # 2개 일치 - 1.5배
-            multiplier = 1.5
+            # 2개 일치 - 1배 (본전)
+            multiplier = 1.0
 
         winnings = int(bet * multiplier)
         user.cash += winnings

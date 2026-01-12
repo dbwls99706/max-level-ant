@@ -8,8 +8,12 @@ import re
 from typing import Dict
 from sqlalchemy.orm import Session
 
-from services import UserService, StockService, TradeService, RankingService, MissionService, GameService, NewsService
-from utils import KakaoResponse
+from services import (
+    UserService, StockService, TradeService, RankingService,
+    MissionService, GameService, NewsService, BattleService,
+    ChallengeService, MilestoneService, AssetService
+)
+from utils import KakaoResponse, get_streak_display, get_profit_bar, get_tier_title, validate_nickname, validate_quantity
 from config import GameConfig, Messages, is_market_closed
 
 
@@ -121,6 +125,40 @@ class CommandHandler:
         elif cmd.startswith("/닉네임") or cmd.startswith("/ㄴㄴ"):
             return self.handle_nickname()
 
+        # 배틀 시스템
+        elif cmd.startswith("/배틀설명"):
+            return self.handle_battle_help()
+
+        elif cmd.startswith("/배틀생성") or cmd.startswith("/배틀"):
+            return self.handle_battle_create()
+
+        elif cmd.startswith("/배틀참가"):
+            return self.handle_battle_join()
+
+        elif cmd.startswith("/배틀결과"):
+            return self.handle_battle_result()
+
+        elif cmd.startswith("/배틀목록") or cmd.startswith("/대기배틀"):
+            return self.handle_battle_list()
+
+        # 주간 챌린지
+        elif cmd.startswith("/챌린지") or cmd.startswith("/주간"):
+            return self.handle_challenge()
+
+        elif cmd.startswith("/챌린지보상"):
+            return self.handle_challenge_reward()
+
+        # 마일스톤
+        elif cmd.startswith("/마일스톤") or cmd.startswith("/목표"):
+            return self.handle_milestone()
+
+        elif cmd.startswith("/마일스톤보상"):
+            return self.handle_milestone_reward()
+
+        # 자산 차트
+        elif cmd.startswith("/차트") or cmd.startswith("/자산차트"):
+            return self.handle_asset_chart()
+
         elif cmd.startswith("/도움말") or cmd.startswith("/help") or cmd.startswith("/ㄷㅇㅁ"):
             return self.handle_help()
 
@@ -157,14 +195,21 @@ class CommandHandler:
         if not success and reward == 0 and streak == 0:
             return KakaoResponse.simple_text("먼저 /시작 으로 게임을 시작해주세요.")
 
+        # 스트릭 시각화
+        streak_emoji = get_streak_display(streak)
+
         if success:
-            msg = Messages.ATTENDANCE_SUCCESS.format(
-                reward=reward,
-                streak=streak,
-                cash=cash
-            )
+            msg = f"""✅ 출석 완료!
+
+💰 +{reward:,}원 지급!
+{streak_emoji} 연속 출석: {streak}일
+
+현재 잔고: {cash:,}원"""
         else:
-            msg = Messages.ATTENDANCE_ALREADY.format(streak=streak)
+            msg = f"""⚠️ 오늘은 이미 출석했습니다!
+
+내일 다시 출석해주세요.
+{streak_emoji} 현재 연속 출석: {streak}일"""
 
         buttons = [
             {"label": "🚀 급등주", "action": "message", "messageText": "/급등"},
@@ -173,35 +218,8 @@ class CommandHandler:
         buttons.extend(self._get_game_buttons())
         return KakaoResponse.quick_replies(msg, buttons)
 
-    def handle_ad(self) -> Dict:
-        """광고 시청"""
-        success, reward, remaining, cash = UserService.watch_ad(self.db, self.kakao_id)
+    # handle_ad() 제거됨 - 광고 기능 비활성화
 
-        if not success and reward == 0 and remaining == 0 and cash == 0:
-            return KakaoResponse.simple_text("먼저 /시작 으로 게임을 시작해주세요.")
-
-        if success:
-            msg = Messages.AD_SUCCESS.format(
-                reward=reward,
-                remaining=remaining,
-                cash=cash
-            )
-            buttons = [
-                {"label": "🚀 급등주", "action": "message", "messageText": "/급등"},
-                {"label": "📺 광고 한번 더", "action": "message", "messageText": "/광고"},
-            ]
-            buttons.extend(self._get_game_buttons())
-            return KakaoResponse.quick_replies(msg, buttons)
-        else:
-            buttons = [
-                {"label": "🚀 급등주", "action": "message", "messageText": "/급등"},
-            ]
-            buttons.extend(self._get_game_buttons())
-            return KakaoResponse.quick_replies(
-                Messages.AD_LIMIT.format(max_ads=GameConfig.MAX_ADS_PER_DAY),
-                buttons
-            )
-    
     def handle_price(self) -> Dict:
         """시세 조회"""
         parts = self.utterance.split(maxsplit=1)
@@ -495,14 +513,17 @@ class CommandHandler:
                 {"label": "📊 인기종목", "action": "message", "messageText": "/인기"}
             ]
 
-        # 총 수익률 이모지
-        profit_emoji = "🚀" if portfolio["profit_rate"] >= 10 else ("📈" if portfolio["profit_rate"] >= 0 else "📉")
+        # 시각적 요소 추가
+        tier = get_tier_title(portfolio['total_asset'])
+        profit_bar = get_profit_bar(portfolio['profit_rate'])
 
         msg = f"""💼 내 포트폴리오
 
+{tier}
 💵 현금: {portfolio['cash']:,}원
 {holdings_text}
-{profit_emoji} 총자산: {portfolio['total_asset']:,}원 ({portfolio['profit_rate']:+.1f}%)"""
+{profit_bar}
+💰 총자산: {portfolio['total_asset']:,}원"""
 
         if not buttons:
             buttons = [{"label": "📊 인기종목", "action": "message", "messageText": "/인기"}]
@@ -902,11 +923,18 @@ class CommandHandler:
             effect = ""
 
         remaining = result.get("remaining", 0)
+        profit = result.get("profit", 0)
+        profit_emoji = "📈" if profit > 0 else "📉" if profit < 0 else "➖"
+        profit_text = f"+{profit:,}" if profit > 0 else f"{profit:,}"
+
         msg = f"""🎫 복권 긁기 {effect}
 
 {tier}! {result['message']}
 
+🎟️ 복권 가격: -{result['cost']:,}원
 💰 당첨금: +{result['reward']:,}원
+{profit_emoji} 순이익: {profit_text}원
+
 📍 오늘 남은 횟수: {remaining}회
 💵 현재 잔고: {result['cash']:,}원"""
 
@@ -1102,24 +1130,424 @@ class CommandHandler:
         if len(parts) < 2:
             current = user.nickname if user.nickname else "없음"
             return KakaoResponse.simple_text(
-                f"🏷️ 닉네임 설정\n\n현재 닉네임: {current}\n\n사용법: /닉네임 [새 닉네임]\n예: /닉네임 주식왕"
+                f"🏷️ 닉네임 설정\n\n현재 닉네임: {current}\n\n사용법: /닉네임 [새 닉네임]\n예: /닉네임 투자왕"
             )
 
         new_nickname = parts[1].strip()
 
-        # 닉네임 유효성 검사
-        if len(new_nickname) < 2 or len(new_nickname) > 10:
-            return KakaoResponse.simple_text("❌ 닉네임은 2~10자로 설정해주세요.")
+        # 닉네임 유효성 검사 (강화된 검증)
+        is_valid, error_msg = validate_nickname(new_nickname)
+        if not is_valid:
+            return KakaoResponse.simple_text(error_msg)
+
+        # 닉네임 중복 검사
+        if UserService.is_nickname_taken(self.db, new_nickname, self.kakao_id):
+            return KakaoResponse.simple_text(f"❌ '{new_nickname}'은(는) 이미 사용 중인 닉네임입니다.\n다른 닉네임을 선택해주세요.")
 
         # 닉네임 업데이트
-        user.nickname = new_nickname
-        self.db.commit()
+        success, msg = UserService.update_nickname(self.db, self.kakao_id, new_nickname)
+
+        if not success:
+            return KakaoResponse.simple_text(msg)
 
         return KakaoResponse.quick_replies(
-            f"✅ 닉네임이 '{new_nickname}'(으)로 설정되었습니다!",
+            msg,
             [
                 {"label": "🏆 랭킹", "action": "message", "messageText": "/랭킹"},
                 {"label": "💼 포트폴리오", "action": "message", "messageText": "/포트폴리오"}
+            ]
+        )
+
+    # ==========================================
+    # 배틀 시스템 핸들러
+    # ==========================================
+
+    def handle_battle_help(self) -> Dict:
+        """배틀 설명"""
+        msg = """⚔️ 배틀 시스템 설명
+
+🎯 배틀이란?
+다른 유저와 주가 예측 대결!
+종목의 주가가 오를지 내릴지 예측하세요.
+
+📝 진행 방식
+1. 도전자가 종목/예측/배팅금으로 배틀 생성
+2. 상대방이 배틀에 참가 (반대 방향 예측)
+3. 60분 후 주가 변동으로 승패 결정
+4. 승자가 배팅금 x2 획득!
+
+💡 예시
+• 도전자: 삼성전자 "상승" 예측 (10만원)
+• 상대방: 삼성전자 "하락" 예측 (10만원)
+• 60분 후 삼성전자가 올랐다면 → 도전자 승리!
+• 승자는 20만원 획득 🎉
+
+⚠️ 주의사항
+• 한 번 생성/참가하면 취소 불가
+• 여러 배틀 동시 참여 가능
+• 무승부시 배팅금 반환
+
+📋 명령어
+/배틀 [종목] [상승/하락] [금액] - 생성
+/배틀참가 [ID] - 참가
+/배틀결과 [ID] - 결과 확인
+/배틀목록 - 대기 중인 배틀"""
+
+        return KakaoResponse.quick_replies(
+            msg,
+            [
+                {"label": "⚔️ 배틀생성", "action": "message", "messageText": "/배틀"},
+                {"label": "📋 배틀목록", "action": "message", "messageText": "/배틀목록"}
+            ]
+        )
+
+    def handle_battle_create(self) -> Dict:
+        """배틀 생성"""
+        parts = self.utterance.split()
+
+        # /배틀 [종목] [상승/하락] [금액(선택)]
+        if len(parts) < 3:
+            return KakaoResponse.quick_replies(
+                "⚔️ 배틀 생성\n\n사용법: /배틀 [종목] [상승/하락] [금액]\n예: /배틀 삼성전자 상승 100000\n\n❓ /배틀설명 으로 자세한 설명 확인",
+                [
+                    {"label": "❓ 배틀설명", "action": "message", "messageText": "/배틀설명"},
+                    {"label": "⚔️ 삼성전자 상승", "action": "message", "messageText": "/배틀 삼성전자 상승 100000"},
+                    {"label": "📋 배틀목록", "action": "message", "messageText": "/배틀목록"}
+                ]
+            )
+
+        stock_name = parts[1]
+        prediction = parts[2]
+        bet = 100_000
+        if len(parts) >= 4:
+            try:
+                bet = int(parts[3].replace(",", ""))
+            except ValueError:
+                pass
+
+        result = BattleService.create_battle(
+            self.db, self.kakao_id, stock_name, prediction, bet
+        )
+
+        if not result["success"]:
+            return KakaoResponse.simple_text(result["message"])
+
+        msg = f"""⚔️ 배틀 생성 완료!
+
+📊 종목: {result['stock_name']}
+💰 현재가: {result['current_price']:,}원
+{result['pred_emoji']} 내 예측: {result['prediction']}
+💵 배팅금: {result['bet_amount']:,}원
+⏱️ 진행시간: {result['duration']}분
+
+🆔 배틀 ID: {result['battle_id']}
+
+⏳ 상대방 대기 중...
+다른 유저가 '/배틀참가 {result['battle_id']}'로 참가하면 배틀 시작!
+
+⚠️ 생성 후 취소 불가"""
+
+        return KakaoResponse.quick_replies(
+            msg,
+            [
+                {"label": "📋 배틀목록", "action": "message", "messageText": "/배틀목록"},
+                {"label": "⚔️ 추가 배틀", "action": "message", "messageText": "/배틀"}
+            ]
+        )
+
+    def handle_battle_join(self) -> Dict:
+        """배틀 참가"""
+        parts = self.utterance.split()
+
+        if len(parts) < 2:
+            return KakaoResponse.quick_replies(
+                "⚔️ 배틀 참가\n\n사용법: /배틀참가 [배틀ID]\n예: /배틀참가 1",
+                [{"label": "📋 배틀목록", "action": "message", "messageText": "/배틀목록"}]
+            )
+
+        try:
+            battle_id = int(parts[1])
+        except ValueError:
+            return KakaoResponse.simple_text("배틀 ID는 숫자입니다.")
+
+        result = BattleService.join_battle(self.db, self.kakao_id, battle_id)
+
+        if not result["success"]:
+            return KakaoResponse.simple_text(result["message"])
+
+        msg = f"""⚔️ 배틀 시작!
+
+📊 종목: {result['stock_name']}
+💰 시작가: {result['start_price']:,}원
+💵 배팅금: {result['bet_amount']:,}원
+
+🔵 {result['challenger_name']}: {result['challenger_prediction']}
+🔴 {result['opponent_name']}: {result['opponent_prediction']}
+
+⏱️ {result['duration']}분 후 결과 확인!
+/배틀결과 {result['battle_id']}"""
+
+        return KakaoResponse.quick_replies(
+            msg,
+            [{"label": f"📊 결과확인", "action": "message", "messageText": f"/배틀결과 {result['battle_id']}"}]
+        )
+
+    def handle_battle_result(self) -> Dict:
+        """배틀 결과 확인"""
+        parts = self.utterance.split()
+
+        if len(parts) < 2:
+            return KakaoResponse.simple_text("사용법: /배틀결과 [배틀ID]")
+
+        try:
+            battle_id = int(parts[1])
+        except ValueError:
+            return KakaoResponse.simple_text("배틀 ID는 숫자입니다.")
+
+        result = BattleService.check_battle_result(self.db, battle_id)
+
+        if not result["success"]:
+            return KakaoResponse.simple_text(result["message"])
+
+        if result.get("finished"):
+            change_emoji = "📈" if result["price_change"] >= 0 else "📉"
+
+            # 승패 여부에 따른 강조 표시
+            if result['winner'] == "무승부":
+                result_header = "🤝 무승부!"
+                result_detail = "주가 변동 없음 - 배팅금 반환"
+            else:
+                result_header = f"🎊🎊🎊 배틀 종료! 🎊🎊🎊"
+                result_detail = f"🏆 승자: {result['winner']}"
+
+            msg = f"""⚔️ 배틀 결과
+
+{result_header}
+
+📊 종목: {result['stock_name']}
+💰 시작가: {result['start_price']:,}원
+💰 종료가: {result['end_price']:,}원
+{change_emoji} 변동: {result['price_change']:+,}원 ({result['change_rate']:+.2f}%)
+
+👤 {result['challenger_name']} vs {result['opponent_name']}
+
+{result_detail}
+💰 상금: {result['prize']:,}원
+
+GG! 다음 배틀도 기대해주세요! 🎮"""
+
+            return KakaoResponse.quick_replies(
+                msg,
+                [
+                    {"label": "⚔️ 새 배틀", "action": "message", "messageText": "/배틀"},
+                    {"label": "📋 배틀목록", "action": "message", "messageText": "/배틀목록"},
+                    {"label": "💼 포트폴리오", "action": "message", "messageText": "/포트폴리오"}
+                ]
+            )
+
+        return KakaoResponse.simple_text(result["message"])
+
+    def handle_battle_list(self) -> Dict:
+        """대기 중인 배틀 목록"""
+        battles = BattleService.get_waiting_battles(self.db)
+
+        if not battles:
+            return KakaoResponse.quick_replies(
+                "⚔️ 대기 중인 배틀이 없습니다.\n새로운 배틀을 시작해보세요!",
+                [
+                    {"label": "⚔️ 배틀생성", "action": "message", "messageText": "/배틀"},
+                    {"label": "🚀 급등주", "action": "message", "messageText": "/급등"}
+                ]
+            )
+
+        msg = "⚔️ 대기 중인 배틀\n"
+        buttons = []
+        for b in battles[:5]:
+            pred_emoji = "📈" if b["prediction"] == "상승" else "📉"
+            msg += f"\n🆔 {b['id']} | {b['challenger']}"
+            msg += f"\n   {b['stock_name']} {pred_emoji}{b['prediction']} ({b['bet_amount']:,}원)\n"
+
+            if len(buttons) < 3:
+                buttons.append({
+                    "label": f"⚔️ #{b['id']} 참가",
+                    "action": "message",
+                    "messageText": f"/배틀참가 {b['id']}"
+                })
+
+        buttons.append({"label": "⚔️ 새 배틀", "action": "message", "messageText": "/배틀"})
+
+        return KakaoResponse.quick_replies(msg, buttons)
+
+    # ==========================================
+    # 주간 챌린지 핸들러
+    # ==========================================
+
+    def handle_challenge(self) -> Dict:
+        """주간 챌린지 현황"""
+        result = ChallengeService.get_user_challenge_progress(self.db, self.kakao_id)
+
+        if not result["success"]:
+            return KakaoResponse.simple_text(result["message"])
+
+        ch = result["challenge"]
+        pr = result["progress"]
+
+        # 진행 바 생성
+        progress_bar = "▓" * int(pr["progress_rate"] / 10) + "░" * (10 - int(pr["progress_rate"] / 10))
+
+        status = "✅ 완료!" if pr["completed"] else f"{pr['current']}/{pr['target']}"
+        reward_status = "(수령완료)" if pr["reward_claimed"] else ""
+
+        msg = f"""🎯 주간 챌린지
+
+{ch['description']}
+
+📊 진행: [{progress_bar}] {pr['progress_rate']:.0f}%
+🎯 상태: {status} {reward_status}
+💰 보상: {ch['reward']:,}원
+
+📅 기간: {ch['start_date']} ~ {ch['end_date']}"""
+
+        buttons = []
+        if pr["completed"] and not pr["reward_claimed"]:
+            buttons.append({"label": "🎁 보상받기", "action": "message", "messageText": "/챌린지보상"})
+
+        buttons.extend([
+            {"label": "🏆 마일스톤", "action": "message", "messageText": "/마일스톤"},
+            {"label": "💼 포트폴리오", "action": "message", "messageText": "/포트폴리오"}
+        ])
+
+        return KakaoResponse.quick_replies(msg, buttons)
+
+    def handle_challenge_reward(self) -> Dict:
+        """챌린지 보상 수령"""
+        result = ChallengeService.claim_challenge_reward(self.db, self.kakao_id)
+
+        if not result["success"]:
+            return KakaoResponse.simple_text(result["message"])
+
+        msg = f"""🎉 챌린지 보상 수령!
+
+💰 +{result['reward']:,}원
+💵 현재 잔고: {result['cash']:,}원"""
+
+        return KakaoResponse.quick_replies(
+            msg,
+            [
+                {"label": "🎯 챌린지", "action": "message", "messageText": "/챌린지"},
+                {"label": "💼 포트폴리오", "action": "message", "messageText": "/포트폴리오"}
+            ]
+        )
+
+    # ==========================================
+    # 마일스톤 핸들러
+    # ==========================================
+
+    def handle_milestone(self) -> Dict:
+        """마일스톤 현황"""
+        user = UserService.get_user(self.db, self.kakao_id)
+        if not user:
+            return KakaoResponse.simple_text("먼저 /시작 으로 게임을 시작해주세요.")
+
+        result = MilestoneService.get_user_milestones(self.db, self.kakao_id)
+
+        msg = f"""🏆 마일스톤
+
+✅ 달성: {len(result['achieved'])}개
+⬜ 미달성: {len(result['pending'])}개
+"""
+
+        if result["unclaimed_rewards"] > 0:
+            msg += f"🎁 미수령 보상: {result['unclaimed_rewards']:,}원\n"
+
+        # 달성한 마일스톤 (최근 3개)
+        if result["achieved"]:
+            msg += "\n✅ 최근 달성\n"
+            for m in result["achieved"][-3:]:
+                claimed = "✓" if m["reward_claimed"] else "🎁"
+                msg += f"  {m['name']} {claimed}\n"
+
+        # 다음 목표 (2개)
+        if result["pending"]:
+            msg += "\n🎯 다음 목표\n"
+            for m in result["pending"][:2]:
+                msg += f"  {m['name']}\n"
+                msg += f"    {m['description']} (보상: {m['reward']:,}원)\n"
+
+        buttons = []
+        if result["unclaimed_rewards"] > 0:
+            buttons.append({"label": "🎁 전체 보상받기", "action": "message", "messageText": "/마일스톤보상"})
+
+        buttons.extend([
+            {"label": "🎯 챌린지", "action": "message", "messageText": "/챌린지"},
+            {"label": "💼 포트폴리오", "action": "message", "messageText": "/포트폴리오"}
+        ])
+
+        return KakaoResponse.quick_replies(msg, buttons)
+
+    def handle_milestone_reward(self) -> Dict:
+        """마일스톤 보상 수령"""
+        result = MilestoneService.claim_all_rewards(self.db, self.kakao_id)
+
+        if not result["success"]:
+            return KakaoResponse.simple_text(result["message"])
+
+        msg = f"""🎉 마일스톤 보상 수령!
+
+💰 +{result['total_reward']:,}원 ({result['count']}개)
+💵 현재 잔고: {result['cash']:,}원
+
+달성 마일스톤:
+"""
+        for m in result["milestones"]:
+            msg += f"  ✅ {m}\n"
+
+        return KakaoResponse.quick_replies(
+            msg,
+            [
+                {"label": "🏆 마일스톤", "action": "message", "messageText": "/마일스톤"},
+                {"label": "💼 포트폴리오", "action": "message", "messageText": "/포트폴리오"}
+            ]
+        )
+
+    # ==========================================
+    # 자산 차트 핸들러
+    # ==========================================
+
+    def handle_asset_chart(self) -> Dict:
+        """자산 차트 조회"""
+        user = UserService.get_user(self.db, self.kakao_id)
+        if not user:
+            return KakaoResponse.simple_text("먼저 /시작 으로 게임을 시작해주세요.")
+
+        # 오늘 자산 기록
+        AssetService.record_daily_asset(self.db, self.kakao_id)
+
+        # 차트 생성
+        chart = AssetService.generate_ascii_chart(self.db, self.kakao_id, days=7)
+
+        # 요약 정보
+        summary = AssetService.get_asset_summary(self.db, self.kakao_id)
+
+        msg = f"📊 내 자산 차트 (7일)\n\n{chart}"
+
+        if summary.get("has_history") and summary.get("changes"):
+            msg += "\n\n📈 기간별 변동"
+            if "day" in summary["changes"]:
+                d = summary["changes"]["day"]
+                emoji = "🔺" if d["amount"] >= 0 else "🔻"
+                msg += f"\n  어제대비: {d['amount']:+,}원 ({d['rate']:+.1f}%) {emoji}"
+
+            if "week" in summary["changes"]:
+                w = summary["changes"]["week"]
+                emoji = "🔺" if w["amount"] >= 0 else "🔻"
+                msg += f"\n  주간: {w['amount']:+,}원 ({w['rate']:+.1f}%) {emoji}"
+
+        return KakaoResponse.quick_replies(
+            msg,
+            [
+                {"label": "💼 포트폴리오", "action": "message", "messageText": "/포트폴리오"},
+                {"label": "🏆 랭킹", "action": "message", "messageText": "/랭킹"}
             ]
         )
 
