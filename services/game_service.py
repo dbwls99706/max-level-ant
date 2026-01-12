@@ -73,7 +73,7 @@ class GameService:
         user.lottery_count_today += 1
         remaining = cls.MAX_LOTTERY_PER_DAY - user.lottery_count_today
 
-        # 복권 확률 (기준: 복권 1장 10,000원, 기대값 ~85%)
+        # 복권 확률 (기준: 복권 1장 10,000원, 5회 수행 시 기대값 100%)
         roll = random.random()
 
         if roll < 0.0025:  # 0.25% - 1등 (50~100배)
@@ -92,11 +92,11 @@ class GameService:
             reward = random.randint(8_000, 12_000)
             tier = "🎁 4등"
             msg = "조금이나마..."
-        elif roll < 0.45:  # 22% - 5등 (본전 1배)
+        elif roll < 0.57:  # 34% - 5등 (본전 1배)
             reward = 10_000
             tier = "💫 5등"
             msg = "본전!"
-        else:  # 55% - 꽝
+        else:  # 43% - 꽝
             reward = random.randint(0, 1_000)
             tier = "😅 꽝"
             msg = "다음 기회에..."
