@@ -119,6 +119,9 @@ class CommandHandler:
         elif cmd.startswith("/하이로우") or cmd.startswith("/ㅎㅇㄹㅇ"):
             return self.handle_highlow()
 
+        elif cmd.startswith("/룰렛") or cmd.startswith("/ㄹㄹ"):
+            return self.handle_roulette()
+
         elif cmd.startswith("/게임") or cmd.startswith("/미니게임"):
             return self.handle_game_menu()
 
@@ -466,7 +469,7 @@ class CommandHandler:
         if data["profit"] >= 0:
             profit_text = f"📈 수익: +{data['profit']:,}원 (+{data['profit_rate']:.2f}%)"
         else:
-            profit_text = f"📉 손실: {data['profit']:,}원 ({data['profit_rate']:.2f}%)"
+            profit_text = f"📉 손실: {abs(data['profit']):,}원 ({data['profit_rate']:.2f}%)"
 
         msg = Messages.SELL_SUCCESS.format(
             name=data["name"],
@@ -600,11 +603,11 @@ class CommandHandler:
             )
         
         data = result["data"]
-        
+
         if data["profit"] >= 0:
             profit_text = f"📈 수익: +{data['profit']:,}원 (+{data['profit_rate']:.2f}%)"
         else:
-            profit_text = f"📉 손실: {data['profit']:,}원 ({data['profit_rate']:.2f}%)"
+            profit_text = f"📉 손실: {abs(data['profit']):,}원 ({data['profit_rate']:.2f}%)"
         
         msg = Messages.SELL_SUCCESS.format(
             name=data["name"],
@@ -1077,18 +1080,19 @@ class CommandHandler:
         msg = """🎰 미니게임
 
 🎫 /복권 - 1만원 복권 (1일 5회)
-🎰 /슬롯머신 [금액] - 슬롯머신 (777 잭팟!)
-🪙 /동전 [금액] [앞/뒤] - 동전던지기 (x1.95)
-🎲 /하이로우 [금액] [높/낮] - 숫자게임 (x1.9)
+🎰 /슬롯머신 [금액] - 슬롯머신
+🎡 /룰렛 [금액] [색상] - 색상 맞추기
+🪙 /동전 [금액] [앞/뒤] - 동전던지기
+🎲 /하이로우 [금액] [높/낮] - 숫자게임
 
-⏰ 슬롯/동전/하이로우는 장 마감 후 이용 가능"""
+⏰ 슬롯/룰렛/동전/하이로우는 장 마감 후 이용 가능"""
 
         return KakaoResponse.quick_replies(
             msg,
             [
-                {"label": "🎫 무료복권", "action": "message", "messageText": "/복권"},
-                {"label": "🎰 슬롯 5만", "action": "message", "messageText": "/슬롯머신 50000"},
-                {"label": "🪙 동전 10만", "action": "message", "messageText": "/동전 100000 앞"},
+                {"label": "🎫 복권", "action": "message", "messageText": "/복권"},
+                {"label": "🎰 슬롯머신", "action": "message", "messageText": "/슬롯머신 50000"},
+                {"label": "🎡 룰렛", "action": "message", "messageText": "/룰렛 50000 빨강"},
                 {"label": "🚀 급등주", "action": "message", "messageText": "/급등"}
             ]
         )
@@ -1355,6 +1359,74 @@ class CommandHandler:
                 {"label": "🔼 높!", "action": "message", "messageText": f"/하이로우 {bet} 높"},
                 {"label": "🔽 낮!", "action": "message", "messageText": f"/하이로우 {bet} 낮"},
                 {"label": "🚀 급등주", "action": "message", "messageText": "/급등"}
+            ]
+        )
+
+    def handle_roulette(self) -> Dict:
+        """룰렛 게임"""
+        parts = self.utterance.split()
+
+        if len(parts) < 3:
+            return KakaoResponse.quick_replies(
+                "🎡 룰렛\n\n빨강/검정/초록 중 하나를 선택!\n\n🔴 빨강: 2배 (45%)\n⚫ 검정: 2배 (45%)\n🟢 초록: 9배 (10%)\n\n사용법: /룰렛 [금액] [색상]",
+                [
+                    {"label": "🔴 10만 빨강", "action": "message", "messageText": "/룰렛 100000 빨강"},
+                    {"label": "⚫ 10만 검정", "action": "message", "messageText": "/룰렛 100000 검정"},
+                    {"label": "🟢 10만 초록", "action": "message", "messageText": "/룰렛 100000 초록"}
+                ]
+            )
+
+        try:
+            bet = int(parts[1].replace(",", ""))
+        except ValueError:
+            return KakaoResponse.quick_replies(
+                "배팅금은 숫자로 입력해주세요.",
+                [
+                    {"label": "🔴 10만 빨강", "action": "message", "messageText": "/룰렛 100000 빨강"},
+                    {"label": "⚫ 10만 검정", "action": "message", "messageText": "/룰렛 100000 검정"}
+                ]
+            )
+
+        choice = parts[2]
+        result = GameService.play_roulette(self.db, self.kakao_id, bet, choice)
+
+        if not result["success"]:
+            return KakaoResponse.quick_replies(
+                result["message"],
+                [
+                    {"label": "📅 출석체크", "action": "message", "messageText": "/출석"},
+                    {"label": "🎫 복권", "action": "message", "messageText": "/복권"},
+                    {"label": "💼 포트폴리오", "action": "message", "messageText": "/포트폴리오"}
+                ]
+            )
+
+        if result["won"]:
+            effect = "🎉 WIN!"
+            profit_text = f"📈 +{result['profit']:,}원"
+        else:
+            effect = "💨 LOSE"
+            profit_text = f"📉 {result['profit']:,}원"
+
+        # 선택한 색상 이모지
+        choice_emoji = {"빨강": "🔴", "검정": "⚫", "초록": "🟢"}.get(result["choice"], "")
+
+        msg = f"""🎡 룰렛
+
+{result['emoji']} 결과: {result['result']}!
+{choice_emoji} 선택: {result['choice']}
+
+{effect}
+
+💰 배팅: {result['bet']:,}원
+{profit_text}
+💵 잔고: {result['cash']:,}원"""
+
+        return KakaoResponse.quick_replies(
+            msg,
+            [
+                {"label": "🔴 빨강!", "action": "message", "messageText": f"/룰렛 {bet} 빨강"},
+                {"label": "⚫ 검정!", "action": "message", "messageText": f"/룰렛 {bet} 검정"},
+                {"label": "🟢 초록!", "action": "message", "messageText": f"/룰렛 {bet} 초록"}
             ]
         )
 

@@ -214,8 +214,9 @@ class GameService:
     def play_roulette(cls, db: Session, kakao_id: str, bet: int, choice: str) -> Dict:
         """
         룰렛 (빨강/검정/초록)
-        - 빨강/검정: 2배
-        - 초록(0): 14배
+        - 빨강/검정: 2배 (45% 확률)
+        - 초록: 9배 (10% 확률)
+        - 기대값 90%
         """
         # 장 마감 시간에만 가능
         if not is_market_closed():
@@ -240,13 +241,13 @@ class GameService:
             }
 
         choice = choice.lower()
-        if choice not in ["빨강", "검정", "초록", "red", "black", "green"]:
+        if choice not in ["빨강", "검정", "초록", "red", "black", "green", "빨", "검", "초"]:
             return {"success": False, "message": "빨강, 검정, 초록 중 선택해주세요."}
 
         # 정규화
-        if choice in ["red", "빨강"]:
+        if choice in ["red", "빨강", "빨"]:
             choice = "빨강"
-        elif choice in ["black", "검정"]:
+        elif choice in ["black", "검정", "검"]:
             choice = "검정"
         else:
             choice = "초록"
@@ -254,27 +255,26 @@ class GameService:
         # 배팅금 차감
         user.cash -= bet
 
-        # 룰렛 돌리기 (0-36)
-        number = random.randint(0, 36)
-
-        if number == 0:
-            result = "초록"
-            emoji = "🟢"
-        elif number % 2 == 0:
+        # 룰렛 결과 (기대값 90%: 빨강 45%, 검정 45%, 초록 10%)
+        roll = random.random()
+        if roll < 0.45:
             result = "빨강"
             emoji = "🔴"
-        else:
+        elif roll < 0.90:
             result = "검정"
             emoji = "⚫"
+        else:
+            result = "초록"
+            emoji = "🟢"
 
         # 당첨 확인
         won = (choice == result)
 
         if won:
             if result == "초록":
-                multiplier = 14
+                multiplier = 9  # 10% × 9 = 90% EV
             else:
-                multiplier = 2
+                multiplier = 2  # 45% × 2 = 90% EV
             winnings = bet * multiplier
         else:
             multiplier = 0
@@ -285,7 +285,6 @@ class GameService:
 
         return {
             "success": True,
-            "number": number,
             "result": result,
             "emoji": emoji,
             "choice": choice,
