@@ -18,9 +18,9 @@ class GameService:
     # 슬롯머신 심볼
     SLOT_SYMBOLS = ["🍒", "🍋", "🍊", "🍇", "💎", "7️⃣", "🚀"]
 
-    # 슬롯 배당률 (매우 낮은 배당 - 잭팟 희귀)
+    # 슬롯 배당률 (원래 배수 유지)
     SLOT_PAYOUTS = {
-        "7️⃣7️⃣7️⃣": 50,      # 잭팟 50배 (희귀 - 1/343 = 0.29%)
+        "7️⃣7️⃣7️⃣": 50,      # 잭팟 50배
         "💎💎💎": 20,         # 다이아 20배
         "🚀🚀🚀": 10,         # 로켓 10배
         "🍇🍇🍇": 5,          # 포도 5배
@@ -28,6 +28,19 @@ class GameService:
         "🍋🍋🍋": 2,          # 레몬 2배
         "🍒🍒🍒": 1.5,        # 체리 1.5배
     }
+
+    # 슬롯 확률 (기대값 90%, 고배율일수록 희귀)
+    SLOT_PROBABILITIES = [
+        ("7️⃣", 50, 0.0005),   # 0.05% - 잭팟 (매우 희귀)
+        ("💎", 20, 0.0015),    # 0.15%
+        ("🚀", 10, 0.003),     # 0.3%
+        ("🍇", 5, 0.008),      # 0.8%
+        ("🍊", 3, 0.02),       # 2%
+        ("🍋", 2, 0.0575),     # 5.75%
+        ("🍒", 1.5, 0.10),     # 10%
+        ("MATCH2", 1, 0.45),   # 45% - 2개 일치 (본전)
+        ("LOSE", 0, 0.3595),   # 35.95% - 꽝
+    ]
 
     # 복권 1일 최대 횟수
     MAX_LOTTERY_PER_DAY = 5
@@ -144,20 +157,40 @@ class GameService:
         # 배팅금 차감
         user.cash -= bet
 
-        # 슬롯 돌리기
-        slot1 = random.choice(cls.SLOT_SYMBOLS)
-        slot2 = random.choice(cls.SLOT_SYMBOLS)
-        slot3 = random.choice(cls.SLOT_SYMBOLS)
+        # 확률 기반 결과 결정
+        roll = random.random()
+        cumulative = 0
+        outcome_symbol = None
+        multiplier = 0
+
+        for symbol, mult, prob in cls.SLOT_PROBABILITIES:
+            cumulative += prob
+            if roll < cumulative:
+                outcome_symbol = symbol
+                multiplier = mult
+                break
+
+        # 슬롯 심볼 생성
+        if outcome_symbol == "LOSE":
+            # 꽝: 모두 다른 심볼
+            symbols = random.sample(cls.SLOT_SYMBOLS, 3)
+            slot1, slot2, slot3 = symbols
+        elif outcome_symbol == "MATCH2":
+            # 2개 일치 (본전)
+            match_symbol = random.choice(cls.SLOT_SYMBOLS)
+            other_symbols = [s for s in cls.SLOT_SYMBOLS if s != match_symbol]
+            other = random.choice(other_symbols)
+            pattern = random.choice([
+                [match_symbol, match_symbol, other],
+                [match_symbol, other, match_symbol],
+                [other, match_symbol, match_symbol]
+            ])
+            slot1, slot2, slot3 = pattern
+        else:
+            # 3개 일치
+            slot1 = slot2 = slot3 = outcome_symbol
 
         result = f"{slot1}{slot2}{slot3}"
-
-        # 당첨 확인
-        multiplier = 0
-        if result in cls.SLOT_PAYOUTS:
-            multiplier = cls.SLOT_PAYOUTS[result]
-        elif slot1 == slot2 or slot2 == slot3 or slot1 == slot3:
-            # 2개 일치 - 1배 (본전)
-            multiplier = 1.0
 
         winnings = int(bet * multiplier)
         user.cash += winnings
