@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 
 from models import Battle, User
 from services.stock_service import StockService
-from config import is_market_open, is_market_closed
+from config import is_market_open, is_market_closed, get_market_status_message
 
 
 class BattleService:
@@ -35,11 +35,12 @@ class BattleService:
         배틀 생성 (도전장 던지기)
         prediction: "상승" or "하락"
         """
-        # 장이 열려있을 때만 가능
+        # 장이 열려있을 때만 가능 (정규장)
         if not is_market_open():
+            status_msg = get_market_status_message()
             return {
                 "success": False,
-                "message": "⚔️ 배틀은 장 운영 시간에만 가능합니다!\n\n⏰ 장 운영: 평일 09:00~15:30\n🎮 장 마감 후에는 미니게임을 즐겨보세요!"
+                "message": f"⚔️ 배틀은 정규장 시간에만 가능해요!\n\n{status_msg}\n\n⏰ 배틀 가능 시간:\n• 평일 09:00~15:30\n\n🎮 장 마감 후에는 미니게임을 즐겨보세요!"
             }
 
         # 유저 확인
@@ -108,11 +109,12 @@ class BattleService:
     @classmethod
     def join_battle(cls, db: Session, opponent_id: str, battle_id: int) -> Dict:
         """배틀 참가 (도전 수락)"""
-        # 장이 열려있을 때만 가능
+        # 장이 열려있을 때만 가능 (정규장)
         if not is_market_open():
+            status_msg = get_market_status_message()
             return {
                 "success": False,
-                "message": "⚔️ 배틀은 장 운영 시간에만 가능합니다!\n\n⏰ 장 운영: 평일 09:00~15:30\n🎮 장 마감 후에는 미니게임을 즐겨보세요!"
+                "message": f"⚔️ 배틀은 정규장 시간에만 가능해요!\n\n{status_msg}\n\n⏰ 배틀 가능 시간:\n• 평일 09:00~15:30\n\n🎮 장 마감 후에는 미니게임을 즐겨보세요!"
             }
 
         # 유저 확인

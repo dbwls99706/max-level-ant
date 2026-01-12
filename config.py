@@ -2,7 +2,7 @@
 주식왕 봇 설정 파일
 """
 import os
-from datetime import datetime
+from datetime import datetime, date
 import pytz
 from dotenv import load_dotenv
 
@@ -12,32 +12,153 @@ load_dotenv()
 KST = pytz.timezone('Asia/Seoul')
 
 
-def is_market_closed() -> bool:
+# ===========================================
+# 공휴일 목록 (2024-2025)
+# ===========================================
+HOLIDAYS = {
+    # 2024년
+    date(2024, 1, 1),    # 신정
+    date(2024, 2, 9),    # 설날 연휴
+    date(2024, 2, 10),   # 설날
+    date(2024, 2, 11),   # 설날 연휴
+    date(2024, 2, 12),   # 대체공휴일
+    date(2024, 3, 1),    # 삼일절
+    date(2024, 4, 10),   # 국회의원선거일
+    date(2024, 5, 5),    # 어린이날
+    date(2024, 5, 6),    # 대체공휴일
+    date(2024, 5, 15),   # 부처님오신날
+    date(2024, 6, 6),    # 현충일
+    date(2024, 8, 15),   # 광복절
+    date(2024, 9, 16),   # 추석 연휴
+    date(2024, 9, 17),   # 추석
+    date(2024, 9, 18),   # 추석 연휴
+    date(2024, 10, 3),   # 개천절
+    date(2024, 10, 9),   # 한글날
+    date(2024, 12, 25),  # 성탄절
+    date(2024, 12, 31),  # 연말 휴장
+    # 2025년
+    date(2025, 1, 1),    # 신정
+    date(2025, 1, 28),   # 설날 연휴
+    date(2025, 1, 29),   # 설날
+    date(2025, 1, 30),   # 설날 연휴
+    date(2025, 3, 1),    # 삼일절
+    date(2025, 3, 3),    # 대체공휴일
+    date(2025, 5, 5),    # 어린이날
+    date(2025, 5, 6),    # 부처님오신날
+    date(2025, 6, 6),    # 현충일
+    date(2025, 8, 15),   # 광복절
+    date(2025, 10, 3),   # 개천절
+    date(2025, 10, 5),   # 추석 연휴
+    date(2025, 10, 6),   # 추석
+    date(2025, 10, 7),   # 추석 연휴
+    date(2025, 10, 8),   # 대체공휴일
+    date(2025, 10, 9),   # 한글날
+    date(2025, 12, 25),  # 성탄절
+    # 2026년
+    date(2026, 1, 1),    # 신정
+    date(2026, 2, 16),   # 설날 연휴
+    date(2026, 2, 17),   # 설날
+    date(2026, 2, 18),   # 설날 연휴
+    date(2026, 3, 1),    # 삼일절
+    date(2026, 3, 2),    # 대체공휴일
+    date(2026, 5, 5),    # 어린이날
+    date(2026, 5, 24),   # 부처님오신날
+    date(2026, 5, 25),   # 대체공휴일
+    date(2026, 6, 6),    # 현충일
+    date(2026, 8, 15),   # 광복절
+    date(2026, 8, 17),   # 대체공휴일
+    date(2026, 9, 24),   # 추석 연휴
+    date(2026, 9, 25),   # 추석
+    date(2026, 9, 26),   # 추석 연휴
+    date(2026, 10, 3),   # 개천절
+    date(2026, 10, 5),   # 대체공휴일
+    date(2026, 10, 9),   # 한글날
+    date(2026, 12, 25),  # 성탄절
+}
+
+
+def is_holiday(check_date: date = None) -> bool:
+    """공휴일 여부 확인"""
+    if check_date is None:
+        check_date = datetime.now(KST).date()
+    return check_date in HOLIDAYS
+
+
+def get_market_status() -> str:
     """
-    장 마감 시간인지 확인
-    - 주말: True
-    - 평일 09:00~15:30: False (장 중)
-    - 평일 15:30 이후 또는 09:00 이전: True (장 마감)
+    현재 장 상태 반환
+    - CLOSED: 완전 휴장 (주말, 공휴일, 18:00~08:30)
+    - PRE_MARKET: 동시호가 (08:30~09:00)
+    - REGULAR: 정규장 (09:00~15:30)
+    - AFTER_HOURS: 시간외 거래 (15:40~18:00)
     """
     now = datetime.now(KST)
+    today = now.date()
 
-    # 주말 체크 (토=5, 일=6)
+    # 주말 체크
     if now.weekday() >= 5:
-        return True
+        return "CLOSED"
 
-    # 장 시간 체크 (09:00 ~ 15:30)
-    market_open = now.replace(hour=9, minute=0, second=0, microsecond=0)
-    market_close = now.replace(hour=15, minute=30, second=0, microsecond=0)
+    # 공휴일 체크
+    if is_holiday(today):
+        return "CLOSED"
 
-    if now < market_open or now > market_close:
-        return True
+    hour = now.hour
+    minute = now.minute
+    time_val = hour * 60 + minute  # 분 단위로 변환
 
-    return False
+    # 시간대별 상태
+    if time_val < 8 * 60 + 30:  # ~08:30
+        return "CLOSED"
+    elif time_val < 9 * 60:  # 08:30~09:00
+        return "PRE_MARKET"
+    elif time_val < 15 * 60 + 30:  # 09:00~15:30
+        return "REGULAR"
+    elif time_val < 15 * 60 + 40:  # 15:30~15:40 (휴식)
+        return "CLOSED"
+    elif time_val < 18 * 60:  # 15:40~18:00
+        return "AFTER_HOURS"
+    else:  # 18:00~
+        return "CLOSED"
+
+
+def is_market_closed() -> bool:
+    """장이 완전히 닫혀있는지 (거래 불가)"""
+    return get_market_status() == "CLOSED"
 
 
 def is_market_open() -> bool:
-    """장이 열려있는지 확인"""
-    return not is_market_closed()
+    """정규장이 열려있는지"""
+    return get_market_status() == "REGULAR"
+
+
+def is_trading_available() -> bool:
+    """거래 가능 시간인지 (정규장 + 시간외)"""
+    status = get_market_status()
+    return status in ["REGULAR", "AFTER_HOURS", "PRE_MARKET"]
+
+
+def get_market_status_message() -> str:
+    """현재 장 상태 메시지"""
+    status = get_market_status()
+    now = datetime.now(KST)
+
+    if status == "CLOSED":
+        if now.weekday() >= 5:
+            return "🔴 휴장 (주말)"
+        elif is_holiday():
+            return "🔴 휴장 (공휴일)"
+        elif now.hour < 8 or (now.hour == 8 and now.minute < 30):
+            return "🔴 휴장 (장 시작 전)"
+        else:
+            return "🔴 휴장 (장 마감)"
+    elif status == "PRE_MARKET":
+        return "🟡 동시호가 (08:30~09:00)"
+    elif status == "REGULAR":
+        return "🟢 정규장 (09:00~15:30)"
+    elif status == "AFTER_HOURS":
+        return "🟠 시간외 거래 (15:40~18:00)"
+    return "알 수 없음"
 
 # ===========================================
 # 데이터베이스 설정
