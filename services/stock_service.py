@@ -319,18 +319,29 @@ class StockService:
         if not name or not code:
             return
 
+        # 이름이 코드와 같으면 (API에서 이름 못 받은 경우) 캐시하지 않음
+        if name == code or (name.isdigit() and len(name) == 6):
+            # 기존에 저장된 이름이 있으면 그것 사용
+            existing_name = cls._dynamic_stocks_by_code.get(code)
+            if existing_name and existing_name != code:
+                return  # 이미 좋은 이름이 있음
+            return  # 코드를 이름으로 저장하지 않음
+
         # 메모리 캐시
         cls._dynamic_stocks_by_name[name] = code
         cls._dynamic_stocks_by_code[code] = name
 
-        # DB 영구 저장 (비동기적으로)
+        # DB 영구 저장
         try:
             from models import StockCache
             db = SessionLocal()
             try:
                 existing = db.query(StockCache).filter(StockCache.stock_code == code).first()
                 if existing:
-                    if existing.stock_name != name:
+                    # 기존 이름이 코드가 아닌 경우에만 업데이트 스킵
+                    if existing.stock_name != name and not existing.stock_name.isdigit():
+                        pass  # 기존 좋은 이름 유지
+                    else:
                         existing.stock_name = name
                         db.commit()
                 else:
