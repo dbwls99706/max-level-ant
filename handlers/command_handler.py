@@ -288,9 +288,9 @@ class CommandHandler:
     
     def handle_buy(self) -> Dict:
         """주식 매수"""
-        # /매수 삼성전자 10 형태 파싱
+        # /매수 삼성전자 10 형태 파싱 (종목명에 띄어쓰기 허용)
         parts = self.utterance.split()
-        
+
         if len(parts) < 3:
             return KakaoResponse.quick_replies(
                 "사용법: /매수 [종목명] [수량]\n예: /매수 삼성전자 10",
@@ -301,23 +301,42 @@ class CommandHandler:
                 ]
             )
 
-        stock_query = parts[1]
-
+        # 마지막 요소가 수량, 나머지가 종목명
         try:
-            quantity = int(parts[2])
+            quantity = int(parts[-1])
+            stock_query = " ".join(parts[1:-1])
         except ValueError:
             return KakaoResponse.quick_replies(
                 "수량은 숫자로 입력해주세요.\n예: /매수 삼성전자 10",
                 [
-                    {"label": f"📈 {parts[1]} 1주", "action": "message", "messageText": f"/매수 {parts[1]} 1"},
-                    {"label": f"📈 {parts[1]} 10주", "action": "message", "messageText": f"/매수 {parts[1]} 10"}
+                    {"label": "📈 1주 매수", "action": "message", "messageText": f"/매수 {parts[1]} 1"},
+                    {"label": "📈 10주 매수", "action": "message", "messageText": f"/매수 {parts[1]} 10"}
                 ]
             )
-        
+
+        if not stock_query:
+            return KakaoResponse.quick_replies(
+                "종목명을 입력해주세요.\n예: /매수 삼성전자 10",
+                [
+                    {"label": "🚀 급등주", "action": "message", "messageText": "/급등"},
+                    {"label": "📊 시세 조회", "action": "message", "messageText": "/시세"}
+                ]
+            )
+
         result = TradeService.buy_stock(self.db, self.kakao_id, stock_query, quantity)
-        
+
         if not result["success"]:
-            if "data" in result and "shortage" in result.get("data", {}):
+            # 거래 불가 시간 (장 마감) - 미니게임 안내
+            if "거래 불가능" in result["message"]:
+                return KakaoResponse.quick_replies(
+                    result["message"],
+                    [
+                        {"label": "🎫 복권", "action": "message", "messageText": "/복권"},
+                        {"label": "🎰 슬롯머신", "action": "message", "messageText": "/슬롯머신 50000"},
+                        {"label": "💼 포트폴리오", "action": "message", "messageText": "/포트폴리오"}
+                    ]
+                )
+            elif "data" in result and "shortage" in result.get("data", {}):
                 data = result["data"]
                 msg = Messages.NOT_ENOUGH_CASH.format(
                     required=data["required"],
@@ -385,10 +404,10 @@ class CommandHandler:
                 ]
             )
 
-        stock_query = parts[1]
-
+        # 마지막 요소가 수량, 나머지가 종목명 (띄어쓰기 허용)
         try:
-            quantity = int(parts[2])
+            quantity = int(parts[-1])
+            stock_query = " ".join(parts[1:-1])
         except ValueError:
             return KakaoResponse.quick_replies(
                 "수량은 숫자로 입력해주세요.\n예: /매도 삼성전자 10",
@@ -398,10 +417,28 @@ class CommandHandler:
                 ]
             )
 
+        if not stock_query:
+            return KakaoResponse.quick_replies(
+                "종목명을 입력해주세요.\n예: /매도 삼성전자 10",
+                [
+                    {"label": "💼 포트폴리오", "action": "message", "messageText": "/포트폴리오"}
+                ]
+            )
+
         result = TradeService.sell_stock(self.db, self.kakao_id, stock_query, quantity)
 
         if not result["success"]:
-            if "data" in result and "holding" in result.get("data", {}):
+            # 거래 불가 시간 (장 마감) - 미니게임 안내
+            if "거래 불가능" in result["message"]:
+                return KakaoResponse.quick_replies(
+                    result["message"],
+                    [
+                        {"label": "🎫 복권", "action": "message", "messageText": "/복권"},
+                        {"label": "🎰 슬롯머신", "action": "message", "messageText": "/슬롯머신 50000"},
+                        {"label": "💼 포트폴리오", "action": "message", "messageText": "/포트폴리오"}
+                    ]
+                )
+            elif "data" in result and "holding" in result.get("data", {}):
                 data = result["data"]
                 msg = Messages.NOT_ENOUGH_STOCK.format(
                     requested=data["requested"],
@@ -475,10 +512,21 @@ class CommandHandler:
                 ]
             )
 
-        stock_query = parts[1]
+        # 띄어쓰기 포함 종목명 지원
+        stock_query = " ".join(parts[1:])
         result = TradeService.buy_max(self.db, self.kakao_id, stock_query)
 
         if not result["success"]:
+            # 거래 불가 시간 (장 마감) - 미니게임 안내
+            if "거래 불가능" in result["message"]:
+                return KakaoResponse.quick_replies(
+                    result["message"],
+                    [
+                        {"label": "🎫 복권", "action": "message", "messageText": "/복권"},
+                        {"label": "🎰 슬롯머신", "action": "message", "messageText": "/슬롯머신 50000"},
+                        {"label": "💼 포트폴리오", "action": "message", "messageText": "/포트폴리오"}
+                    ]
+                )
             # 잔고 부족 시 돈 버는 방법 안내
             if "잔고" in result["message"]:
                 return KakaoResponse.quick_replies(
@@ -528,10 +576,21 @@ class CommandHandler:
                 ]
             )
 
-        stock_query = parts[1]
+        # 띄어쓰기 포함 종목명 지원
+        stock_query = " ".join(parts[1:])
         result = TradeService.sell_all(self.db, self.kakao_id, stock_query)
 
         if not result["success"]:
+            # 거래 불가 시간 (장 마감) - 미니게임 안내
+            if "거래 불가능" in result["message"]:
+                return KakaoResponse.quick_replies(
+                    result["message"],
+                    [
+                        {"label": "🎫 복권", "action": "message", "messageText": "/복권"},
+                        {"label": "🎰 슬롯머신", "action": "message", "messageText": "/슬롯머신 50000"},
+                        {"label": "💼 포트폴리오", "action": "message", "messageText": "/포트폴리오"}
+                    ]
+                )
             return KakaoResponse.quick_replies(
                 result["message"],
                 [
