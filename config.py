@@ -69,11 +69,11 @@ class GameConfig:
     INITIAL_CASH = 5_000_000  # 500만원
 
     # 출석 보상
-    ATTENDANCE_REWARD = 2_000_000  # 200만원
+    ATTENDANCE_REWARD = 300_000  # 30만원
     ATTENDANCE_STREAK_BONUS = {
-        3: 1.3,    # 3일 연속: 30% 보너스
+        3: 1.2,    # 3일 연속: 20% 보너스
         5: 1.5,    # 5일 연속: 50% 보너스
-        7: 2.0,    # 7일 연속: 100% 보너스 (최대)
+        7: 2.0,    # 7일 연속: 100% 보너스 (최대 60만원)
     }
 
     # 광고 보상 (비활성화 - 수익 발생 방지)
@@ -89,7 +89,7 @@ class GameConfig:
 
     # 일간 미션
     DAILY_MISSION_TRADE_COUNT = 3  # 3번 거래 미션
-    DAILY_MISSION_REWARD = 1_000_000  # 100만원
+    DAILY_MISSION_REWARD = 200_000  # 20만원
 
     # 주간 보너스 (특정 요일)
     WEEKLY_BONUS_DAY = 0  # 월요일 (0=월, 6=일)
@@ -129,8 +129,8 @@ class Messages:
 /차트 - 자산 변동 차트
 
 💵 보상
-/출석 - +200만원
-/복권 - 무료 복권 (1일3회)
+/출석 - +30만원 (연속보너스)
+/복권 - 1만원 복권 (1일3회)
 
 🎰 미니게임
 /게임 - 게임 목록
