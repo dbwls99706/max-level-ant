@@ -388,6 +388,7 @@ class StockService:
             return None
 
         code = stock_info["code"]
+        name = stock_info["name"]  # 우리가 가진 종목명 사용
 
         # 캐시 확인
         if code in cls._price_cache:
@@ -397,6 +398,8 @@ class StockService:
         result = KISAPIClient.get_stock_price(code)
 
         if result:
+            # API 응답의 이름 대신 우리 종목명 사용
+            result["name"] = name
             cls._price_cache[code] = result
             return result
 
