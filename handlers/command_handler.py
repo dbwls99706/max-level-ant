@@ -8,7 +8,7 @@ import re
 from typing import Dict
 from sqlalchemy.orm import Session
 
-from services import UserService, StockService, TradeService, RankingService, MissionService, GameService
+from services import UserService, StockService, TradeService, RankingService, MissionService, GameService, NewsService
 from utils import KakaoResponse
 from config import GameConfig, Messages, is_market_closed
 
@@ -87,6 +87,9 @@ class CommandHandler:
 
         elif cmd.startswith("/시장") or cmd.startswith("/지수"):
             return self.handle_market_overview()
+
+        elif cmd.startswith("/뉴스") or cmd.startswith("/ㄴㅅ"):
+            return self.handle_news()
 
         elif cmd.startswith("/미션"):
             return self.handle_mission()
@@ -550,23 +553,36 @@ class CommandHandler:
     def handle_search(self) -> Dict:
         """종목 검색"""
         parts = self.utterance.split(maxsplit=1)
-        
+
         if len(parts) < 2:
-            return KakaoResponse.simple_text("사용법: /검색 [키워드]\n예: /검색 반도체")
-        
+            return KakaoResponse.quick_replies(
+                "🔍 어떤 종목을 찾으시나요?",
+                [
+                    {"label": "🔍 반도체", "action": "message", "messageText": "/검색 반도체"},
+                    {"label": "🔍 자동차", "action": "message", "messageText": "/검색 자동차"},
+                    {"label": "🔍 바이오", "action": "message", "messageText": "/검색 바이오"},
+                ]
+            )
+
         query = parts[1].strip()
-        results = StockService.search_stocks(query, limit=5)
-        
+        results = StockService.search_stocks(query, limit=3)
+
         if not results:
-            return KakaoResponse.simple_text(f"'{query}' 관련 종목을 찾을 수 없습니다.")
-        
-        msg = f"🔍 '{query}' 검색 결과:\n"
-        for r in results:
-            msg += f"\n• {r['name']} ({r['code']})"
-        
-        msg += "\n\n시세를 확인하려면 /시세 [종목명]"
-        
-        return KakaoResponse.simple_text(msg)
+            return KakaoResponse.quick_replies(
+                f"'{query}' 관련 종목을 찾을 수 없습니다.",
+                [
+                    {"label": "🚀 급등주", "action": "message", "messageText": "/급등"},
+                    {"label": "📊 인기종목", "action": "message", "messageText": "/인기"},
+                ]
+            )
+
+        msg = f"🔍 '{query}' 검색 결과"
+
+        # 검색 결과 버튼
+        buttons = [{"label": f"📊 {r['name']}", "action": "message", "messageText": f"/시세 {r['name']}"} for r in results[:3]]
+        buttons.append({"label": "🚀 급등주", "action": "message", "messageText": "/급등"})
+
+        return KakaoResponse.quick_replies(msg, buttons)
     
     def handle_top_volume(self) -> Dict:
         """거래량 상위 종목"""
@@ -640,54 +656,48 @@ class CommandHandler:
 
     def handle_top_gainers(self) -> Dict:
         """급등주 조회"""
-        stocks = StockService.get_top_gainers(limit=5)
+        stocks = StockService.get_top_gainers(limit=10)
 
         if not stocks:
-            # 데이터 없을 때도 버튼 제공
             return KakaoResponse.quick_replies(
-                "📊 급등주 데이터를 불러오는 중입니다.\n인기 종목을 확인해보세요!",
+                "📊 급등주 데이터를 불러오는 중입니다.",
                 [
                     {"label": "🔥 삼성전자", "action": "message", "messageText": "/시세 삼성전자"},
-                    {"label": "🚀 SK하이닉스", "action": "message", "messageText": "/시세 SK하이닉스"},
                     {"label": "📉 급락주", "action": "message", "messageText": "/급락"},
                     {"label": "💼 포트폴리오", "action": "message", "messageText": "/포트폴리오"},
                 ]
             )
 
-        msg = "🚀 오늘의 급등주 TOP 5\n"
+        msg = "🚀 오늘의 급등주 TOP 10\n"
         for i, s in enumerate(stocks, 1):
-            msg += f"\n{i}. {s['name']} 📈{s['change']:+.1f}%"
-            msg += f"\n   {s['price']:,}원\n"
+            msg += f"\n{i}. {s['name']} 📈{s['change']:+.1f}% ({s['price']:,}원)"
 
-        # 상위 종목 바로 매수 버튼
-        buttons = [{"label": f"🔥 {s['name']}", "action": "message", "messageText": f"/시세 {s['name']}"} for s in stocks[:4]]
+        # 버튼은 3개만
+        buttons = [{"label": f"🔥 {s['name']}", "action": "message", "messageText": f"/시세 {s['name']}"} for s in stocks[:3]]
         buttons.append({"label": "📉 급락주", "action": "message", "messageText": "/급락"})
 
         return KakaoResponse.quick_replies(msg, buttons)
 
     def handle_top_losers(self) -> Dict:
         """급락주 조회"""
-        stocks = StockService.get_top_losers(limit=5)
+        stocks = StockService.get_top_losers(limit=10)
 
         if not stocks:
-            # 데이터 없을 때도 버튼 제공
             return KakaoResponse.quick_replies(
-                "📊 급락주 데이터를 불러오는 중입니다.\n인기 종목을 확인해보세요!",
+                "📊 급락주 데이터를 불러오는 중입니다.",
                 [
                     {"label": "💎 카카오", "action": "message", "messageText": "/시세 카카오"},
-                    {"label": "💎 NAVER", "action": "message", "messageText": "/시세 NAVER"},
                     {"label": "🚀 급등주", "action": "message", "messageText": "/급등"},
                     {"label": "💼 포트폴리오", "action": "message", "messageText": "/포트폴리오"},
                 ]
             )
 
-        msg = "📉 오늘의 급락주 TOP 5 (저점매수 기회?)\n"
+        msg = "📉 오늘의 급락주 TOP 10 (저점매수 기회?)\n"
         for i, s in enumerate(stocks, 1):
-            msg += f"\n{i}. {s['name']} 🔻{s['change']:+.1f}%"
-            msg += f"\n   {s['price']:,}원\n"
+            msg += f"\n{i}. {s['name']} 🔻{s['change']:+.1f}% ({s['price']:,}원)"
 
-        # 저점 매수 버튼
-        buttons = [{"label": f"💎 {s['name']}", "action": "message", "messageText": f"/시세 {s['name']}"} for s in stocks[:4]]
+        # 버튼은 3개만
+        buttons = [{"label": f"💎 {s['name']}", "action": "message", "messageText": f"/시세 {s['name']}"} for s in stocks[:3]]
         buttons.append({"label": "🚀 급등주", "action": "message", "messageText": "/급등"})
 
         return KakaoResponse.quick_replies(msg, buttons)
@@ -726,6 +736,45 @@ class CommandHandler:
                 {"label": "🚀 급등주", "action": "message", "messageText": "/급등"},
                 {"label": "📉 급락주", "action": "message", "messageText": "/급락"},
                 {"label": "📊 거래량", "action": "message", "messageText": "/인기"}
+            ]
+        )
+
+    def handle_news(self) -> Dict:
+        """뉴스 조회"""
+        parts = self.utterance.split(maxsplit=1)
+
+        if len(parts) < 2:
+            # 종목명 없으면 시장 뉴스
+            news = NewsService.get_market_news(limit=3)
+            title = "📰 주식시장 뉴스"
+        else:
+            query = parts[1].strip()
+            news = NewsService.get_stock_news(query, limit=3)
+            title = f"📰 '{query}' 관련 뉴스"
+
+        if not news:
+            return KakaoResponse.quick_replies(
+                "📰 뉴스를 불러오지 못했습니다.",
+                [
+                    {"label": "🚀 급등주", "action": "message", "messageText": "/급등"},
+                    {"label": "💼 포트폴리오", "action": "message", "messageText": "/포트폴리오"},
+                ]
+            )
+
+        msg = f"{title}\n"
+        for i, n in enumerate(news, 1):
+            # 제목이 30자 넘으면 자르기
+            t = n['title']
+            if len(t) > 35:
+                t = t[:35] + "..."
+            msg += f"\n{i}. {t}"
+
+        return KakaoResponse.quick_replies(
+            msg,
+            [
+                {"label": "📰 삼성전자", "action": "message", "messageText": "/뉴스 삼성전자"},
+                {"label": "📰 반도체", "action": "message", "messageText": "/뉴스 반도체"},
+                {"label": "🚀 급등주", "action": "message", "messageText": "/급등"},
             ]
         )
 
