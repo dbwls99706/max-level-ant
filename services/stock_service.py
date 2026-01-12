@@ -180,7 +180,7 @@ class KISAPIClient:
         else:  # 하락률순
             items = sorted(items, key=lambda x: x.get("change", 0))
 
-        return items[:3]
+        return items[:10]
 
     @classmethod
     def get_market_index(cls, index_code: str) -> Optional[Dict]:

@@ -656,7 +656,7 @@ class CommandHandler:
 
     def handle_top_gainers(self) -> Dict:
         """급등주 조회"""
-        stocks = StockService.get_top_gainers(limit=3)
+        stocks = StockService.get_top_gainers(limit=10)
 
         if not stocks:
             return KakaoResponse.quick_replies(
@@ -668,12 +668,11 @@ class CommandHandler:
                 ]
             )
 
-        msg = "🚀 오늘의 급등주 TOP 3\n"
+        msg = "🚀 오늘의 급등주 TOP 10\n"
         for i, s in enumerate(stocks, 1):
-            msg += f"\n{i}. {s['name']} 📈{s['change']:+.1f}%"
-            msg += f"\n   {s['price']:,}원\n"
+            msg += f"\n{i}. {s['name']} 📈{s['change']:+.1f}% ({s['price']:,}원)"
 
-        # 상위 종목 바로 매수 버튼
+        # 버튼은 3개만
         buttons = [{"label": f"🔥 {s['name']}", "action": "message", "messageText": f"/시세 {s['name']}"} for s in stocks[:3]]
         buttons.append({"label": "📉 급락주", "action": "message", "messageText": "/급락"})
 
@@ -681,7 +680,7 @@ class CommandHandler:
 
     def handle_top_losers(self) -> Dict:
         """급락주 조회"""
-        stocks = StockService.get_top_losers(limit=3)
+        stocks = StockService.get_top_losers(limit=10)
 
         if not stocks:
             return KakaoResponse.quick_replies(
@@ -693,12 +692,11 @@ class CommandHandler:
                 ]
             )
 
-        msg = "📉 오늘의 급락주 TOP 3 (저점매수 기회?)\n"
+        msg = "📉 오늘의 급락주 TOP 10 (저점매수 기회?)\n"
         for i, s in enumerate(stocks, 1):
-            msg += f"\n{i}. {s['name']} 🔻{s['change']:+.1f}%"
-            msg += f"\n   {s['price']:,}원\n"
+            msg += f"\n{i}. {s['name']} 🔻{s['change']:+.1f}% ({s['price']:,}원)"
 
-        # 저점 매수 버튼
+        # 버튼은 3개만
         buttons = [{"label": f"💎 {s['name']}", "action": "message", "messageText": f"/시세 {s['name']}"} for s in stocks[:3]]
         buttons.append({"label": "🚀 급등주", "action": "message", "messageText": "/급등"})
 
