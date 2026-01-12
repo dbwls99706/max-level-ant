@@ -79,6 +79,7 @@ def _migrate_db():
         'total_profit_realized': 'BIGINT DEFAULT 0',
         'total_trades': 'INTEGER DEFAULT 0',
         'last_lottery_date': 'DATE',
+        'lottery_count_today': 'INTEGER DEFAULT 0',
     }
 
     with engine.connect() as conn:
