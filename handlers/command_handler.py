@@ -16,10 +16,11 @@ from config import GameConfig, Messages, is_market_closed
 class CommandHandler:
     """명령어 처리 클래스"""
 
-    def __init__(self, db: Session, kakao_id: str, utterance: str):
+    def __init__(self, db: Session, kakao_id: str, utterance: str, nickname: str = None):
         self.db = db
         self.kakao_id = kakao_id
         self.utterance = utterance.strip()
+        self.nickname = nickname
 
     def _get_game_buttons(self) -> list:
         """장 마감 시간에만 게임 버튼 반환"""
@@ -124,7 +125,7 @@ class CommandHandler:
     
     def handle_start(self) -> Dict:
         """게임 시작 / 회원가입"""
-        user, is_new = UserService.create_user(self.db, self.kakao_id)
+        user, is_new = UserService.create_user(self.db, self.kakao_id, self.nickname)
 
         if is_new:
             welcome_msg = Messages.WELCOME.format(initial_cash=GameConfig.INITIAL_CASH)

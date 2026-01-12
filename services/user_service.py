@@ -23,12 +23,17 @@ class UserService:
     @staticmethod
     def create_user(db: Session, kakao_id: str, nickname: str = None) -> Tuple[User, bool]:
         """
-        유저 생성
+        유저 생성 (기존 유저면 닉네임 업데이트)
         Returns: (User, is_new)
         """
         # 기존 유저 확인
         user = UserService.get_user(db, kakao_id)
         if user:
+            # 닉네임이 있으면 업데이트
+            if nickname and user.nickname != nickname:
+                user.nickname = nickname
+                db.commit()
+                db.refresh(user)
             return user, False
         
         # 새 유저 생성
