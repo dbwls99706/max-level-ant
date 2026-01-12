@@ -135,23 +135,51 @@ class UserService:
     @staticmethod
     def update_nickname(db: Session, kakao_id: str, new_nickname: str) -> Tuple[bool, str]:
         """
-        닉네임 업데이트 (중복 검사 포함, 한 번 설정하면 변경 불가)
+        닉네임 업데이트 (초기 2회 + 한달마다 1회 추가)
         Returns: (success, message)
         """
         user = UserService.get_user(db, kakao_id)
         if not user:
             return False, "유저를 찾을 수 없습니다."
 
-        # 이미 닉네임이 설정된 경우 변경 불가
-        if hasattr(user, 'nickname_set') and user.nickname_set == 1:
-            return False, f"❌ 닉네임은 한 번만 설정할 수 있습니다.\n현재 닉네임: {user.nickname}"
+        # 닉네임 변경 가능 여부 확인
+        change_count = getattr(user, 'nickname_change_count', 0) or 0
+        last_change = getattr(user, 'last_nickname_change', None)
+        today = date.today()
+
+        can_change = False
+        remaining_msg = ""
+
+        if change_count < 2:
+            # 초기 2회 무료 변경
+            can_change = True
+            remaining = 2 - change_count - 1
+            if remaining > 0:
+                remaining_msg = f"남은 변경 횟수: {remaining}회"
+            else:
+                remaining_msg = "⚠️ 마지막 변경입니다! (한 달 후 1회 추가)"
+        elif last_change:
+            # 마지막 변경 후 30일 경과 시 1회 추가
+            days_passed = (today - last_change).days
+            if days_passed >= 30:
+                can_change = True
+                remaining_msg = "⚠️ 월간 변경권 사용 (다음 변경: 30일 후)"
+            else:
+                days_left = 30 - days_passed
+                return False, f"❌ 닉네임 변경 횟수를 모두 사용했습니다.\n현재: {user.nickname}\n🕐 다음 변경 가능: {days_left}일 후"
+        else:
+            return False, f"❌ 닉네임 변경 횟수를 모두 사용했습니다.\n현재: {user.nickname}"
+
+        if not can_change:
+            return False, f"❌ 닉네임을 변경할 수 없습니다.\n현재: {user.nickname}"
 
         # 중복 확인
         if UserService.is_nickname_taken(db, new_nickname, kakao_id):
             return False, f"❌ '{new_nickname}'은(는) 이미 사용 중인 닉네임입니다."
 
         user.nickname = new_nickname
-        user.nickname_set = 1  # 닉네임 설정 완료 표시
+        user.nickname_change_count = change_count + 1
+        user.last_nickname_change = today
         db.commit()
 
-        return True, f"✅ 닉네임이 '{new_nickname}'(으)로 설정되었습니다!\n⚠️ 닉네임은 변경할 수 없으니 신중히 선택하세요."
+        return True, f"✅ 닉네임이 '{new_nickname}'(으)로 설정되었습니다!\n{remaining_msg}"
