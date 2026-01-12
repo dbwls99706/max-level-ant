@@ -570,31 +570,50 @@ class CommandHandler:
     
     def handle_top_volume(self) -> Dict:
         """거래량 상위 종목"""
-        stocks = StockService.get_top_volume(limit=10)
+        stocks = StockService.get_top_volume(limit=5)
 
         if not stocks:
-            return KakaoResponse.simple_text("거래량 데이터를 조회할 수 없습니다.")
+            return KakaoResponse.quick_replies(
+                "📊 거래량 데이터를 불러오는 중입니다.",
+                [
+                    {"label": "🚀 급등주", "action": "message", "messageText": "/급등"},
+                    {"label": "📉 급락주", "action": "message", "messageText": "/급락"},
+                    {"label": "💼 포트폴리오", "action": "message", "messageText": "/포트폴리오"},
+                ]
+            )
 
-        msg = "📊 거래량 TOP 10\n"
+        msg = "📊 거래량 TOP 5\n"
         for i, s in enumerate(stocks, 1):
             emoji = "📈" if s["change"] >= 0 else "📉"
             msg += f"\n{i}. {s['name']}"
-            msg += f"\n   {s['price']:,}원 ({s['change']:+.2f}%) {emoji}"
-            msg += f"\n   거래량: {s['volume']:,}주\n"
+            msg += f"\n   {s['price']:,}원 ({s['change']:+.2f}%) {emoji}\n"
 
-        return KakaoResponse.simple_text(msg)
+        # 상위 종목 버튼
+        buttons = [{"label": f"📊 {s['name']}", "action": "message", "messageText": f"/시세 {s['name']}"} for s in stocks[:4]]
+        buttons.append({"label": "🚀 급등주", "action": "message", "messageText": "/급등"})
+
+        return KakaoResponse.quick_replies(msg, buttons)
 
     def handle_transactions(self) -> Dict:
         """거래 내역 조회"""
         # 유저 확인 먼저
         user = UserService.get_user(self.db, self.kakao_id)
         if not user:
-            return KakaoResponse.simple_text("먼저 /시작 으로 게임을 시작해주세요.")
+            return KakaoResponse.quick_replies(
+                "먼저 게임을 시작해주세요!",
+                [{"label": "🎮 시작하기", "action": "message", "messageText": "/시작"}]
+            )
 
         transactions = TradeService.get_transactions(self.db, self.kakao_id, limit=10)
 
         if not transactions:
-            return KakaoResponse.simple_text("거래 내역이 없습니다.\n\n/시세 [종목명] 으로 주식을 검색해보세요!")
+            return KakaoResponse.quick_replies(
+                "거래 내역이 없습니다.\n주식을 매수해보세요!",
+                [
+                    {"label": "🚀 급등주", "action": "message", "messageText": "/급등"},
+                    {"label": "🔥 삼성전자", "action": "message", "messageText": "/시세 삼성전자"},
+                ]
+            )
 
         msg = "📜 최근 거래 내역\n"
         for t in transactions:
@@ -624,7 +643,16 @@ class CommandHandler:
         stocks = StockService.get_top_gainers(limit=5)
 
         if not stocks:
-            return KakaoResponse.simple_text("급등주 데이터를 조회할 수 없습니다.")
+            # 데이터 없을 때도 버튼 제공
+            return KakaoResponse.quick_replies(
+                "📊 급등주 데이터를 불러오는 중입니다.\n인기 종목을 확인해보세요!",
+                [
+                    {"label": "🔥 삼성전자", "action": "message", "messageText": "/시세 삼성전자"},
+                    {"label": "🚀 SK하이닉스", "action": "message", "messageText": "/시세 SK하이닉스"},
+                    {"label": "📉 급락주", "action": "message", "messageText": "/급락"},
+                    {"label": "💼 포트폴리오", "action": "message", "messageText": "/포트폴리오"},
+                ]
+            )
 
         msg = "🚀 오늘의 급등주 TOP 5\n"
         for i, s in enumerate(stocks, 1):
@@ -642,7 +670,16 @@ class CommandHandler:
         stocks = StockService.get_top_losers(limit=5)
 
         if not stocks:
-            return KakaoResponse.simple_text("급락주 데이터를 조회할 수 없습니다.")
+            # 데이터 없을 때도 버튼 제공
+            return KakaoResponse.quick_replies(
+                "📊 급락주 데이터를 불러오는 중입니다.\n인기 종목을 확인해보세요!",
+                [
+                    {"label": "💎 카카오", "action": "message", "messageText": "/시세 카카오"},
+                    {"label": "💎 NAVER", "action": "message", "messageText": "/시세 NAVER"},
+                    {"label": "🚀 급등주", "action": "message", "messageText": "/급등"},
+                    {"label": "💼 포트폴리오", "action": "message", "messageText": "/포트폴리오"},
+                ]
+            )
 
         msg = "📉 오늘의 급락주 TOP 5 (저점매수 기회?)\n"
         for i, s in enumerate(stocks, 1):
@@ -660,7 +697,14 @@ class CommandHandler:
         market = StockService.get_market_overview()
 
         if not market:
-            return KakaoResponse.simple_text("시장 데이터를 조회할 수 없습니다.")
+            return KakaoResponse.quick_replies(
+                "📊 시장 데이터를 불러오는 중입니다.",
+                [
+                    {"label": "🚀 급등주", "action": "message", "messageText": "/급등"},
+                    {"label": "📉 급락주", "action": "message", "messageText": "/급락"},
+                    {"label": "💼 포트폴리오", "action": "message", "messageText": "/포트폴리오"},
+                ]
+            )
 
         msg = "📈 시장 현황\n"
 
