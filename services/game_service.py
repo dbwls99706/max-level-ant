@@ -74,14 +74,10 @@ class GameService:
         # 복권 확률 (기준: 복권 1장 10,000원, 기대값 ~85%)
         roll = random.random()
 
-        if roll < 0.0005:  # 0.05% - 대박 (100~200배)
-            reward = random.randint(1_000_000, 2_000_000)
-            tier = "🎊 대박"
-            msg = "축하합니다!!! 전설의 대박!!!"
-        elif roll < 0.0025:  # 0.2% - 1등 (20~50배)
-            reward = random.randint(200_000, 500_000)
+        if roll < 0.0025:  # 0.25% - 1등 (50~100배)
+            reward = random.randint(500_000, 1_000_000)
             tier = "🥇 1등"
-            msg = "대단해요!"
+            msg = "대박! 축하합니다!"
         elif roll < 0.025:  # 2.25% - 2등 (5~10배)
             reward = random.randint(50_000, 100_000)
             tier = "🥈 2등"
