@@ -60,9 +60,9 @@ class RankingService:
         rankings = []
         for user in users:
             total_asset, profit_rate = cls.calculate_total_asset(db, user)
-            # 닉네임 처리: 카카오 닉네임이 있으면 "닉네임 투자자", 없으면 "투자자XXXX"
+            # 닉네임 처리: 카카오 닉네임이 있으면 그대로, 없으면 "투자자XXXX"
             if user.nickname:
-                display_name = f"{user.nickname} 투자자"
+                display_name = user.nickname
             else:
                 display_name = f"투자자{user.kakao_id[-4:]}"
 
@@ -116,7 +116,7 @@ class RankingService:
         
         # 닉네임 처리
         if user.nickname:
-            display_name = f"{user.nickname} 투자자"
+            display_name = user.nickname
         else:
             display_name = f"투자자{kakao_id[-4:]}"
 

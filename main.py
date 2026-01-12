@@ -91,15 +91,19 @@ async def kakao_skill(request: Request, db: Session = Depends(get_db)):
         
         # 유저 정보 추출
         user_request = body.get("userRequest", {})
-        kakao_id = user_request.get("user", {}).get("id", "")
+        user_info = user_request.get("user", {})
+        kakao_id = user_info.get("id", "")
         utterance = user_request.get("utterance", "")
-        
+
+        # 닉네임 추출 (카카오 OpenBuilder에서 제공)
+        nickname = user_info.get("properties", {}).get("nickname", "")
+
         # 유저 ID 없으면 에러
         if not kakao_id:
             return KakaoResponse.simple_text("유저 정보를 확인할 수 없습니다.")
-        
+
         # 명령어 처리
-        handler = CommandHandler(db, kakao_id, utterance)
+        handler = CommandHandler(db, kakao_id, utterance, nickname)
         response = handler.handle()
         
         return response

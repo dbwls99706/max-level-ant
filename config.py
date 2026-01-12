@@ -77,7 +77,7 @@ class GameConfig:
     }
 
     # 광고 보상
-    AD_REWARD = 1_500_000  # 150만원
+    AD_REWARD = 500_000  # 50만원
     MAX_ADS_PER_DAY = 3  # 하루 최대 3회
 
     # 거래 수수료
