@@ -61,19 +61,7 @@ class BattleService:
         else:
             return {"success": False, "message": "❌ 예측은 '상승' 또는 '하락'으로 입력해주세요."}
 
-        # 이미 대기 중인 배틀 확인
-        existing = db.query(Battle).filter(
-            Battle.challenger_id == challenger_id,
-            Battle.status == "WAITING"
-        ).first()
-
-        if existing:
-            return {
-                "success": False,
-                "message": f"❌ 이미 대기 중인 배틀이 있습니다!\n종목: {existing.stock_name}\n/배틀취소 로 취소 가능"
-            }
-
-        # 배팅금 차감
+        # 배팅금 차감 (중복 참여 허용)
         user.cash -= bet
 
         # 배틀 생성
@@ -285,39 +273,6 @@ class BattleService:
             "winner_emoji": winner_emoji,
             "bet_amount": battle.bet_amount,
             "prize": battle.bet_amount * 2
-        }
-
-    @classmethod
-    def cancel_battle(cls, db: Session, kakao_id: str, battle_id: int = None) -> Dict:
-        """배틀 취소"""
-        if battle_id:
-            battle = db.query(Battle).filter(Battle.id == battle_id).first()
-        else:
-            # 내 대기 중인 배틀 찾기
-            battle = db.query(Battle).filter(
-                Battle.challenger_id == kakao_id,
-                Battle.status == "WAITING"
-            ).first()
-
-        if not battle:
-            return {"success": False, "message": "❌ 취소할 배틀이 없습니다."}
-
-        if battle.challenger_id != kakao_id:
-            return {"success": False, "message": "❌ 본인이 생성한 배틀만 취소할 수 있습니다."}
-
-        if battle.status != "WAITING":
-            return {"success": False, "message": "❌ 진행 중이거나 종료된 배틀은 취소할 수 없습니다."}
-
-        # 배팅금 반환
-        user = db.query(User).filter(User.kakao_id == kakao_id).first()
-        user.cash += battle.bet_amount
-
-        battle.status = "CANCELLED"
-        db.commit()
-
-        return {
-            "success": True,
-            "message": f"✅ 배틀이 취소되었습니다.\n💰 {battle.bet_amount:,}원 반환"
         }
 
     @classmethod
