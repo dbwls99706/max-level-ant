@@ -31,10 +31,13 @@ class GameService:
     # 복권 1일 최대 횟수
     MAX_LOTTERY_PER_DAY = 3
 
+    # 복권 가격
+    LOTTERY_COST = 10_000
+
     @classmethod
     def play_lottery(cls, db: Session, kakao_id: str) -> Dict:
         """
-        복권 긁기 (1일 3회 무료)
+        복권 긁기 (1일 3회, 1장 10,000원)
         Returns: {"success": bool, "reward": int, "message": str}
         """
         user = db.query(User).filter(User.kakao_id == kakao_id).first()
@@ -54,48 +57,63 @@ class GameService:
                 "message": f"🎫 오늘 복권은 모두 긁었어요! ({cls.MAX_LOTTERY_PER_DAY}회)\n내일 다시 도전하세요 🍀"
             }
 
+        # 잔액 확인
+        if user.cash < cls.LOTTERY_COST:
+            return {
+                "success": False,
+                "message": f"❌ 잔액 부족!\n복권 가격: {cls.LOTTERY_COST:,}원\n보유: {user.cash:,}원"
+            }
+
+        # 복권 구매 (비용 차감)
+        user.cash -= cls.LOTTERY_COST
+
         # 복권 사용 기록
         user.lottery_count_today += 1
         remaining = cls.MAX_LOTTERY_PER_DAY - user.lottery_count_today
 
-        # 복권 확률 (현실적 - 잭팟은 극히 희귀, 본전 확률 높게)
+        # 복권 확률 (기준: 복권 1장 10,000원)
         roll = random.random()
 
-        if roll < 0.0005:  # 0.05% - 대박 (극히 희귀)
-            reward = random.randint(10_000_000, 20_000_000)
+        if roll < 0.0005:  # 0.05% - 대박 (500~1000배)
+            reward = random.randint(5_000_000, 10_000_000)
             tier = "🎊 대박"
             msg = "축하합니다!!! 전설의 대박!!!"
-        elif roll < 0.005:  # 0.45% - 1등
-            reward = random.randint(2_000_000, 5_000_000)
+        elif roll < 0.005:  # 0.45% - 1등 (100~300배)
+            reward = random.randint(1_000_000, 3_000_000)
             tier = "🥇 1등"
             msg = "대단해요!"
-        elif roll < 0.025:  # 2% - 2등
-            reward = random.randint(500_000, 1_000_000)
+        elif roll < 0.025:  # 2% - 2등 (20~50배)
+            reward = random.randint(200_000, 500_000)
             tier = "🥈 2등"
             msg = "좋아요!"
-        elif roll < 0.075:  # 5% - 3등
-            reward = random.randint(100_000, 300_000)
+        elif roll < 0.075:  # 5% - 3등 (5~15배)
+            reward = random.randint(50_000, 150_000)
             tier = "🥉 3등"
             msg = "괜찮네요!"
-        elif roll < 0.20:  # 12.5% - 4등
-            reward = random.randint(20_000, 80_000)
+        elif roll < 0.20:  # 12.5% - 4등 (2~5배)
+            reward = random.randint(20_000, 50_000)
             tier = "🎁 4등"
             msg = "조금이나마..."
-        elif roll < 0.40:  # 20% - 5등 (본전)
-            reward = random.randint(5_000, 15_000)
+        elif roll < 0.40:  # 20% - 5등 (본전 1배)
+            reward = 10_000
             tier = "💫 5등"
-            msg = "본전이라도..."
+            msg = "본전!"
         else:  # 60% - 꽝
-            reward = random.randint(100, 2_000)
+            reward = random.randint(0, 2_000)
             tier = "😅 꽝"
             msg = "다음 기회에..."
 
         user.cash += reward
         db.commit()
 
+        # 순이익 계산
+        profit = reward - cls.LOTTERY_COST
+
         return {
             "success": True,
+            "cost": cls.LOTTERY_COST,
             "reward": reward,
+            "profit": profit,
             "tier": tier,
             "message": msg,
             "cash": user.cash,

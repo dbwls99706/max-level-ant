@@ -923,11 +923,18 @@ class CommandHandler:
             effect = ""
 
         remaining = result.get("remaining", 0)
+        profit = result.get("profit", 0)
+        profit_emoji = "📈" if profit > 0 else "📉" if profit < 0 else "➖"
+        profit_text = f"+{profit:,}" if profit > 0 else f"{profit:,}"
+
         msg = f"""🎫 복권 긁기 {effect}
 
 {tier}! {result['message']}
 
+🎟️ 복권 가격: -{result['cost']:,}원
 💰 당첨금: +{result['reward']:,}원
+{profit_emoji} 순이익: {profit_text}원
+
 📍 오늘 남은 횟수: {remaining}회
 💵 현재 잔고: {result['cash']:,}원"""
 
