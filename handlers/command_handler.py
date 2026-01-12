@@ -9,7 +9,7 @@ from typing import Dict
 from sqlalchemy.orm import Session
 
 from services import UserService, StockService, TradeService, RankingService, MissionService, GameService, NewsService
-from utils import KakaoResponse
+from utils import KakaoResponse, get_streak_display, get_profit_bar, get_tier_title, validate_nickname, validate_quantity
 from config import GameConfig, Messages, is_market_closed
 
 
@@ -157,14 +157,21 @@ class CommandHandler:
         if not success and reward == 0 and streak == 0:
             return KakaoResponse.simple_text("먼저 /시작 으로 게임을 시작해주세요.")
 
+        # 스트릭 시각화
+        streak_emoji = get_streak_display(streak)
+
         if success:
-            msg = Messages.ATTENDANCE_SUCCESS.format(
-                reward=reward,
-                streak=streak,
-                cash=cash
-            )
+            msg = f"""✅ 출석 완료!
+
+💰 +{reward:,}원 지급!
+{streak_emoji} 연속 출석: {streak}일
+
+현재 잔고: {cash:,}원"""
         else:
-            msg = Messages.ATTENDANCE_ALREADY.format(streak=streak)
+            msg = f"""⚠️ 오늘은 이미 출석했습니다!
+
+내일 다시 출석해주세요.
+{streak_emoji} 현재 연속 출석: {streak}일"""
 
         buttons = [
             {"label": "🚀 급등주", "action": "message", "messageText": "/급등"},
@@ -173,35 +180,8 @@ class CommandHandler:
         buttons.extend(self._get_game_buttons())
         return KakaoResponse.quick_replies(msg, buttons)
 
-    def handle_ad(self) -> Dict:
-        """광고 시청"""
-        success, reward, remaining, cash = UserService.watch_ad(self.db, self.kakao_id)
+    # handle_ad() 제거됨 - 광고 기능 비활성화
 
-        if not success and reward == 0 and remaining == 0 and cash == 0:
-            return KakaoResponse.simple_text("먼저 /시작 으로 게임을 시작해주세요.")
-
-        if success:
-            msg = Messages.AD_SUCCESS.format(
-                reward=reward,
-                remaining=remaining,
-                cash=cash
-            )
-            buttons = [
-                {"label": "🚀 급등주", "action": "message", "messageText": "/급등"},
-                {"label": "📺 광고 한번 더", "action": "message", "messageText": "/광고"},
-            ]
-            buttons.extend(self._get_game_buttons())
-            return KakaoResponse.quick_replies(msg, buttons)
-        else:
-            buttons = [
-                {"label": "🚀 급등주", "action": "message", "messageText": "/급등"},
-            ]
-            buttons.extend(self._get_game_buttons())
-            return KakaoResponse.quick_replies(
-                Messages.AD_LIMIT.format(max_ads=GameConfig.MAX_ADS_PER_DAY),
-                buttons
-            )
-    
     def handle_price(self) -> Dict:
         """시세 조회"""
         parts = self.utterance.split(maxsplit=1)
@@ -495,14 +475,17 @@ class CommandHandler:
                 {"label": "📊 인기종목", "action": "message", "messageText": "/인기"}
             ]
 
-        # 총 수익률 이모지
-        profit_emoji = "🚀" if portfolio["profit_rate"] >= 10 else ("📈" if portfolio["profit_rate"] >= 0 else "📉")
+        # 시각적 요소 추가
+        tier = get_tier_title(portfolio['total_asset'])
+        profit_bar = get_profit_bar(portfolio['profit_rate'])
 
         msg = f"""💼 내 포트폴리오
 
+{tier}
 💵 현금: {portfolio['cash']:,}원
 {holdings_text}
-{profit_emoji} 총자산: {portfolio['total_asset']:,}원 ({portfolio['profit_rate']:+.1f}%)"""
+{profit_bar}
+💰 총자산: {portfolio['total_asset']:,}원"""
 
         if not buttons:
             buttons = [{"label": "📊 인기종목", "action": "message", "messageText": "/인기"}]
@@ -1102,14 +1085,15 @@ class CommandHandler:
         if len(parts) < 2:
             current = user.nickname if user.nickname else "없음"
             return KakaoResponse.simple_text(
-                f"🏷️ 닉네임 설정\n\n현재 닉네임: {current}\n\n사용법: /닉네임 [새 닉네임]\n예: /닉네임 주식왕"
+                f"🏷️ 닉네임 설정\n\n현재 닉네임: {current}\n\n사용법: /닉네임 [새 닉네임]\n예: /닉네임 투자왕"
             )
 
         new_nickname = parts[1].strip()
 
-        # 닉네임 유효성 검사
-        if len(new_nickname) < 2 or len(new_nickname) > 10:
-            return KakaoResponse.simple_text("❌ 닉네임은 2~10자로 설정해주세요.")
+        # 닉네임 유효성 검사 (강화된 검증)
+        is_valid, error_msg = validate_nickname(new_nickname)
+        if not is_valid:
+            return KakaoResponse.simple_text(error_msg)
 
         # 닉네임 업데이트
         user.nickname = new_nickname

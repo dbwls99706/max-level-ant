@@ -89,41 +89,9 @@ class UserService:
         db.refresh(user)
         
         return True, reward, user.attendance_streak, user.cash
-    
-    @staticmethod
-    def watch_ad(db: Session, kakao_id: str) -> Tuple[bool, int, int, int]:
-        """
-        광고 시청 보상
-        Returns: (success, reward, remaining_count, current_cash)
-        """
-        user = UserService.get_user(db, kakao_id)
-        if not user:
-            return False, 0, 0, 0
-        
-        today = date.today()
-        
-        # 날짜가 바뀌었으면 카운트 리셋
-        if user.last_ad_date != today:
-            user.last_ad_date = today
-            user.ad_count_today = 0
-        
-        # 최대 횟수 확인
-        if user.ad_count_today >= GameConfig.MAX_ADS_PER_DAY:
-            remaining = 0
-            return False, 0, remaining, user.cash
-        
-        # 보상 지급
-        reward = GameConfig.AD_REWARD
-        user.ad_count_today += 1
-        user.cash += reward
-        
-        remaining = GameConfig.MAX_ADS_PER_DAY - user.ad_count_today
-        
-        db.commit()
-        db.refresh(user)
-        
-        return True, reward, remaining, user.cash
-    
+
+    # watch_ad() 제거됨 - 광고 기능 비활성화 (수익 발생 방지)
+
     @staticmethod
     def get_balance(db: Session, kakao_id: str) -> Optional[int]:
         """잔고 조회"""
