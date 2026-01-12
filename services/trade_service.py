@@ -16,7 +16,36 @@ from config import GameConfig
 
 class TradeService:
     """주식 거래 관련 서비스"""
-    
+
+    @staticmethod
+    def find_holding_by_name(db: Session, kakao_id: str, stock_query: str) -> Optional[Holding]:
+        """
+        유저 포트폴리오에서 종목명으로 검색
+        동적 캐시가 사라져도 포트폴리오 종목은 찾을 수 있음
+        """
+        stock_query = stock_query.strip()
+
+        # 1. 정확한 이름 매칭
+        holding = db.query(Holding).filter(
+            Holding.kakao_id == kakao_id,
+            Holding.stock_name == stock_query,
+            Holding.quantity > 0
+        ).first()
+        if holding:
+            return holding
+
+        # 2. 부분 이름 매칭
+        holdings = db.query(Holding).filter(
+            Holding.kakao_id == kakao_id,
+            Holding.quantity > 0
+        ).all()
+
+        for h in holdings:
+            if stock_query in h.stock_name:
+                return h
+
+        return None
+
     @staticmethod
     def buy_stock(
         db: Session,
@@ -45,10 +74,13 @@ class TradeService:
         stock_info = StockService.get_price(stock_query)
         if not stock_info:
             return {"success": False, "message": f"'{stock_query}' 종목을 찾을 수 없습니다."}
-        
+
         code = stock_info["code"]
         name = stock_info["name"]
         price = stock_info["price"]
+
+        # 종목 캐시 저장 (서버 재시작 후에도 찾을 수 있도록)
+        StockService._cache_stock(code, name)
         
         # 총 금액 계산 (수수료 포함)
         total_amount = price * quantity
@@ -147,26 +179,41 @@ class TradeService:
         user = UserService.get_user(db, kakao_id)
         if not user:
             return {"success": False, "message": "먼저 /시작 으로 게임을 시작해주세요."}
-        
+
         # 수량 확인
         if quantity < GameConfig.MIN_TRADE_AMOUNT:
             return {"success": False, "message": f"최소 {GameConfig.MIN_TRADE_AMOUNT}주 이상 매도해야 합니다."}
-        
-        # 종목 시세 조회
-        stock_info = StockService.get_price(stock_query)
-        if not stock_info:
-            return {"success": False, "message": f"'{stock_query}' 종목을 찾을 수 없습니다."}
-        
-        code = stock_info["code"]
-        name = stock_info["name"]
-        price = stock_info["price"]
-        
-        # 보유 종목 확인
-        holding = db.query(Holding).filter(
-            Holding.kakao_id == kakao_id,
-            Holding.stock_code == code
-        ).first()
-        
+
+        # 1. 먼저 포트폴리오에서 종목 검색 (캐시 무관하게 찾기)
+        holding = TradeService.find_holding_by_name(db, kakao_id, stock_query)
+
+        if holding:
+            # 포트폴리오에서 찾음 - 종목코드로 시세 조회
+            code = holding.stock_code
+            name = holding.stock_name
+            stock_info = StockService.get_price(code)
+            if stock_info:
+                price = stock_info["price"]
+                # 동적 캐시에 다시 저장
+                StockService._cache_stock(code, name)
+            else:
+                return {"success": False, "message": f"'{name}' 시세 조회 실패. 잠시 후 다시 시도해주세요."}
+        else:
+            # 2. 포트폴리오에 없으면 일반 검색
+            stock_info = StockService.get_price(stock_query)
+            if not stock_info:
+                return {"success": False, "message": f"'{stock_query}' 종목을 찾을 수 없습니다."}
+
+            code = stock_info["code"]
+            name = stock_info["name"]
+            price = stock_info["price"]
+
+            # 보유 종목 확인
+            holding = db.query(Holding).filter(
+                Holding.kakao_id == kakao_id,
+                Holding.stock_code == code
+            ).first()
+
         if not holding or holding.quantity < quantity:
             holding_qty = holding.quantity if holding else 0
             return {
@@ -271,6 +318,13 @@ class TradeService:
         """
         전량 매도
         """
+        # 1. 먼저 포트폴리오에서 검색
+        holding = TradeService.find_holding_by_name(db, kakao_id, stock_query)
+        if holding:
+            # 포트폴리오에서 찾음 - 해당 종목 전량 매도
+            return TradeService.sell_stock(db, kakao_id, holding.stock_name, holding.quantity)
+
+        # 2. 포트폴리오에 없으면 일반 검색
         stock_info = StockService.search_stock(stock_query)
         if not stock_info:
             return {"success": False, "message": f"'{stock_query}' 종목을 찾을 수 없습니다."}

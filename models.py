@@ -289,3 +289,20 @@ class AssetHistory(Base):
 
     def __repr__(self):
         return f"<AssetHistory(user={self.kakao_id}, date={self.record_date}, asset={self.total_asset:,})>"
+
+
+class StockCache(Base):
+    """종목 코드/이름 영구 캐시"""
+    __tablename__ = "stock_cache"
+
+    # 종목 코드 (PK)
+    stock_code = Column(String(20), primary_key=True)
+
+    # 종목명
+    stock_name = Column(String(100), nullable=False)
+
+    # 마지막 업데이트
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    def __repr__(self):
+        return f"<StockCache(code={self.stock_code}, name={self.stock_name})>"

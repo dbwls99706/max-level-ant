@@ -241,6 +241,16 @@ class CommandHandler:
         stock_info = StockService.get_price(query)
 
         if not stock_info:
+            # 포트폴리오에서 종목 검색 시도
+            holding = TradeService.find_holding_by_name(self.db, self.kakao_id, query)
+            if holding:
+                # 포트폴리오에서 찾음 - 종목코드로 시세 조회
+                stock_info = StockService.get_price(holding.stock_code)
+                if stock_info:
+                    # 동적 캐시에 다시 저장
+                    StockService._cache_stock(holding.stock_code, holding.stock_name)
+
+        if not stock_info:
             # 유사 종목 추천
             similar = StockService.search_similar_stocks(query, limit=5)
             if similar:

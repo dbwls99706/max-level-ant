@@ -47,7 +47,11 @@ def init_db():
     앱 시작 시 호출
     """
     # 모든 모델 임포트 (테이블 생성을 위해)
-    from models import User, Holding, Transaction
+    from models import (
+        User, Holding, Transaction,
+        Battle, WeeklyChallenge, UserChallenge,
+        Milestone, AssetHistory, StockCache
+    )
 
     # 테이블 생성
     Base.metadata.create_all(bind=engine)
@@ -80,6 +84,8 @@ def _migrate_db():
         'total_trades': 'INTEGER DEFAULT 0',
         'last_lottery_date': 'DATE',
         'lottery_count_today': 'INTEGER DEFAULT 0',
+        'nickname_change_count': 'INTEGER DEFAULT 0',
+        'last_nickname_change': 'DATE',
     }
 
     with engine.connect() as conn:
