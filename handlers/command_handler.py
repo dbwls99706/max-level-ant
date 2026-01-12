@@ -308,6 +308,15 @@ class CommandHandler:
                     cash=data["cash"],
                     shortage=data["shortage"]
                 )
+                # 돈 버는 방법 안내
+                return KakaoResponse.quick_replies(
+                    msg,
+                    [
+                        {"label": "📅 출석체크", "action": "message", "messageText": "/출석"},
+                        {"label": "🎰 복권", "action": "message", "messageText": "/복권"},
+                        {"label": "🎯 미션확인", "action": "message", "messageText": "/미션"}
+                    ]
+                )
             else:
                 msg = result["message"]
             return KakaoResponse.simple_text(msg)
@@ -418,8 +427,18 @@ class CommandHandler:
         result = TradeService.buy_max(self.db, self.kakao_id, stock_query)
         
         if not result["success"]:
+            # 잔고 부족 시 돈 버는 방법 안내
+            if "잔고" in result["message"]:
+                return KakaoResponse.quick_replies(
+                    result["message"],
+                    [
+                        {"label": "📅 출석체크", "action": "message", "messageText": "/출석"},
+                        {"label": "🎰 복권", "action": "message", "messageText": "/복권"},
+                        {"label": "🎯 미션확인", "action": "message", "messageText": "/미션"}
+                    ]
+                )
             return KakaoResponse.simple_text(result["message"])
-        
+
         data = result["data"]
         msg = Messages.BUY_SUCCESS.format(
             name=data["name"],
