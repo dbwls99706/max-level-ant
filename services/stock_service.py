@@ -193,9 +193,16 @@ class KISAPIClient:
             if resp.status_code == 200:
                 data = resp.json()
                 print(f"등락률 API 결과: rt_cd={data.get('rt_cd')}, msg={data.get('msg1')}")
+                print(f"등락률 API 키들: {list(data.keys())}")
 
                 if data.get("rt_cd") == "0":
+                    # output 또는 output1 또는 output2 확인
                     items = data.get("output", [])
+                    if not items:
+                        items = data.get("output1", [])
+                    if not items:
+                        items = data.get("output2", [])
+                    print(f"등락률 데이터 개수: {len(items)}")
 
                     # 등락률로 정렬
                     if sort == "1":  # 상승률순
