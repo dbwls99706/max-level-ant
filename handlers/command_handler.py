@@ -781,10 +781,22 @@ class CommandHandler:
             # 종목명 없으면 시장 뉴스
             news = NewsService.get_market_news(limit=3)
             title = "📰 주식시장 뉴스"
+            buttons = [
+                {"label": "📰 삼성전자", "action": "message", "messageText": "/뉴스 삼성전자"},
+                {"label": "📰 반도체", "action": "message", "messageText": "/뉴스 반도체"},
+                {"label": "🚀 급등주", "action": "message", "messageText": "/급등"},
+            ]
         else:
             query = parts[1].strip()
             news = NewsService.get_stock_news(query, limit=3)
             title = f"📰 '{query}' 관련 뉴스"
+            # 해당 종목 매수/매도 + 다른 뉴스 보기
+            buttons = [
+                {"label": f"📈 {query} 매수", "action": "message", "messageText": f"/매수 {query} 10"},
+                {"label": f"📉 {query} 매도", "action": "message", "messageText": f"/매도 {query} 10"},
+                {"label": "📰 다른 뉴스", "action": "message", "messageText": "/뉴스"},
+                {"label": "🚀 급등주", "action": "message", "messageText": "/급등"},
+            ]
 
         if not news:
             return KakaoResponse.quick_replies(
@@ -803,14 +815,7 @@ class CommandHandler:
                 t = t[:35] + "..."
             msg += f"\n{i}. {t}"
 
-        return KakaoResponse.quick_replies(
-            msg,
-            [
-                {"label": "📰 삼성전자", "action": "message", "messageText": "/뉴스 삼성전자"},
-                {"label": "📰 반도체", "action": "message", "messageText": "/뉴스 반도체"},
-                {"label": "🚀 급등주", "action": "message", "messageText": "/급등"},
-            ]
-        )
+        return KakaoResponse.quick_replies(msg, buttons)
 
     def handle_mission(self) -> Dict:
         """일간 미션 현황"""
