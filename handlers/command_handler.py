@@ -1228,7 +1228,8 @@ class CommandHandler:
                 [
                     {"label": "🪙 10만 앞", "action": "message", "messageText": "/동전 100000 앞"},
                     {"label": "🪙 10만 뒤", "action": "message", "messageText": "/동전 100000 뒤"},
-                    {"label": "🪙 50만 앞", "action": "message", "messageText": "/동전 500000 앞"}
+                    {"label": "🪙 50만 앞", "action": "message", "messageText": "/동전 500000 앞"},
+                    {"label": "🪙 50만 뒤", "action": "message", "messageText": "/동전 500000 뒤"}
                 ]
             )
 

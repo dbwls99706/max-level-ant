@@ -387,7 +387,7 @@ class GameService:
     def play_coin_flip(cls, db: Session, kakao_id: str, bet: int, choice: str) -> Dict:
         """
         동전 던지기
-        - 앞/뒤 맞추면 1.8배 (기대값 90%)
+        - 앞/뒤 맞추면 2배 (기대값 100%)
         """
         # 장 마감 시간에만 가능
         if not is_market_closed():
@@ -431,7 +431,7 @@ class GameService:
         won = (choice == result)
 
         if won:
-            multiplier = 1.8  # 50% × 1.8 = 90% EV
+            multiplier = 2.0  # 50% × 2.0 = 100% EV
             winnings = int(bet * multiplier)
         else:
             multiplier = 0
