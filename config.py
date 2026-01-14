@@ -225,7 +225,7 @@ class GameConfig:
     LOTTERY_COST = 10_000  # 복권 가격
     MAX_LOTTERY_PER_DAY = 5  # 복권 1일 최대 횟수
     MIN_BET = 10_000  # 미니게임 최소 배팅금
-    MAX_BET = 1_000_000_000_000  # 미니게임 최대 배팅금 (1조)
+    MAX_BET = 999_900_000_000  # 미니게임 최대 배팅금 (9999억)
     DEFAULT_BET = 50_000  # 미니게임 기본 배팅금
 
     # 거래 설정
