@@ -110,16 +110,12 @@ class TradingHandlerMixin(BaseHandlerMixin):
         result = TradeService.buy_stock(self.db, self.kakao_id, stock_query, quantity)
 
         if not result["success"]:
-            if result.get("error_code") == "MARKET_CLOSED":
-                return KakaoResponse.quick_replies(
-                    result["message"],
-                    [
-                        {"label": "🎫 복권", "action": "message", "messageText": "/복권"},
-                        {"label": "🎰 슬롯머신", "action": "message", "messageText": "/슬롯머신 50000"},
-                        {"label": "💼 포트폴리오", "action": "message", "messageText": "/포트폴리오"}
-                    ]
-                )
-            elif "data" in result and "shortage" in result.get("data", {}):
+            # 장 마감 에러 확인
+            is_closed, response = self._check_market_closed_error(result)
+            if is_closed:
+                return response
+
+            if "data" in result and "shortage" in result.get("data", {}):
                 data = result["data"]
                 msg = Messages.NOT_ENOUGH_CASH.format(
                     required=data["required"],
@@ -207,16 +203,12 @@ class TradingHandlerMixin(BaseHandlerMixin):
         result = TradeService.sell_stock(self.db, self.kakao_id, stock_query, quantity)
 
         if not result["success"]:
-            if result.get("error_code") == "MARKET_CLOSED":
-                return KakaoResponse.quick_replies(
-                    result["message"],
-                    [
-                        {"label": "🎫 복권", "action": "message", "messageText": "/복권"},
-                        {"label": "🎰 슬롯머신", "action": "message", "messageText": "/슬롯머신 50000"},
-                        {"label": "💼 포트폴리오", "action": "message", "messageText": "/포트폴리오"}
-                    ]
-                )
-            elif "data" in result and "holding" in result.get("data", {}):
+            # 장 마감 에러 확인
+            is_closed, response = self._check_market_closed_error(result)
+            if is_closed:
+                return response
+
+            if "data" in result and "holding" in result.get("data", {}):
                 data = result["data"]
                 msg = Messages.NOT_ENOUGH_STOCK.format(
                     requested=data["requested"],
@@ -291,15 +283,11 @@ class TradingHandlerMixin(BaseHandlerMixin):
         result = TradeService.buy_max(self.db, self.kakao_id, stock_query)
 
         if not result["success"]:
-            if result.get("error_code") == "MARKET_CLOSED":
-                return KakaoResponse.quick_replies(
-                    result["message"],
-                    [
-                        {"label": "🎫 복권", "action": "message", "messageText": "/복권"},
-                        {"label": "🎰 슬롯머신", "action": "message", "messageText": "/슬롯머신 50000"},
-                        {"label": "💼 포트폴리오", "action": "message", "messageText": "/포트폴리오"}
-                    ]
-                )
+            # 장 마감 에러 확인
+            is_closed, response = self._check_market_closed_error(result)
+            if is_closed:
+                return response
+
             if "잔고" in result["message"]:
                 return KakaoResponse.quick_replies(
                     result["message"],
@@ -352,15 +340,11 @@ class TradingHandlerMixin(BaseHandlerMixin):
         result = TradeService.sell_all(self.db, self.kakao_id, stock_query)
 
         if not result["success"]:
-            if result.get("error_code") == "MARKET_CLOSED":
-                return KakaoResponse.quick_replies(
-                    result["message"],
-                    [
-                        {"label": "🎫 복권", "action": "message", "messageText": "/복권"},
-                        {"label": "🎰 슬롯머신", "action": "message", "messageText": "/슬롯머신 50000"},
-                        {"label": "💼 포트폴리오", "action": "message", "messageText": "/포트폴리오"}
-                    ]
-                )
+            # 장 마감 에러 확인
+            is_closed, response = self._check_market_closed_error(result)
+            if is_closed:
+                return response
+
             return KakaoResponse.quick_replies(
                 result["message"],
                 [

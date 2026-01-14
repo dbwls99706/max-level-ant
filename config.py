@@ -3,12 +3,16 @@
 """
 import os
 import secrets
+import logging
 from datetime import datetime, date
 from typing import Dict, Any, Optional
 import pytz
 from dotenv import load_dotenv
 
 load_dotenv()
+
+# 설정 모듈용 로거
+_config_logger = logging.getLogger(__name__)
 
 
 # ===========================================
@@ -316,6 +320,14 @@ class GameConfig:
     WEEKLY_BONUS_DAY = 0  # 월요일 (0=월, 6=일)
     WEEKLY_BONUS_MULTIPLIER = 2.0  # 2배 보너스
 
+    # 미니게임 기본 설정
+    DEFAULT_BET = 50_000  # 기본 배팅금 5만원
+    MIN_BET = 1_000  # 최소 배팅금 1천원
+    MAX_BET = 100_000_000  # 최대 배팅금 1억원
+
+    # 배틀 기본 설정
+    DEFAULT_BATTLE_BET = 100_000  # 기본 배틀 배팅금 10만원
+
     # 미니게임 설정
     LOTTERY_COST = 10_000  # 복권 가격
     MAX_LOTTERY_PER_DAY = 5  # 복권 1일 최대 횟수
@@ -401,10 +413,10 @@ class GameProbability:
 
         if errors:
             for error in errors:
-                print(f"⚠️ 확률 검증 실패: {error}")
+                _config_logger.warning(f"확률 검증 실패: {error}")
             return False
 
-        print("✅ 게임 확률 검증 완료")
+        _config_logger.debug("게임 확률 검증 완료")
         return True
 
     @classmethod

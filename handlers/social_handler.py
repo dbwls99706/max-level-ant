@@ -241,18 +241,19 @@ class SocialHandlerMixin(BaseHandlerMixin):
         parts = self.utterance.split()
 
         if len(parts) < 3:
+            default_bet = GameConfig.DEFAULT_BATTLE_BET
             return KakaoResponse.quick_replies(
-                "⚔️ 배틀 생성\n\n사용법: /배틀 [종목] [상승/하락] [금액]\n예: /배틀 삼성전자 상승 100000\n\n❓ /배틀설명 으로 자세한 설명 확인",
+                f"⚔️ 배틀 생성\n\n사용법: /배틀 [종목] [상승/하락] [금액]\n예: /배틀 삼성전자 상승 {default_bet}\n\n❓ /배틀설명 으로 자세한 설명 확인",
                 [
                     {"label": "❓ 배틀설명", "action": "message", "messageText": "/배틀설명"},
-                    {"label": "⚔️ 삼성전자 상승", "action": "message", "messageText": "/배틀 삼성전자 상승 100000"},
+                    {"label": "⚔️ 삼성전자 상승", "action": "message", "messageText": f"/배틀 삼성전자 상승 {default_bet}"},
                     {"label": "📋 배틀목록", "action": "message", "messageText": "/배틀목록"}
                 ]
             )
 
         stock_name = parts[1]
         prediction = parts[2]
-        bet = 100_000
+        bet = GameConfig.DEFAULT_BATTLE_BET
         if len(parts) >= 4:
             try:
                 bet = int(parts[3].replace(",", ""))

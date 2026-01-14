@@ -1,7 +1,8 @@
 """
-랭킹 서비스
+랭킹 서비스 (리팩토링)
 - 수익률 기준 랭킹
 - N+1 쿼리 최적화 적용
+- 중복 로직 제거
 """
 from typing import List, Dict, Optional, Tuple, Set
 from sqlalchemy.orm import Session, joinedload
@@ -30,12 +31,6 @@ class RankingService:
         """
         주식 가격 일괄 조회 (캐시 활용)
         N+1 문제 해결을 위한 일괄 조회
-
-        Args:
-            stock_codes: 조회할 종목 코드 집합
-
-        Returns:
-            종목코드 -> 현재가 매핑
         """
         prices = {}
         for code in stock_codes:
@@ -43,36 +38,6 @@ class RankingService:
             if stock_info:
                 prices[code] = stock_info["price"]
         return prices
-
-    @classmethod
-    def calculate_total_asset(cls, db: Session, user: User) -> Tuple[int, float]:
-        """
-        유저의 총 자산 및 수익률 계산
-        Returns: (total_asset, profit_rate)
-        """
-        total_asset = user.cash
-
-        # 보유 주식 가치 계산
-        holdings = db.query(Holding).filter(
-            Holding.kakao_id == user.kakao_id,
-            Holding.quantity > 0
-        ).all()
-
-        for h in holdings:
-            stock_info = StockService.get_price(h.stock_code)
-            if stock_info:
-                total_asset += stock_info["price"] * h.quantity
-            else:
-                # 시세 조회 실패 시 평균 매수가 사용
-                total_asset += h.avg_price * h.quantity
-
-        # 수익률 계산 (0으로 나누기 방지)
-        if user.initial_cash > 0:
-            profit_rate = ((total_asset - user.initial_cash) / user.initial_cash) * 100
-        else:
-            profit_rate = 0.0
-
-        return total_asset, profit_rate
 
     @classmethod
     def _calculate_total_asset_batch(
@@ -83,14 +48,6 @@ class RankingService:
     ) -> Tuple[int, float]:
         """
         일괄 조회된 데이터로 총 자산 계산 (N+1 최적화)
-
-        Args:
-            user: 유저 객체
-            user_holdings: 해당 유저의 보유 주식 목록
-            stock_prices: 미리 조회된 주식 가격 매핑
-
-        Returns:
-            (총자산, 수익률%)
         """
         total_asset = user.cash
 
@@ -99,7 +56,7 @@ class RankingService:
                 price = stock_prices.get(h.stock_code, h.avg_price)
                 total_asset += price * h.quantity
 
-        # 수익률 계산
+        # 수익률 계산 (0으로 나누기 방지)
         if user.initial_cash > 0:
             profit_rate = ((total_asset - user.initial_cash) / user.initial_cash) * 100
         else:
@@ -108,22 +65,20 @@ class RankingService:
         return total_asset, profit_rate
 
     @classmethod
-    def get_ranking(cls, db: Session, limit: int = 10) -> List[Dict]:
+    def _build_rankings(cls, db: Session) -> List[Dict]:
         """
-        수익률 랭킹 TOP N (N+1 최적화)
-        """
-        # 캐시 확인
-        cache_key = f"ranking_{limit}"
-        if cache_key in cls._ranking_cache:
-            return cls._ranking_cache[cache_key]
+        전체 유저 랭킹 계산 (공통 로직)
 
+        Returns:
+            정렬된 랭킹 리스트 (순위 포함)
+        """
         # 1. 모든 유저와 보유 주식을 한 번에 조회 (joinedload로 N+1 방지)
         users = db.query(User).options(joinedload(User.holdings)).all()
 
         if not users:
             return []
 
-        # 2. 필요한 모든 종목 코드 수집
+        # 2. 필요한 모든 종목 코드 수집 및 유저별 보유 주식 매핑
         all_stock_codes: Set[str] = set()
         user_holdings_map: Dict[str, List[Holding]] = {}
 
@@ -151,13 +106,56 @@ class RankingService:
                 "profit_rate": profit_rate
             })
 
-        # 5. 수익률 기준 정렬
+        # 5. 수익률 기준 정렬 및 순위 부여
         rankings.sort(key=lambda x: x["profit_rate"], reverse=True)
-
-        # 6. 순위 부여
         for i, r in enumerate(rankings):
             r["rank"] = i + 1
 
+        return rankings
+
+    @classmethod
+    def calculate_total_asset(cls, db: Session, user: User) -> Tuple[int, float]:
+        """
+        유저의 총 자산 및 수익률 계산 (단일 유저용)
+        """
+        total_asset = user.cash
+
+        # 보유 주식 가치 계산
+        holdings = db.query(Holding).filter(
+            Holding.kakao_id == user.kakao_id,
+            Holding.quantity > 0
+        ).all()
+
+        for h in holdings:
+            stock_info = StockService.get_price(h.stock_code)
+            if stock_info:
+                total_asset += stock_info["price"] * h.quantity
+            else:
+                # 시세 조회 실패 시 평균 매수가 사용
+                total_asset += h.avg_price * h.quantity
+
+        # 수익률 계산 (0으로 나누기 방지)
+        if user.initial_cash > 0:
+            profit_rate = ((total_asset - user.initial_cash) / user.initial_cash) * 100
+        else:
+            profit_rate = 0.0
+
+        return total_asset, profit_rate
+
+    @classmethod
+    def get_ranking(cls, db: Session, limit: int = 10) -> List[Dict]:
+        """
+        수익률 랭킹 TOP N (N+1 최적화)
+        """
+        # 캐시 확인
+        cache_key = f"ranking_{limit}"
+        if cache_key in cls._ranking_cache:
+            return cls._ranking_cache[cache_key]
+
+        # 전체 랭킹 계산
+        rankings = cls._build_rankings(db)
+
+        # TOP N 추출
         result = rankings[:limit]
 
         # 캐시 저장
@@ -170,14 +168,13 @@ class RankingService:
         """
         내 순위 조회 (N+1 최적화)
         """
-        # 1. 전체 랭킹을 활용 (이미 캐시됨)
-        # 먼저 캐시된 전체 랭킹에서 찾기 시도
+        # 1. 전체 랭킹 캐시 확인 또는 계산
         full_ranking_key = "ranking_full"
         if full_ranking_key not in cls._ranking_cache:
-            # 전체 랭킹 계산 (캐시됨)
-            cls._calculate_full_ranking(db)
-
-        full_ranking = cls._ranking_cache.get(full_ranking_key, [])
+            full_ranking = cls._build_rankings(db)
+            cls._ranking_cache[full_ranking_key] = full_ranking
+        else:
+            full_ranking = cls._ranking_cache[full_ranking_key]
 
         # 2. 유저 조회
         user = db.query(User).filter(User.kakao_id == kakao_id).first()
@@ -185,81 +182,64 @@ class RankingService:
             return None
 
         # 3. 전체 랭킹에서 내 순위 찾기
-        my_rank_info = None
         for r in full_ranking:
             if r["kakao_id"] == kakao_id:
-                my_rank_info = r
-                break
+                return {
+                    "rank": r["rank"],
+                    "total": len(full_ranking),
+                    "kakao_id": kakao_id,
+                    "nickname": r["nickname"],
+                    "total_asset": r["total_asset"],
+                    "profit_rate": r["profit_rate"]
+                }
 
-        # 4. 캐시에 없으면 직접 계산
-        if not my_rank_info:
-            total_asset, profit_rate = cls.calculate_total_asset(db, user)
+        # 4. 캐시에 없으면 직접 계산 (새 유저 등)
+        total_asset, profit_rate = cls.calculate_total_asset(db, user)
 
-            # 나보다 높은 수익률 수 계산 (전체 랭킹 활용)
-            higher_count = sum(1 for r in full_ranking if r["profit_rate"] > profit_rate)
-
-            return {
-                "rank": higher_count + 1,
-                "total": len(full_ranking) if full_ranking else db.query(User).count(),
-                "kakao_id": kakao_id,
-                "nickname": cls._get_display_name(user),
-                "total_asset": total_asset,
-                "profit_rate": profit_rate
-            }
+        # 나보다 높은 수익률 수 계산
+        higher_count = sum(1 for r in full_ranking if r["profit_rate"] > profit_rate)
 
         return {
-            "rank": my_rank_info["rank"],
-            "total": len(full_ranking),
+            "rank": higher_count + 1,
+            "total": len(full_ranking) + 1,  # 새 유저 포함
             "kakao_id": kakao_id,
-            "nickname": my_rank_info["nickname"],
-            "total_asset": my_rank_info["total_asset"],
-            "profit_rate": my_rank_info["profit_rate"]
+            "nickname": cls._get_display_name(user),
+            "total_asset": total_asset,
+            "profit_rate": profit_rate
         }
 
     @classmethod
-    def _calculate_full_ranking(cls, db: Session) -> List[Dict]:
-        """전체 유저 랭킹 계산 및 캐시"""
-        # 모든 유저와 보유 주식을 한 번에 조회
-        users = db.query(User).options(joinedload(User.holdings)).all()
+    def clear_cache(cls):
+        """랭킹 캐시 초기화"""
+        cls._ranking_cache.clear()
 
-        if not users:
-            cls._ranking_cache["ranking_full"] = []
-            return []
+    @classmethod
+    def get_top_gainers(cls, db: Session, limit: int = 5) -> List[Dict]:
+        """오늘 수익률 상위 유저 (빠른 조회)"""
+        cache_key = f"top_gainers_{limit}"
+        if cache_key in cls._ranking_cache:
+            return cls._ranking_cache[cache_key]
 
-        # 필요한 모든 종목 코드 수집
-        all_stock_codes: Set[str] = set()
-        user_holdings_map: Dict[str, List[Holding]] = {}
+        rankings = cls._build_rankings(db)
+        # 양수 수익률만 필터링
+        gainers = [r for r in rankings if r["profit_rate"] > 0][:limit]
 
-        for user in users:
-            user_holdings = [h for h in user.holdings if h.quantity > 0]
-            user_holdings_map[user.kakao_id] = user_holdings
-            for h in user_holdings:
-                all_stock_codes.add(h.stock_code)
+        cls._ranking_cache[cache_key] = gainers
+        return gainers
 
-        # 주식 가격 일괄 조회
-        stock_prices = cls._prefetch_stock_prices(all_stock_codes)
+    @classmethod
+    def get_top_losers(cls, db: Session, limit: int = 5) -> List[Dict]:
+        """오늘 손실률 상위 유저 (빠른 조회)"""
+        cache_key = f"top_losers_{limit}"
+        if cache_key in cls._ranking_cache:
+            return cls._ranking_cache[cache_key]
 
-        # 각 유저의 총 자산 계산
-        rankings = []
-        for user in users:
-            user_holdings = user_holdings_map.get(user.kakao_id, [])
-            total_asset, profit_rate = cls._calculate_total_asset_batch(
-                user, user_holdings, stock_prices
-            )
+        rankings = cls._build_rankings(db)
+        # 음수 수익률만 필터링 후 손실 큰 순서
+        losers = sorted(
+            [r for r in rankings if r["profit_rate"] < 0],
+            key=lambda x: x["profit_rate"]
+        )[:limit]
 
-            rankings.append({
-                "kakao_id": user.kakao_id,
-                "nickname": cls._get_display_name(user),
-                "total_asset": total_asset,
-                "profit_rate": profit_rate
-            })
-
-        # 수익률 기준 정렬 및 순위 부여
-        rankings.sort(key=lambda x: x["profit_rate"], reverse=True)
-        for i, r in enumerate(rankings):
-            r["rank"] = i + 1
-
-        # 캐시 저장
-        cls._ranking_cache["ranking_full"] = rankings
-
-        return rankings
+        cls._ranking_cache[cache_key] = losers
+        return losers

@@ -6,8 +6,8 @@
 from typing import Dict, List
 from sqlalchemy.orm import Session
 
-from config import is_market_closed
-from utils import get_handler_logger
+from config import is_market_closed, GameConfig
+from utils import get_handler_logger, KakaoResponse
 
 logger = get_handler_logger()
 
@@ -245,3 +245,39 @@ class BaseHandlerMixin:
         if effect:
             return f"{effect}\n\n{msg}"
         return msg
+
+    # ===========================================
+    # 공통 에러 응답 (중복 제거)
+    # ===========================================
+
+    def _market_closed_response(self) -> Dict:
+        """장 마감 시 공통 응답 (게임 유도)"""
+        return KakaoResponse.quick_replies(
+            "📢 현재 장이 열려있지 않아요!\n\n"
+            "🎮 장 마감 시간에는 미니게임을 즐겨보세요!",
+            [
+                {"label": "🎫 복권", "action": "message", "messageText": "/복권"},
+                {"label": "🎰 슬롯머신", "action": "message", "messageText": f"/슬롯머신 {GameConfig.DEFAULT_BET}"},
+                {"label": "💼 포트폴리오", "action": "message", "messageText": "/포트폴리오"}
+            ]
+        )
+
+    def _market_closed_with_message(self, message: str) -> Dict:
+        """장 마감 시 커스텀 메시지 응답"""
+        return KakaoResponse.quick_replies(
+            message,
+            [
+                {"label": "🎫 복권", "action": "message", "messageText": "/복권"},
+                {"label": "🎰 슬롯머신", "action": "message", "messageText": f"/슬롯머신 {GameConfig.DEFAULT_BET}"},
+                {"label": "💼 포트폴리오", "action": "message", "messageText": "/포트폴리오"}
+            ]
+        )
+
+    def _check_market_closed_error(self, result: Dict) -> tuple:
+        """
+        서비스 결과에서 MARKET_CLOSED 에러 확인
+        Returns: (is_market_closed, response or None)
+        """
+        if not result.get("success") and result.get("error_code") == "MARKET_CLOSED":
+            return True, self._market_closed_with_message(result.get("message", "장이 마감되었습니다."))
+        return False, None
