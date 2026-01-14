@@ -46,11 +46,7 @@ class CommandHandler:
         
         elif cmd.startswith("/출석") or cmd.startswith("/ㅊㅅ"):
             return self.handle_attendance()
-        
-        # 광고 기능 비활성화 (수익 발생 방지)
-        elif cmd.startswith("/광고") or cmd.startswith("/ㄱㄱ"):
-            return KakaoResponse.simple_text("🚫 광고 기능은 현재 비활성화되어 있습니다.")
-        
+
         elif cmd.startswith("/시세") or cmd.startswith("/ㅅㅅ"):
             return self.handle_price()
         
@@ -174,7 +170,7 @@ class CommandHandler:
         if is_new:
             welcome_msg = Messages.WELCOME.format(initial_cash=GameConfig.INITIAL_CASH)
             buttons = [
-                {"label": "📅 출석 +200만", "action": "message", "messageText": "/출석"},
+                {"label": "📅 출석 +30만", "action": "message", "messageText": "/출석"},
                 {"label": "🎫 무료복권", "action": "message", "messageText": "/복권"},
                 {"label": "🚀 급등주", "action": "message", "messageText": "/급등"},
             ]
@@ -1092,7 +1088,8 @@ class CommandHandler:
                 {"label": "🎫 복권", "action": "message", "messageText": "/복권"},
                 {"label": "🎰 슬롯머신", "action": "message", "messageText": "/슬롯머신 50000"},
                 {"label": "🎡 룰렛", "action": "message", "messageText": "/룰렛 50000 빨강"},
-                {"label": "🚀 급등주", "action": "message", "messageText": "/급등"}
+                {"label": "🪙 동전던지기", "action": "message", "messageText": "/동전 50000 앞"},
+                {"label": "🎲 하이로우", "action": "message", "messageText": "/하이로우 50000 높"}
             ]
         )
 

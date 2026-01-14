@@ -9,7 +9,16 @@ from typing import Dict, Tuple, Optional
 from sqlalchemy.orm import Session
 
 from models import User
-from config import is_market_closed, get_market_status_message
+from config import is_market_closed, get_market_status_message, GameConfig
+
+
+def _get_market_closed_error(emoji: str) -> Dict:
+    """장 마감 시간 에러 메시지 (중복 제거)"""
+    status_msg = get_market_status_message()
+    return {
+        "success": False,
+        "message": f"{emoji} 미니게임은 장 마감 후에만 가능해요!\n\n{status_msg}\n\n🎮 게임 가능 시간:\n• 평일 18:00 이후\n• 평일 08:30 이전\n• 주말/공휴일 종일"
+    }
 
 
 class GameService:
@@ -42,12 +51,6 @@ class GameService:
         ("LOSE", 0, 0.4505),   # 45.05% - 꽝
     ]
 
-    # 복권 1일 최대 횟수
-    MAX_LOTTERY_PER_DAY = 5
-
-    # 복권 가격
-    LOTTERY_COST = 10_000
-
     @classmethod
     def play_lottery(cls, db: Session, kakao_id: str) -> Dict:
         """
@@ -66,25 +69,25 @@ class GameService:
             user.lottery_count_today = 0
 
         # 오늘 최대 횟수 체크
-        if user.lottery_count_today >= cls.MAX_LOTTERY_PER_DAY:
+        if user.lottery_count_today >= GameConfig.MAX_LOTTERY_PER_DAY:
             return {
                 "success": False,
-                "message": f"🎫 오늘 복권은 모두 긁었어요! ({cls.MAX_LOTTERY_PER_DAY}회)\n내일 다시 도전하세요 🍀"
+                "message": f"🎫 오늘 복권은 모두 긁었어요! ({GameConfig.MAX_LOTTERY_PER_DAY}회)\n내일 다시 도전하세요 🍀"
             }
 
         # 잔액 확인
-        if user.cash < cls.LOTTERY_COST:
+        if user.cash < GameConfig.LOTTERY_COST:
             return {
                 "success": False,
-                "message": f"❌ 잔액 부족!\n복권 가격: {cls.LOTTERY_COST:,}원\n보유: {user.cash:,}원"
+                "message": f"❌ 잔액 부족!\n복권 가격: {GameConfig.LOTTERY_COST:,}원\n보유: {user.cash:,}원"
             }
 
         # 복권 구매 (비용 차감)
-        user.cash -= cls.LOTTERY_COST
+        user.cash -= GameConfig.LOTTERY_COST
 
         # 복권 사용 기록
         user.lottery_count_today += 1
-        remaining = cls.MAX_LOTTERY_PER_DAY - user.lottery_count_today
+        remaining = GameConfig.MAX_LOTTERY_PER_DAY - user.lottery_count_today
 
         # 복권 확률 (기준: 복권 1장 10,000원, 기대값 90%)
         roll = random.random()
@@ -118,11 +121,11 @@ class GameService:
         db.commit()
 
         # 순이익 계산
-        profit = reward - cls.LOTTERY_COST
+        profit = reward - GameConfig.LOTTERY_COST
 
         return {
             "success": True,
-            "cost": cls.LOTTERY_COST,
+            "cost": GameConfig.LOTTERY_COST,
             "reward": reward,
             "profit": profit,
             "tier": tier,
@@ -138,11 +141,7 @@ class GameService:
         """
         # 장 마감 시간에만 가능
         if not is_market_closed():
-            status_msg = get_market_status_message()
-            return {
-                "success": False,
-                "message": f"🎰 미니게임은 장 마감 후에만 가능해요!\n\n{status_msg}\n\n🎮 게임 가능 시간:\n• 평일 18:00 이후\n• 평일 08:30 이전\n• 주말/공휴일 종일"
-            }
+            return _get_market_closed_error("🎰")
 
         user = db.query(User).filter(User.kakao_id == kakao_id).first()
         if not user:
@@ -220,17 +219,13 @@ class GameService:
         """
         # 장 마감 시간에만 가능
         if not is_market_closed():
-            status_msg = get_market_status_message()
-            return {
-                "success": False,
-                "message": f"🎡 미니게임은 장 마감 후에만 가능해요!\n\n{status_msg}\n\n🎮 게임 가능 시간:\n• 평일 18:00 이후\n• 평일 08:30 이전\n• 주말/공휴일 종일"
-            }
+            return _get_market_closed_error("🎡")
 
         user = db.query(User).filter(User.kakao_id == kakao_id).first()
         if not user:
             return {"success": False, "message": "먼저 /시작 으로 게임을 시작해주세요."}
 
-        min_bet = 10_000
+        min_bet = GameConfig.MIN_BET
         if bet < min_bet:
             return {"success": False, "message": f"최소 배팅금은 {min_bet:,}원입니다."}
 
@@ -305,17 +300,13 @@ class GameService:
         """
         # 장 마감 시간에만 가능
         if not is_market_closed():
-            status_msg = get_market_status_message()
-            return {
-                "success": False,
-                "message": f"🎲 미니게임은 장 마감 후에만 가능해요!\n\n{status_msg}\n\n🎮 게임 가능 시간:\n• 평일 18:00 이후\n• 평일 08:30 이전\n• 주말/공휴일 종일"
-            }
+            return _get_market_closed_error("🎲")
 
         user = db.query(User).filter(User.kakao_id == kakao_id).first()
         if not user:
             return {"success": False, "message": "먼저 /시작 으로 게임을 시작해주세요."}
 
-        min_bet = 10_000
+        min_bet = GameConfig.MIN_BET
         if bet < min_bet:
             return {"success": False, "message": f"최소 배팅금은 {min_bet:,}원입니다."}
 
@@ -391,17 +382,13 @@ class GameService:
         """
         # 장 마감 시간에만 가능
         if not is_market_closed():
-            status_msg = get_market_status_message()
-            return {
-                "success": False,
-                "message": f"🪙 미니게임은 장 마감 후에만 가능해요!\n\n{status_msg}\n\n🎮 게임 가능 시간:\n• 평일 18:00 이후\n• 평일 08:30 이전\n• 주말/공휴일 종일"
-            }
+            return _get_market_closed_error("🪙")
 
         user = db.query(User).filter(User.kakao_id == kakao_id).first()
         if not user:
             return {"success": False, "message": "먼저 /시작 으로 게임을 시작해주세요."}
 
-        min_bet = 10_000
+        min_bet = GameConfig.MIN_BET
         if bet < min_bet:
             return {"success": False, "message": f"최소 배팅금은 {min_bet:,}원입니다."}
 
