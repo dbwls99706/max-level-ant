@@ -7,7 +7,6 @@ from datetime import datetime, timedelta
 from typing import Optional, Dict, List
 from cachetools import TTLCache
 import requests
-import json
 
 from config import CacheConfig, KISConfig
 from database import SessionLocal

@@ -56,10 +56,10 @@ class CommandHandler:
         elif cmd.startswith("/매도") or cmd.startswith("/ㅁㄷ"):
             return self.handle_sell()
         
-        elif cmd.startswith("/전량매수"):
+        elif cmd.startswith("/전량매수") or cmd.startswith("/ㅈㅁㅅ"):
             return self.handle_buy_max()
-        
-        elif cmd.startswith("/전량매도"):
+
+        elif cmd.startswith("/전량매도") or cmd.startswith("/ㅈㅁㄷ"):
             return self.handle_sell_all()
         
         elif cmd.startswith("/잔고") or cmd.startswith("/ㅈㄱ"):
@@ -71,16 +71,16 @@ class CommandHandler:
         elif cmd.startswith("/랭킹") or cmd.startswith("/ㄹㅋ"):
             return self.handle_ranking()
         
-        elif cmd.startswith("/내순위"):
+        elif cmd.startswith("/내순위") or cmd.startswith("/ㄴㅅㅇ"):
             return self.handle_my_rank()
-        
-        elif cmd.startswith("/검색"):
+
+        elif cmd.startswith("/검색") or cmd.startswith("/ㄱㅅ"):
             return self.handle_search()
-        
-        elif cmd.startswith("/인기") or cmd.startswith("/거래량"):
+
+        elif cmd.startswith("/인기") or cmd.startswith("/거래량") or cmd.startswith("/ㅇㄱ"):
             return self.handle_top_volume()
 
-        elif cmd.startswith("/급등") or cmd.startswith("/상승"):
+        elif cmd.startswith("/급등") or cmd.startswith("/상승") or cmd.startswith("/ㄱㄷ"):
             return self.handle_top_gainers()
 
         elif cmd.startswith("/급락") or cmd.startswith("/하락"):
