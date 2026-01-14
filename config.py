@@ -2,11 +2,106 @@
 주식왕 봇 설정 파일
 """
 import os
+import secrets
 from datetime import datetime, date
+from typing import Dict, Any, Optional
 import pytz
 from dotenv import load_dotenv
 
 load_dotenv()
+
+
+# ===========================================
+# 에러 코드 상수
+# ===========================================
+class ErrorCode:
+    """표준화된 에러 코드"""
+    USER_NOT_FOUND = "USER_NOT_FOUND"
+    MARKET_CLOSED = "MARKET_CLOSED"
+    INSUFFICIENT_BALANCE = "INSUFFICIENT_BALANCE"
+    INSUFFICIENT_STOCK = "INSUFFICIENT_STOCK"
+    STOCK_NOT_FOUND = "STOCK_NOT_FOUND"
+    INVALID_INPUT = "INVALID_INPUT"
+    INVALID_QUANTITY = "INVALID_QUANTITY"
+    INVALID_AMOUNT = "INVALID_AMOUNT"
+    DAILY_LIMIT_REACHED = "DAILY_LIMIT_REACHED"
+    DUPLICATE_ACTION = "DUPLICATE_ACTION"
+    UNAUTHORIZED = "UNAUTHORIZED"
+    INTERNAL_ERROR = "INTERNAL_ERROR"
+    API_ERROR = "API_ERROR"
+    TIMEOUT = "TIMEOUT"
+
+
+class ApiResponse:
+    """표준화된 API 응답 형식"""
+
+    @staticmethod
+    def success(data: Optional[Dict] = None, message: str = "성공") -> Dict[str, Any]:
+        """성공 응답"""
+        return {
+            "success": True,
+            "message": message,
+            "data": data or {}
+        }
+
+    @staticmethod
+    def error(
+        error_code: str,
+        message: str,
+        data: Optional[Dict] = None
+    ) -> Dict[str, Any]:
+        """에러 응답"""
+        return {
+            "success": False,
+            "error_code": error_code,
+            "message": message,
+            "data": data or {}
+        }
+
+
+# ===========================================
+# 배틀 상태 상수
+# ===========================================
+class BattleStatus:
+    """배틀 상태"""
+    WAITING = "WAITING"
+    ACTIVE = "ACTIVE"
+    FINISHED = "FINISHED"
+
+
+# ===========================================
+# 거래 타입 상수
+# ===========================================
+class TradeType:
+    """거래 타입"""
+    BUY = "BUY"
+    SELL = "SELL"
+
+
+# ===========================================
+# 보안 설정
+# ===========================================
+class SecurityConfig:
+    """보안 관련 설정"""
+    # 관리자 토큰 (환경변수에서 읽거나 랜덤 생성)
+    ADMIN_TOKEN = os.getenv("ADMIN_TOKEN", secrets.token_urlsafe(32))
+
+    # CORS 허용 도메인
+    ALLOWED_ORIGINS = [
+        "https://talk.kakao.com",
+        "https://pf.kakao.com",
+        "https://kapi.kakao.com",
+    ]
+
+    # 개발 모드에서는 모든 origin 허용
+    DEV_MODE = os.getenv("DEV_MODE", "false").lower() == "true"
+
+    @classmethod
+    def get_allowed_origins(cls) -> list:
+        """허용된 origin 목록 반환"""
+        if cls.DEV_MODE:
+            return ["*"]
+        return cls.ALLOWED_ORIGINS
 
 # 한국 시간대
 KST = pytz.timezone('Asia/Seoul')

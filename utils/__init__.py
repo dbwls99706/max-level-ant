@@ -10,7 +10,17 @@ from .visual_helpers import (
     get_tier_title,
     validate_nickname,
     validate_quantity,
+    validate_bet_amount,
+    sanitize_input,
     format_money
+)
+from .logger import (
+    setup_logger,
+    configure_root_logger,
+    get_main_logger,
+    get_handler_logger,
+    get_service_logger,
+    get_api_logger
 )
 
 __all__ = [
@@ -22,5 +32,13 @@ __all__ = [
     "get_tier_title",
     "validate_nickname",
     "validate_quantity",
-    "format_money"
+    "validate_bet_amount",
+    "sanitize_input",
+    "format_money",
+    "setup_logger",
+    "configure_root_logger",
+    "get_main_logger",
+    "get_handler_logger",
+    "get_service_logger",
+    "get_api_logger"
 ]

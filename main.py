@@ -1,16 +1,24 @@
 """
 주식왕 카카오톡 챗봇 - 메인 서버
 """
-from fastapi import FastAPI, Request, Depends, HTTPException
+import os
+import secrets
+from fastapi import FastAPI, Request, Depends, HTTPException, Header
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 import uvicorn
 from contextlib import asynccontextmanager
+from typing import Optional
 
 from database import get_db, init_db, reset_db
 from handlers import CommandHandler
-from utils import KakaoResponse
+from utils import KakaoResponse, configure_root_logger, get_main_logger
 from services.stock_service import KISAPIClient, StockService
+from config import SecurityConfig
+
+# 로깅 설정
+configure_root_logger()
+logger = get_main_logger()
 
 
 # ===========================================
@@ -20,7 +28,7 @@ from services.stock_service import KISAPIClient, StockService
 async def lifespan(app: FastAPI):
     """앱 시작/종료 시 실행"""
     # 시작 시
-    print("🚀 주식왕 봇 서버 시작!")
+    logger.info("주식왕 봇 서버 시작!")
     init_db()  # DB 테이블 생성
 
     # 종목 캐시 로드 (DB에서 메모리로)
@@ -29,13 +37,17 @@ async def lifespan(app: FastAPI):
     # KIS API 토큰 미리 발급 (타임아웃 방지)
     token = KISAPIClient.get_access_token()
     if token:
-        print("✅ KIS API 토큰 준비 완료!")
+        logger.info("KIS API 토큰 준비 완료!")
     else:
-        print("⚠️ KIS API 토큰 발급 실패 - 환경변수 확인 필요")
+        logger.warning("KIS API 토큰 발급 실패 - 환경변수 확인 필요")
+
+    # 개발 모드 알림
+    if SecurityConfig.DEV_MODE:
+        logger.warning("개발 모드 활성화됨 - CORS 제한 해제")
 
     yield
     # 종료 시
-    print("👋 주식왕 봇 서버 종료!")
+    logger.info("주식왕 봇 서버 종료!")
 
 
 # ===========================================
@@ -48,13 +60,14 @@ app = FastAPI(
     lifespan=lifespan
 )
 
-# CORS 설정 (필요시)
+# CORS 설정 (카카오톡 도메인만 허용, 개발 모드에서는 전체 허용)
+# 참고: CORS는 브라우저에서만 적용됨. 서버-to-서버 요청(Render keep-alive 등)은 영향 없음
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_origins=SecurityConfig.get_allowed_origins(),
+    allow_credentials=False,  # 카카오톡 요청에는 credentials 불필요
+    allow_methods=["GET", "POST"],
+    allow_headers=["Content-Type", "Authorization"],
 )
 
 
@@ -102,8 +115,8 @@ async def kakao_skill(request: Request, db: Session = Depends(get_db)):
         nickname = user_info.get("properties", {}).get("nickname", "")
 
         # 디버그: 카카오에서 받은 유저 정보 로그
-        print(f"📥 카카오 유저 정보: {user_info}")
-        print(f"📥 닉네임: '{nickname}'")
+        logger.debug(f"카카오 유저 정보: {user_info}")
+        logger.debug(f"닉네임: '{nickname}'")
 
         # 유저 ID 없으면 에러
         if not kakao_id:
@@ -116,10 +129,8 @@ async def kakao_skill(request: Request, db: Session = Depends(get_db)):
         return response
         
     except Exception as e:
-        print(f"❌ 스킬 처리 에러: {e}")
-        import traceback
-        traceback.print_exc()
-        
+        logger.error(f"스킬 처리 에러: {e}", exc_info=True)
+
         return KakaoResponse.simple_text(
             "죄송합니다. 오류가 발생했습니다.\n잠시 후 다시 시도해주세요."
         )
@@ -156,15 +167,39 @@ async def debug_skill(request: Request, db: Session = Depends(get_db)):
 # 관리자 엔드포인트
 # ===========================================
 @app.post("/admin/reset-db")
-async def admin_reset_db(request: Request):
+async def admin_reset_db(
+    request: Request,
+    authorization: Optional[str] = Header(None, alias="Authorization")
+):
     """
     데이터베이스 초기화 (모든 데이터 삭제)
+    인증 필요: Authorization 헤더에 Bearer 토큰 필요
 
     curl -X POST http://localhost:8000/admin/reset-db \
          -H "Content-Type: application/json" \
+         -H "Authorization: Bearer YOUR_ADMIN_TOKEN" \
          -d '{"confirm": "DELETE_ALL_DATA"}'
     """
     try:
+        # 인증 확인
+        if not authorization:
+            logger.warning("관리자 API 호출 - 인증 토큰 없음")
+            raise HTTPException(status_code=401, detail="인증 토큰이 필요합니다.")
+
+        # Bearer 토큰 파싱
+        try:
+            scheme, token = authorization.split()
+            if scheme.lower() != "bearer":
+                raise ValueError("Invalid scheme")
+        except ValueError:
+            logger.warning("관리자 API 호출 - 잘못된 토큰 형식")
+            raise HTTPException(status_code=401, detail="잘못된 인증 형식입니다.")
+
+        # 토큰 검증 (타이밍 공격 방지를 위해 secrets.compare_digest 사용)
+        if not secrets.compare_digest(token, SecurityConfig.ADMIN_TOKEN):
+            logger.warning("관리자 API 호출 - 잘못된 토큰")
+            raise HTTPException(status_code=403, detail="권한이 없습니다.")
+
         body = await request.json()
         confirm = body.get("confirm", "")
 
@@ -176,13 +211,17 @@ async def admin_reset_db(request: Request):
 
         # 데이터베이스 초기화
         reset_db()
+        logger.info("관리자에 의해 데이터베이스가 초기화됨")
 
         return {
             "success": True,
-            "message": "🗑️ 데이터베이스가 초기화되었습니다. 모든 유저 데이터가 삭제되었습니다."
+            "message": "데이터베이스가 초기화되었습니다. 모든 유저 데이터가 삭제되었습니다."
         }
 
+    except HTTPException:
+        raise
     except Exception as e:
+        logger.error(f"관리자 API 에러: {e}", exc_info=True)
         return {"success": False, "error": str(e)}
 
 
@@ -190,9 +229,10 @@ async def admin_reset_db(request: Request):
 # 메인 실행
 # ===========================================
 if __name__ == "__main__":
+    # 개발 모드에서만 reload 활성화
     uvicorn.run(
         "main:app",
         host="0.0.0.0",
-        port=8000,
-        reload=True  # 개발 시 자동 리로드
+        port=int(os.getenv("PORT", 8000)),
+        reload=SecurityConfig.DEV_MODE
     )
