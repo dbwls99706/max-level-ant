@@ -8,7 +8,7 @@ from datetime import datetime, timedelta
 from typing import Optional, Dict, List, Set
 from cachetools import TTLCache
 import requests
-from requests.exceptions import RequestException, Timeout, ConnectionError as RequestsConnectionError
+from requests.exceptions import RequestException, Timeout
 from sqlalchemy.exc import SQLAlchemyError
 
 from config import CacheConfig, KISConfig
@@ -20,6 +20,11 @@ logger = get_service_logger()
 
 class KISAPIClient:
     """한국투자증권 API 클라이언트"""
+
+    # API Transaction IDs
+    TR_ID_STOCK_PRICE = "FHKST01010100"  # 주식 현재가 조회
+    TR_ID_VOLUME_RANK = "FHPST01710000"  # 거래량 순위 조회
+    TR_ID_MARKET_INDEX = "FHPUP02100000"  # 시장 지수 조회
 
     _access_token = None
     _token_expires_at = None
@@ -86,7 +91,7 @@ class KISAPIClient:
         주식 현재가 조회
         tr_id: FHKST01010100
         """
-        headers = cls._get_headers("FHKST01010100")
+        headers = cls._get_headers(cls.TR_ID_STOCK_PRICE)
         if not headers:
             return None
 
@@ -131,7 +136,7 @@ class KISAPIClient:
         거래량 순위 조회
         tr_id: FHPST01710000
         """
-        headers = cls._get_headers("FHPST01710000")
+        headers = cls._get_headers(cls.TR_ID_VOLUME_RANK)
         if not headers:
             logger.warning("거래량 순위: 헤더 생성 실패")
             return []
@@ -203,7 +208,7 @@ class KISAPIClient:
         시장 지수 조회 (KOSPI: 0001, KOSDAQ: 1001)
         tr_id: FHPUP02100000
         """
-        headers = cls._get_headers("FHPUP02100000")
+        headers = cls._get_headers(cls.TR_ID_MARKET_INDEX)
         if not headers:
             return None
 

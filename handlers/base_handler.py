@@ -3,7 +3,7 @@
 - 공통 기능 제공
 - 도파민 요소 강화 (연속 보상, 스트릭, 레벨업)
 """
-from typing import Dict, List
+from typing import Dict, List, Optional, Tuple
 from sqlalchemy.orm import Session
 
 from config import is_market_closed, GameConfig
@@ -47,8 +47,8 @@ class BaseHandlerMixin:
         (float('-inf'), "💸 크게 잃었네요", ""),
     ]
 
-    def _get_profit_message(self, profit: int) -> tuple:
-        """수익에 따른 도파민 메시지 반환"""
+    def _get_profit_message(self, profit: int) -> Tuple[str, str]:
+        """수익에 따른 도파민 메시지 반환 (메시지, 이펙트)"""
         for threshold, msg, effect in self.PROFIT_TIERS:
             if profit >= threshold:
                 return msg, effect
@@ -166,7 +166,7 @@ class BaseHandlerMixin:
     # 파싱 헬퍼
     # ===========================================
 
-    def _parse_parts(self, min_parts: int = 2) -> tuple:
+    def _parse_parts(self, min_parts: int = 2) -> Tuple[List[str], bool]:
         """
         명령어 파싱
         Returns: (parts, is_valid)
@@ -176,7 +176,7 @@ class BaseHandlerMixin:
             return parts, False
         return parts, True
 
-    def _parse_with_amount(self) -> tuple:
+    def _parse_with_amount(self) -> Tuple[str, Optional[int], bool]:
         """
         금액이 포함된 명령어 파싱
         예: /슬롯머신 50000
@@ -192,7 +192,7 @@ class BaseHandlerMixin:
         except ValueError:
             return parts[0], None, False
 
-    def _parse_with_choice(self) -> tuple:
+    def _parse_with_choice(self) -> Tuple[str, Optional[int], Optional[str], bool]:
         """
         금액과 선택이 포함된 명령어 파싱
         예: /동전 50000 앞

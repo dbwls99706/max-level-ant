@@ -11,6 +11,9 @@ from cachetools import TTLCache
 from models import User, Holding
 from services.stock_service import StockService
 from config import CacheConfig
+from utils import get_service_logger
+
+logger = get_service_logger()
 
 
 class RankingService:
