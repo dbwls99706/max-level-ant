@@ -1,18 +1,21 @@
+# ===========================================
+# 주식왕 봇 의존성
+# ===========================================
+
 # FastAPI
 fastapi==0.109.0
 uvicorn[standard]==0.27.0
 
 # Database
-sqlalchemy>=2.0.27
+sqlalchemy>=2.0.27,<3.0
 psycopg2-binary==2.9.9
 
 # Stock data
-pykrx
-pandas
+pykrx>=1.0.44
+pandas>=2.0.0,<3.0
 
-# HTTP
-httpx==0.26.0
-requests>=2.31.0
+# HTTP (requests만 사용, httpx 제거)
+requests>=2.31.0,<3.0
 
 # Utils
 python-dotenv==1.0.0
