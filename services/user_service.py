@@ -300,7 +300,3 @@ class UserService:
             "attendance_streak": user.attendance_streak,
             "created_at": str(user.created_at) if user.created_at else None
         }
-
-
-# 타입 힌트를 위한 import
-from typing import Dict

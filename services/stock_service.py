@@ -8,6 +8,8 @@ from datetime import datetime, timedelta
 from typing import Optional, Dict, List, Set
 from cachetools import TTLCache
 import requests
+from requests.exceptions import RequestException, Timeout, ConnectionError as RequestsConnectionError
+from sqlalchemy.exc import SQLAlchemyError
 
 from config import CacheConfig, KISConfig
 from database import SessionLocal
@@ -56,8 +58,11 @@ class KISAPIClient:
                 logger.error(f"KIS 토큰 발급 실패: {resp.status_code}")
                 return None
 
-        except Exception as e:
-            logger.error(f"KIS 토큰 발급 에러: {e}")
+        except Timeout:
+            logger.error("KIS 토큰 발급 타임아웃")
+            return None
+        except RequestException as e:
+            logger.error(f"KIS 토큰 발급 네트워크 에러: {e}")
             return None
 
     @classmethod
@@ -111,8 +116,12 @@ class KISAPIClient:
                 else:
                     logger.warning(f"KIS API 에러: {data.get('msg1')}")
 
-        except Exception as e:
-            logger.error(f"주식 시세 조회 실패 ({stock_code}): {e}")
+        except Timeout:
+            logger.warning(f"주식 시세 조회 타임아웃 ({stock_code})")
+        except RequestException as e:
+            logger.error(f"주식 시세 조회 네트워크 에러 ({stock_code}): {e}")
+        except (ValueError, KeyError) as e:
+            logger.error(f"주식 시세 응답 파싱 실패 ({stock_code}): {e}")
 
         return None
 
@@ -163,8 +172,10 @@ class KISAPIClient:
                             continue
                     return results
 
-        except Exception as e:
-            logger.error(f"거래량 순위 조회 실패: {e}")
+        except Timeout:
+            logger.warning("거래량 순위 조회 타임아웃")
+        except RequestException as e:
+            logger.error(f"거래량 순위 조회 네트워크 에러: {e}")
 
         return []
 
@@ -214,8 +225,12 @@ class KISAPIClient:
                         "change": float(output.get("bstp_nmix_prdy_ctrt", 0)),
                     }
 
-        except Exception as e:
-            logger.error(f"지수 조회 실패 ({index_code}): {e}")
+        except Timeout:
+            logger.warning(f"지수 조회 타임아웃 ({index_code})")
+        except RequestException as e:
+            logger.error(f"지수 조회 네트워크 에러 ({index_code}): {e}")
+        except (ValueError, KeyError) as e:
+            logger.error(f"지수 응답 파싱 실패 ({index_code}): {e}")
 
         return None
 
@@ -313,8 +328,8 @@ class StockService:
                 logger.info(f"종목 캐시 로드 완료: {len(cached_stocks)}개")
             finally:
                 db.close()
-        except Exception as e:
-            logger.warning(f"종목 캐시 로드 실패: {e}")
+        except SQLAlchemyError as e:
+            logger.warning(f"종목 캐시 로드 DB 에러: {e}")
 
     @classmethod
     def _cache_stock(cls, code: str, name: str):
@@ -353,7 +368,7 @@ class StockService:
                     db.commit()
             finally:
                 db.close()
-        except Exception as e:
+        except SQLAlchemyError:
             # DB 저장 실패해도 메모리 캐시는 유지
             pass
 

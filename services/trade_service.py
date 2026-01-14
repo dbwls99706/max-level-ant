@@ -7,6 +7,7 @@
 """
 from typing import Optional, Dict, List, Set
 from sqlalchemy.orm import Session
+from sqlalchemy.exc import SQLAlchemyError
 
 from models import User, Holding, Transaction
 from services.stock_service import StockService
@@ -205,9 +206,9 @@ class TradeService:
             db.commit()
             db.refresh(user)
 
-        except Exception as e:
+        except SQLAlchemyError as e:
             db.rollback()
-            logger.error(f"매수 트랜잭션 실패: {e}")
+            logger.error(f"매수 DB 트랜잭션 실패: {e}")
             return error_response(ErrorCode.INTERNAL_ERROR, "거래 처리 중 오류가 발생했습니다.")
 
         # 미션 및 업적 처리
@@ -339,9 +340,9 @@ class TradeService:
             db.commit()
             db.refresh(user)
 
-        except Exception as e:
+        except SQLAlchemyError as e:
             db.rollback()
-            logger.error(f"매도 트랜잭션 실패: {e}")
+            logger.error(f"매도 DB 트랜잭션 실패: {e}")
             return error_response(ErrorCode.INTERNAL_ERROR, "거래 처리 중 오류가 발생했습니다.")
 
         # 미션 및 업적 처리

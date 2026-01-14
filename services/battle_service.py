@@ -7,6 +7,7 @@
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional
 from sqlalchemy.orm import Session
+from sqlalchemy.exc import SQLAlchemyError
 
 from models import Battle, User
 from services.stock_service import StockService
@@ -141,9 +142,9 @@ class BattleService:
             db.add(battle)
             db.commit()
             db.refresh(battle)
-        except Exception as e:
+        except SQLAlchemyError as e:
             db.rollback()
-            logger.error(f"배틀 생성 실패: {e}")
+            logger.error(f"배틀 생성 DB 실패: {e}")
             return error_response(ErrorCode.INTERNAL_ERROR, "❌ 배틀 생성 중 오류가 발생했습니다.")
 
         pred_emoji = "📈" if pred == "UP" else "📉"
@@ -215,9 +216,9 @@ class BattleService:
             battle.status = "ACTIVE"
 
             db.commit()
-        except Exception as e:
+        except SQLAlchemyError as e:
             db.rollback()
-            logger.error(f"배틀 참가 실패: {e}")
+            logger.error(f"배틀 참가 DB 실패: {e}")
             return error_response(ErrorCode.INTERNAL_ERROR, "❌ 배틀 참가 중 오류가 발생했습니다.")
 
         challenger = db.query(User).filter(User.kakao_id == battle.challenger_id).first()
@@ -298,9 +299,9 @@ class BattleService:
             try:
                 battle.status = "CANCELLED"
                 db.commit()
-            except Exception as e:
+            except SQLAlchemyError as e:
                 db.rollback()
-                logger.error(f"배틀 취소 실패: {e}")
+                logger.error(f"배틀 만료 취소 DB 실패: {e}")
             return error_response(ErrorCode.USER_NOT_FOUND, "❌ 배틀 참가자 정보를 찾을 수 없습니다.")
 
         total_pot = battle.bet_amount * 2
@@ -326,9 +327,9 @@ class BattleService:
 
             battle.status = "FINISHED"
             db.commit()
-        except Exception as e:
+        except SQLAlchemyError as e:
             db.rollback()
-            logger.error(f"배틀 결과 처리 실패: {e}")
+            logger.error(f"배틀 결과 처리 DB 실패: {e}")
             return error_response(ErrorCode.INTERNAL_ERROR, "❌ 배틀 결과 처리 중 오류가 발생했습니다.")
 
         result = cls._get_finished_result(db, battle)
@@ -449,9 +450,9 @@ class BattleService:
             user.cash = safe_add(user.cash, battle.bet_amount)
             battle.status = "CANCELLED"
             db.commit()
-        except Exception as e:
+        except SQLAlchemyError as e:
             db.rollback()
-            logger.error(f"배틀 취소 실패: {e}")
+            logger.error(f"배틀 취소 DB 실패: {e}")
             return error_response(ErrorCode.INTERNAL_ERROR, "❌ 배틀 취소 중 오류가 발생했습니다.")
 
         return success_response(

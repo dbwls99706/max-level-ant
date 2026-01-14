@@ -320,20 +320,13 @@ class GameConfig:
     WEEKLY_BONUS_DAY = 0  # 월요일 (0=월, 6=일)
     WEEKLY_BONUS_MULTIPLIER = 2.0  # 2배 보너스
 
-    # 미니게임 기본 설정
+    # 미니게임/배팅 설정
+    MIN_BET = 10_000  # 최소 배팅금 1만원
+    MAX_BET = 10_000_000_000  # 최대 배팅금 100억 (오버플로우 방지)
     DEFAULT_BET = 50_000  # 기본 배팅금 5만원
-    MIN_BET = 1_000  # 최소 배팅금 1천원
-    MAX_BET = 100_000_000  # 최대 배팅금 1억원
-
-    # 배틀 기본 설정
-    DEFAULT_BATTLE_BET = 100_000  # 기본 배틀 배팅금 10만원
-
-    # 미니게임 설정
+    DEFAULT_BATTLE_BET = 100_000  # 배틀 기본 배팅금 10만원
     LOTTERY_COST = 10_000  # 복권 가격
     MAX_LOTTERY_PER_DAY = 5  # 복권 1일 최대 횟수
-    MIN_BET = 10_000  # 미니게임 최소 배팅금
-    MAX_BET = 10_000_000_000  # 최대 배팅금 100억 (오버플로우 방지)
-    DEFAULT_BET = 50_000  # 미니게임 기본 배팅금
 
     # 거래 설정
     MAX_QUANTITY = 1_000_000  # 1회 최대 거래 수량

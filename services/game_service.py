@@ -9,6 +9,7 @@ import random
 from datetime import date
 from typing import Dict
 from sqlalchemy.orm import Session
+from sqlalchemy.exc import SQLAlchemyError
 
 from models import User
 from config import GameConfig, GameProbability, Messages
@@ -96,9 +97,9 @@ class GameService:
         # 트랜잭션 커밋
         try:
             db.commit()
-        except Exception as e:
+        except SQLAlchemyError as e:
             db.rollback()
-            logger.error(f"복권 커밋 실패: {e}")
+            logger.error(f"복권 DB 커밋 실패: {e}")
             return error_response("DB_ERROR", "데이터베이스 오류가 발생했습니다.")
 
         profit = reward - GameConfig.LOTTERY_COST
@@ -156,9 +157,9 @@ class GameService:
 
         try:
             db.commit()
-        except Exception as e:
+        except SQLAlchemyError as e:
             db.rollback()
-            logger.error(f"슬롯 커밋 실패: {e}")
+            logger.error(f"슬롯 DB 커밋 실패: {e}")
             return error_response("DB_ERROR", "데이터베이스 오류가 발생했습니다.")
 
         profit_info = calculate_profit(bet, winnings)
@@ -256,9 +257,9 @@ class GameService:
 
         try:
             db.commit()
-        except Exception as e:
+        except SQLAlchemyError as e:
             db.rollback()
-            logger.error(f"룰렛 커밋 실패: {e}")
+            logger.error(f"룰렛 DB 커밋 실패: {e}")
             return error_response("DB_ERROR", "데이터베이스 오류가 발생했습니다.")
 
         return {
@@ -320,7 +321,7 @@ class GameService:
             user.cash += bet
             try:
                 db.commit()
-            except Exception as e:
+            except SQLAlchemyError:
                 db.rollback()
                 return error_response("DB_ERROR", "데이터베이스 오류가 발생했습니다.")
 
@@ -350,9 +351,9 @@ class GameService:
 
         try:
             db.commit()
-        except Exception as e:
+        except SQLAlchemyError as e:
             db.rollback()
-            logger.error(f"하이로우 커밋 실패: {e}")
+            logger.error(f"하이로우 DB 커밋 실패: {e}")
             return error_response("DB_ERROR", "데이터베이스 오류가 발생했습니다.")
 
         return {
@@ -421,9 +422,9 @@ class GameService:
 
         try:
             db.commit()
-        except Exception as e:
+        except SQLAlchemyError as e:
             db.rollback()
-            logger.error(f"동전 커밋 실패: {e}")
+            logger.error(f"동전 DB 커밋 실패: {e}")
             return error_response("DB_ERROR", "데이터베이스 오류가 발생했습니다.")
 
         return {

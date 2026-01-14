@@ -7,6 +7,7 @@ from datetime import date, datetime, timedelta
 from typing import Dict, List, Optional
 import random
 from sqlalchemy.orm import Session
+from sqlalchemy.exc import SQLAlchemyError
 
 from models import WeeklyChallenge, UserChallenge, User
 from services.common import (
@@ -109,9 +110,9 @@ class ChallengeService:
             db.add(challenge)
             db.commit()
             db.refresh(challenge)
-        except Exception as e:
+        except SQLAlchemyError as e:
             db.rollback()
-            logger.error(f"주간 챌린지 생성 실패: {e}")
+            logger.error(f"주간 챌린지 생성 DB 실패: {e}")
             return None
 
         return challenge
@@ -145,9 +146,9 @@ class ChallengeService:
                 db.add(user_challenge)
                 db.commit()
                 db.refresh(user_challenge)
-            except Exception as e:
+            except SQLAlchemyError as e:
                 db.rollback()
-                logger.error(f"유저 챌린지 기록 생성 실패: {e}")
+                logger.error(f"유저 챌린지 기록 생성 DB 실패: {e}")
                 return error_response(
                     ErrorCode.INTERNAL_ERROR,
                     "챌린지 참가 등록에 실패했습니다."
@@ -207,8 +208,8 @@ class ChallengeService:
                     current_value=0
                 )
                 db.add(user_challenge)
-            except Exception as e:
-                logger.error(f"유저 챌린지 생성 중 오류: {e}")
+            except SQLAlchemyError as e:
+                logger.error(f"유저 챌린지 생성 DB 오류: {e}")
                 return None
 
         # 이미 완료된 경우 스킵
@@ -230,9 +231,9 @@ class ChallengeService:
                 }
 
             db.commit()
-        except Exception as e:
+        except SQLAlchemyError as e:
             db.rollback()
-            logger.error(f"챌린지 진행도 업데이트 실패: {e}")
+            logger.error(f"챌린지 진행도 업데이트 DB 실패: {e}")
 
         return None
 
@@ -278,9 +279,9 @@ class ChallengeService:
             user.cash = safe_add(user.cash, challenge.reward)
             user_challenge.reward_claimed = 1
             db.commit()
-        except Exception as e:
+        except SQLAlchemyError as e:
             db.rollback()
-            logger.error(f"챌린지 보상 지급 실패: {e}")
+            logger.error(f"챌린지 보상 지급 DB 실패: {e}")
             return error_response(
                 ErrorCode.INTERNAL_ERROR,
                 "보상 지급 중 오류가 발생했습니다."
