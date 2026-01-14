@@ -20,9 +20,9 @@ from services.common import (
     safe_subtract
 )
 from config import GameConfig, Messages, ErrorCode, is_trading_available, get_market_status_message
-from utils import get_handler_logger
+from utils import get_service_logger
 
-logger = get_handler_logger()
+logger = get_service_logger()
 
 
 class TradeService:

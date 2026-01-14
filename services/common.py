@@ -1,9 +1,10 @@
 """
 서비스 공통 유틸리티
-- 데코레이터: require_user, require_market_closed
-- 트랜잭션 헬퍼: safe_commit
-- 검증 유틸: validate_bet
-- 응답 헬퍼: game_response, trade_response
+- 트랜잭션 헬퍼: safe_commit, safe_transaction
+- 검증 유틸: validate_bet, validate_quantity
+- 유저 헬퍼: get_user_with_error
+- 응답 빌더: error_response, success_response
+- 금액 안전 계산: safe_add, safe_subtract, safe_multiply
 """
 from functools import wraps
 from typing import Dict, Optional, Callable, TypeVar, Any, Tuple
@@ -15,9 +16,9 @@ from config import (
     GameConfig, Messages, ErrorCode,
     is_market_closed, get_market_status_message
 )
-from utils import get_handler_logger
+from utils import get_service_logger
 
-logger = get_handler_logger()
+logger = get_service_logger()
 
 # 제네릭 타입
 T = TypeVar('T')

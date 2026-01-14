@@ -19,9 +19,9 @@ from services.common import (
     success_response,
 )
 from config import is_market_open, is_market_closed, get_market_status_message, ErrorCode
-from utils import get_handler_logger
+from utils import get_service_logger
 
-logger = get_handler_logger()
+logger = get_service_logger()
 
 
 class BattleService:

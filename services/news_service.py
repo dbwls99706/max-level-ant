@@ -10,9 +10,9 @@ from typing import List, Dict
 from html import unescape
 import re
 
-from utils import get_handler_logger
+from utils import get_service_logger
 
-logger = get_handler_logger()
+logger = get_service_logger()
 
 
 class NewsService:

@@ -15,9 +15,9 @@ from services.common import (
     safe_add,
 )
 from config import ErrorCode
-from utils import get_handler_logger
+from utils import get_service_logger
 
-logger = get_handler_logger()
+logger = get_service_logger()
 
 
 class MilestoneService:

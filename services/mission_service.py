@@ -13,9 +13,9 @@ from sqlalchemy.orm import Session
 from models import User
 from config import GameConfig
 from services.common import safe_add
-from utils import get_handler_logger
+from utils import get_service_logger
 
-logger = get_handler_logger()
+logger = get_service_logger()
 
 
 # 업적 정의

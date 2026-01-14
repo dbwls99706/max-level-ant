@@ -11,9 +11,9 @@ import requests
 
 from config import CacheConfig, KISConfig
 from database import SessionLocal
-from utils import get_handler_logger
+from utils import get_service_logger
 
-logger = get_handler_logger()
+logger = get_service_logger()
 
 
 class KISAPIClient:

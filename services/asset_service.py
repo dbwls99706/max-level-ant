@@ -11,9 +11,9 @@ from sqlalchemy.orm import Session
 from models import AssetHistory, User, Holding
 from services.stock_service import StockService
 from services.common import safe_add
-from utils import get_handler_logger
+from utils import get_service_logger
 
-logger = get_handler_logger()
+logger = get_service_logger()
 
 
 class AssetService:

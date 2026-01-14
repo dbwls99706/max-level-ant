@@ -9,7 +9,7 @@ from services import (
     UserService, RankingService, MissionService,
     BattleService, ChallengeService, MilestoneService, AssetService
 )
-from utils import KakaoResponse, get_streak_display, validate_nickname
+from utils import KakaoResponse, get_streak_display
 from config import GameConfig, Messages
 
 from .base_handler import BaseHandlerMixin
@@ -173,12 +173,7 @@ class SocialHandlerMixin(BaseHandlerMixin):
 
         new_nickname = parts[1].strip()
 
-        is_valid, error_msg = validate_nickname(new_nickname)
-        if not is_valid:
-            return KakaoResponse.simple_text(f"❌ {error_msg}")
-
-        if UserService.is_nickname_taken(self.db, new_nickname, self.kakao_id):
-            return KakaoResponse.simple_text(f"❌ '{new_nickname}'은(는) 이미 사용 중인 닉네임입니다.\n다른 닉네임을 선택해주세요.")
+        # UserService.update_nickname에서 검증, 중복 확인, 변경 횟수 체크를 모두 처리
 
         success, msg = UserService.update_nickname(self.db, self.kakao_id, new_nickname)
 
