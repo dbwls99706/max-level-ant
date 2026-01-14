@@ -5,8 +5,25 @@
 - 응답 생성
 """
 import re
+import random
 from typing import Dict
 from sqlalchemy.orm import Session
+
+# 게임 패배 메시지 다양화
+LOSE_MESSAGES = [
+    "💨 아쉽네요...",
+    "😢 다음엔 꼭!",
+    "💸 운이 없었어요",
+    "😅 한 번 더?",
+    "🍀 행운을 빌어요",
+    "💪 포기하지 마세요!",
+    "🎲 다시 도전!",
+]
+
+
+def _get_lose_message() -> str:
+    """랜덤 패배 메시지 반환"""
+    return random.choice(LOSE_MESSAGES)
 
 from services import (
     UserService, StockService, TradeService, RankingService,
@@ -14,7 +31,7 @@ from services import (
     ChallengeService, MilestoneService, AssetService
 )
 from utils import KakaoResponse, get_streak_display, get_profit_bar, get_tier_title, validate_nickname, validate_quantity
-from config import GameConfig, Messages, is_market_closed
+from config import GameConfig, Messages, ErrorCode, is_market_closed
 
 
 class CommandHandler:
@@ -181,7 +198,6 @@ class CommandHandler:
                 {"label": "🎫 복권", "action": "message", "messageText": "/복권"},
                 {"label": "💼 포폴", "action": "message", "messageText": "/포트폴리오"},
                 {"label": "🚀 급등주", "action": "message", "messageText": "/급등"},
-                {"label": "📰 뉴스", "action": "message", "messageText": "/뉴스"},
                 {"label": "🔍 검색", "action": "message", "messageText": "/검색"},
             ]
             return KakaoResponse.quick_replies("이미 가입했어요! 바로 플레이 👇", buttons)
@@ -325,7 +341,7 @@ class CommandHandler:
 
         if not result["success"]:
             # 거래 불가 시간 (장 마감) - 미니게임 안내
-            if result.get("error_code") == "MARKET_CLOSED":
+            if result.get("error_code") == ErrorCode.MARKET_CLOSED:
                 return KakaoResponse.quick_replies(
                     result["message"],
                     [
@@ -427,7 +443,7 @@ class CommandHandler:
 
         if not result["success"]:
             # 거래 불가 시간 (장 마감) - 미니게임 안내
-            if result.get("error_code") == "MARKET_CLOSED":
+            if result.get("error_code") == ErrorCode.MARKET_CLOSED:
                 return KakaoResponse.quick_replies(
                     result["message"],
                     [
@@ -516,7 +532,7 @@ class CommandHandler:
 
         if not result["success"]:
             # 거래 불가 시간 (장 마감) - 미니게임 안내
-            if result.get("error_code") == "MARKET_CLOSED":
+            if result.get("error_code") == ErrorCode.MARKET_CLOSED:
                 return KakaoResponse.quick_replies(
                     result["message"],
                     [
@@ -580,7 +596,7 @@ class CommandHandler:
 
         if not result["success"]:
             # 거래 불가 시간 (장 마감) - 미니게임 안내
-            if result.get("error_code") == "MARKET_CLOSED":
+            if result.get("error_code") == ErrorCode.MARKET_CLOSED:
                 return KakaoResponse.quick_replies(
                     result["message"],
                     [
@@ -1193,7 +1209,7 @@ class CommandHandler:
         elif result["multiplier"] > 0:
             effect = "✨ WIN! ✨"
         else:
-            effect = "💨 실패..."
+            effect = _get_lose_message()
 
         if result["profit"] >= 0:
             profit_text = f"📈 +{result['profit']:,}원"
@@ -1263,7 +1279,7 @@ class CommandHandler:
             effect = "🎉 WIN!"
             profit_text = f"📈 +{result['profit']:,}원"
         else:
-            effect = "💨 LOSE"
+            effect = _get_lose_message()
             profit_text = f"📉 {result['profit']:,}원"
 
         msg = f"""🪙 동전 던지기
@@ -1339,7 +1355,7 @@ class CommandHandler:
                 effect = "🎉 WIN!"
                 profit_text = f"📈 +{result['profit']:,}원"
             else:
-                effect = "💨 LOSE"
+                effect = _get_lose_message()
                 profit_text = f"📉 {result['profit']:,}원"
 
             arrow = "🔼" if result["actual"] == "높" else "🔽"
@@ -1406,7 +1422,7 @@ class CommandHandler:
             effect = "🎉 WIN!"
             profit_text = f"📈 +{result['profit']:,}원"
         else:
-            effect = "💨 LOSE"
+            effect = _get_lose_message()
             profit_text = f"📉 {result['profit']:,}원"
 
         # 선택한 색상 이모지

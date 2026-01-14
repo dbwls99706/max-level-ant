@@ -12,6 +12,19 @@ from models import User
 from config import is_market_closed, get_market_status_message, GameConfig, Messages
 
 
+def _validate_bet(user, bet: int) -> Optional[Dict]:
+    """배팅금 검증 (공통 함수). 문제 있으면 에러 dict 반환, 없으면 None"""
+    if bet <= 0:
+        return {"success": False, "message": Messages.BET_ZERO_OR_NEGATIVE}
+    if bet < GameConfig.MIN_BET:
+        return {"success": False, "message": Messages.BET_TOO_SMALL.format(min_bet=GameConfig.MIN_BET)}
+    if bet > GameConfig.MAX_BET:
+        return {"success": False, "message": Messages.BET_TOO_LARGE.format(max_bet=GameConfig.MAX_BET)}
+    if user.cash < bet:
+        return {"success": False, "message": f"❌ 잔액 부족! (보유: {user.cash:,}원, 필요: {bet:,}원)"}
+    return None
+
+
 def _get_market_closed_error(emoji: str) -> Dict:
     """장 마감 시간 에러 메시지 (중복 제거)"""
     status_msg = get_market_status_message()
@@ -148,17 +161,9 @@ class GameService:
             return {"success": False, "message": Messages.USER_NOT_FOUND}
 
         # 배팅금 검증
-        min_bet = GameConfig.MIN_BET
-        if bet <= 0:
-            return {"success": False, "message": "배팅금은 0보다 커야 합니다."}
-        if bet < min_bet:
-            return {"success": False, "message": f"최소 배팅금은 {min_bet:,}원입니다."}
-
-        if user.cash < bet:
-            return {
-                "success": False,
-                "message": f"잔액 부족! (보유: {user.cash:,}원, 필요: {bet:,}원)"
-            }
+        bet_error = _validate_bet(user, bet)
+        if bet_error:
+            return bet_error
 
         # 배팅금 차감
         user.cash -= bet
@@ -232,17 +237,10 @@ class GameService:
         if not user:
             return {"success": False, "message": Messages.USER_NOT_FOUND}
 
-        min_bet = GameConfig.MIN_BET
-        if bet <= 0:
-            return {"success": False, "message": "배팅금은 0보다 커야 합니다."}
-        if bet < min_bet:
-            return {"success": False, "message": f"최소 배팅금은 {min_bet:,}원입니다."}
-
-        if user.cash < bet:
-            return {
-                "success": False,
-                "message": f"잔액 부족! (보유: {user.cash:,}원)"
-            }
+        # 배팅금 검증
+        bet_error = _validate_bet(user, bet)
+        if bet_error:
+            return bet_error
 
         choice = choice.lower()
         if choice not in ["빨강", "검정", "초록", "red", "black", "green", "빨", "검", "초"]:
@@ -315,17 +313,10 @@ class GameService:
         if not user:
             return {"success": False, "message": Messages.USER_NOT_FOUND}
 
-        min_bet = GameConfig.MIN_BET
-        if bet <= 0:
-            return {"success": False, "message": "배팅금은 0보다 커야 합니다."}
-        if bet < min_bet:
-            return {"success": False, "message": f"최소 배팅금은 {min_bet:,}원입니다."}
-
-        if user.cash < bet:
-            return {
-                "success": False,
-                "message": f"잔액 부족! (보유: {user.cash:,}원)"
-            }
+        # 배팅금 검증
+        bet_error = _validate_bet(user, bet)
+        if bet_error:
+            return bet_error
 
         choice = choice.lower()
         if choice not in ["높", "낮", "high", "low", "하이", "로우"]:
@@ -399,17 +390,10 @@ class GameService:
         if not user:
             return {"success": False, "message": Messages.USER_NOT_FOUND}
 
-        min_bet = GameConfig.MIN_BET
-        if bet <= 0:
-            return {"success": False, "message": "배팅금은 0보다 커야 합니다."}
-        if bet < min_bet:
-            return {"success": False, "message": f"최소 배팅금은 {min_bet:,}원입니다."}
-
-        if user.cash < bet:
-            return {
-                "success": False,
-                "message": f"잔액 부족! (보유: {user.cash:,}원)"
-            }
+        # 배팅금 검증
+        bet_error = _validate_bet(user, bet)
+        if bet_error:
+            return bet_error
 
         choice = choice.lower()
         if choice not in ["앞", "뒤", "head", "tail", "앞면", "뒷면"]:

@@ -11,7 +11,7 @@ from models import User, Holding, Transaction
 from services.stock_service import StockService
 from services.user_service import UserService
 from services.mission_service import MissionService
-from config import GameConfig, Messages, is_trading_available, get_market_status_message
+from config import GameConfig, Messages, ErrorCode, is_trading_available, get_market_status_message
 
 
 class TradeService:
@@ -66,7 +66,7 @@ class TradeService:
             status_msg = get_market_status_message()
             return {
                 "success": False,
-                "error_code": "MARKET_CLOSED",
+                "error_code": ErrorCode.MARKET_CLOSED,
                 "message": Messages.MARKET_CLOSED_TRADING.format(status_msg=status_msg)
             }
 
@@ -126,23 +126,23 @@ class TradeService:
         ).first()
         
         if holding:
-            # 기존 보유 → 평균 단가 계산 (수수료 포함)
+            # 기존 보유 → 평균 단가 계산 (수수료 포함, 소수점 반올림)
             total_qty = holding.quantity + quantity
             total_invested = holding.total_invested + total_amount + fee
-            avg_price = total_invested // total_qty
+            avg_price = round(total_invested / total_qty)
 
             holding.quantity = total_qty
             holding.total_invested = total_invested
             holding.avg_price = avg_price
         else:
-            # 신규 매수 (수수료 포함 평단가)
+            # 신규 매수 (수수료 포함 평단가, 소수점 반올림)
             total_invested = total_amount + fee
             holding = Holding(
                 kakao_id=kakao_id,
                 stock_code=code,
                 stock_name=name,
                 quantity=quantity,
-                avg_price=total_invested // quantity,
+                avg_price=round(total_invested / quantity),
                 total_invested=total_invested
             )
             db.add(holding)
@@ -201,7 +201,7 @@ class TradeService:
             status_msg = get_market_status_message()
             return {
                 "success": False,
-                "error_code": "MARKET_CLOSED",
+                "error_code": ErrorCode.MARKET_CLOSED,
                 "message": Messages.MARKET_CLOSED_TRADING.format(status_msg=status_msg)
             }
 

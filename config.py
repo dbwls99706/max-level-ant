@@ -225,6 +225,7 @@ class GameConfig:
     LOTTERY_COST = 10_000  # 복권 가격
     MAX_LOTTERY_PER_DAY = 5  # 복권 1일 최대 횟수
     MIN_BET = 10_000  # 미니게임 최소 배팅금
+    MAX_BET = 1_000_000_000_000  # 미니게임 최대 배팅금 (1조)
     DEFAULT_BET = 50_000  # 미니게임 기본 배팅금
 
     # 거래 설정
@@ -398,3 +399,16 @@ class Messages:
     MIN_TRADE_AMOUNT_ERROR = "최소 {min_amount}주 이상 거래해야 합니다."
 
     STOCK_PRICE_FAIL = "'{name}' 시세 조회 실패. 잠시 후 다시 시도해주세요."
+
+    # 배팅 검증 메시지
+    BET_ZERO_OR_NEGATIVE = "❌ 배팅금은 0보다 커야 합니다."
+    BET_TOO_SMALL = "❌ 최소 배팅금은 {min_bet:,}원입니다."
+    BET_TOO_LARGE = "❌ 최대 배팅금은 {max_bet:,}원입니다."
+
+
+# 에러 코드 상수
+class ErrorCode:
+    MARKET_CLOSED = "MARKET_CLOSED"
+    INSUFFICIENT_BALANCE = "INSUFFICIENT_BALANCE"
+    INVALID_BET = "INVALID_BET"
+    USER_NOT_FOUND = "USER_NOT_FOUND"
