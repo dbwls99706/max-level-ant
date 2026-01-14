@@ -790,6 +790,7 @@ class CommandHandler:
         # 검색 결과 버튼
         buttons = [{"label": f"📊 {r['name']}", "action": "message", "messageText": f"/시세 {r['name']}"} for r in results[:3]]
         buttons.append({"label": "🚀 급등주", "action": "message", "messageText": "/급등"})
+        buttons.extend(self._get_game_buttons())
 
         return KakaoResponse.quick_replies(msg, buttons)
     
@@ -990,6 +991,7 @@ class CommandHandler:
                 t = t[:35] + "..."
             msg += f"\n{i}. {t}"
 
+        buttons.extend(self._get_game_buttons())
         return KakaoResponse.quick_replies(msg, buttons)
 
     def handle_mission(self) -> Dict:
@@ -1244,7 +1246,7 @@ class CommandHandler:
                 ]
             )
 
-        choice = parts[2]
+        choice = parts[2].strip()
         result = GameService.play_coin_flip(self.db, self.kakao_id, bet, choice)
 
         if not result["success"]:
@@ -1309,7 +1311,7 @@ class CommandHandler:
                 ]
             )
 
-        choice = parts[2]
+        choice = parts[2].strip()
         result = GameService.play_high_low(self.db, self.kakao_id, bet, choice)
 
         if not result["success"]:
@@ -1387,7 +1389,7 @@ class CommandHandler:
                 ]
             )
 
-        choice = parts[2]
+        choice = parts[2].strip()
         result = GameService.play_roulette(self.db, self.kakao_id, bet, choice)
 
         if not result["success"]:

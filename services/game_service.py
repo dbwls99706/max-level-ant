@@ -147,6 +147,13 @@ class GameService:
         if not user:
             return {"success": False, "message": Messages.USER_NOT_FOUND}
 
+        # 배팅금 검증
+        min_bet = GameConfig.MIN_BET
+        if bet <= 0:
+            return {"success": False, "message": "배팅금은 0보다 커야 합니다."}
+        if bet < min_bet:
+            return {"success": False, "message": f"최소 배팅금은 {min_bet:,}원입니다."}
+
         if user.cash < bet:
             return {
                 "success": False,
@@ -226,6 +233,8 @@ class GameService:
             return {"success": False, "message": Messages.USER_NOT_FOUND}
 
         min_bet = GameConfig.MIN_BET
+        if bet <= 0:
+            return {"success": False, "message": "배팅금은 0보다 커야 합니다."}
         if bet < min_bet:
             return {"success": False, "message": f"최소 배팅금은 {min_bet:,}원입니다."}
 
@@ -307,6 +316,8 @@ class GameService:
             return {"success": False, "message": Messages.USER_NOT_FOUND}
 
         min_bet = GameConfig.MIN_BET
+        if bet <= 0:
+            return {"success": False, "message": "배팅금은 0보다 커야 합니다."}
         if bet < min_bet:
             return {"success": False, "message": f"최소 배팅금은 {min_bet:,}원입니다."}
 
@@ -389,6 +400,8 @@ class GameService:
             return {"success": False, "message": Messages.USER_NOT_FOUND}
 
         min_bet = GameConfig.MIN_BET
+        if bet <= 0:
+            return {"success": False, "message": "배팅금은 0보다 커야 합니다."}
         if bet < min_bet:
             return {"success": False, "message": f"최소 배팅금은 {min_bet:,}원입니다."}
 
