@@ -243,7 +243,7 @@ class TradingHandlerMixin(BaseHandlerMixin):
         if data["profit"] >= 0:
             profit_text = f"📈 수익: +{data['profit']:,}원 (+{data['profit_rate']:.2f}%)"
         else:
-            profit_text = f"📉 손실: {abs(data['profit']):,}원 ({data['profit_rate']:.2f}%)"
+            profit_text = f"📉 손실: -{abs(data['profit']):,}원 ({data['profit_rate']:.2f}%)"
 
         msg = Messages.SELL_SUCCESS.format(
             name=data["name"],
@@ -374,7 +374,7 @@ class TradingHandlerMixin(BaseHandlerMixin):
         if data["profit"] >= 0:
             profit_text = f"📈 수익: +{data['profit']:,}원 (+{data['profit_rate']:.2f}%)"
         else:
-            profit_text = f"📉 손실: {abs(data['profit']):,}원 ({data['profit_rate']:.2f}%)"
+            profit_text = f"📉 손실: -{abs(data['profit']):,}원 ({data['profit_rate']:.2f}%)"
 
         msg = Messages.SELL_SUCCESS.format(
             name=data["name"],

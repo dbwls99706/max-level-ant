@@ -1,7 +1,8 @@
 """
-배틀 서비스 - 2인 주가 예측 대결
+배틀 서비스 - 2인 주가 예측 대결 (리팩토링)
 - 장 열릴 때만 생성/참가 가능
 - 장 마감 시 마감가 기준으로 결과 처리
+- 트랜잭션 안전성 강화
 """
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional
@@ -9,7 +10,18 @@ from sqlalchemy.orm import Session
 
 from models import Battle, User
 from services.stock_service import StockService
-from config import is_market_open, is_market_closed, get_market_status_message
+from services.common import (
+    get_user_with_error,
+    validate_bet,
+    safe_subtract,
+    safe_add,
+    error_response,
+    success_response,
+)
+from config import is_market_open, is_market_closed, get_market_status_message, ErrorCode
+from utils import get_handler_logger
+
+logger = get_handler_logger()
 
 
 class BattleService:
@@ -17,9 +29,45 @@ class BattleService:
 
     # 기본 배팅금
     DEFAULT_BET = 100_000
+    MIN_BET = 10_000
+    MAX_BET = 100_000_000  # 1억
 
     # 배틀 지속 시간 (분)
     DEFAULT_DURATION = 60
+    MIN_DURATION = 5
+    MAX_DURATION = 480  # 8시간
+
+    # 예측 정규화 매핑
+    PREDICTION_UP = {"상승", "오름", "up", "롱", "매수", "상", "업"}
+    PREDICTION_DOWN = {"하락", "내림", "down", "숏", "매도", "하", "다운"}
+
+    @classmethod
+    def _normalize_prediction(cls, prediction: str) -> Optional[str]:
+        """예측 문자열 정규화"""
+        pred = prediction.lower().strip()
+        if pred in cls.PREDICTION_UP:
+            return "UP"
+        elif pred in cls.PREDICTION_DOWN:
+            return "DOWN"
+        return None
+
+    @classmethod
+    def _get_market_closed_error(cls) -> Dict:
+        """장 마감 에러 메시지 생성"""
+        status_msg = get_market_status_message()
+        return error_response(
+            ErrorCode.MARKET_CLOSED,
+            f"⚔️ 배틀은 정규장 시간에만 가능해요!\n\n{status_msg}\n\n"
+            f"⏰ 배틀 가능 시간:\n• 평일 09:00~15:30\n\n"
+            f"🎮 장 마감 후에는 미니게임을 즐겨보세요!"
+        )
+
+    @classmethod
+    def _get_user_display_name(cls, user: User, kakao_id: str) -> str:
+        """유저 표시명 생성"""
+        if user and user.nickname:
+            return user.nickname
+        return f"투자자{kakao_id[-4:]}"
 
     @classmethod
     def create_battle(
@@ -37,58 +85,66 @@ class BattleService:
         """
         # 장이 열려있을 때만 가능 (정규장)
         if not is_market_open():
-            status_msg = get_market_status_message()
-            return {
-                "success": False,
-                "message": f"⚔️ 배틀은 정규장 시간에만 가능해요!\n\n{status_msg}\n\n⏰ 배틀 가능 시간:\n• 평일 09:00~15:30\n\n🎮 장 마감 후에는 미니게임을 즐겨보세요!"
-            }
+            return cls._get_market_closed_error()
 
         # 유저 확인
-        user = db.query(User).filter(User.kakao_id == challenger_id).first()
-        if not user:
-            return {"success": False, "message": "먼저 /시작 으로 게임을 시작해주세요."}
+        user, err = get_user_with_error(db, challenger_id)
+        if err:
+            return err
 
+        # 배팅금 및 시간 설정
         bet = bet_amount or cls.DEFAULT_BET
         dur = duration or cls.DEFAULT_DURATION
 
-        # 잔액 확인
-        if user.cash < bet:
-            return {
-                "success": False,
-                "message": f"❌ 잔액 부족!\n보유: {user.cash:,}원\n필요: {bet:,}원"
-            }
+        # 배팅금 검증
+        is_valid, err_msg = validate_bet(bet, user.cash, cls.MIN_BET, cls.MAX_BET)
+        if not is_valid:
+            return error_response(ErrorCode.INSUFFICIENT_CASH, f"❌ {err_msg}")
+
+        # 시간 검증
+        if dur < cls.MIN_DURATION or dur > cls.MAX_DURATION:
+            return error_response(
+                ErrorCode.INVALID_PARAMETER,
+                f"❌ 배틀 시간은 {cls.MIN_DURATION}분~{cls.MAX_DURATION}분 사이여야 합니다."
+            )
 
         # 종목 확인
         stock_info = StockService.get_stock_price(stock_name)
         if not stock_info:
-            return {"success": False, "message": f"❌ '{stock_name}' 종목을 찾을 수 없습니다."}
+            return error_response(
+                ErrorCode.STOCK_NOT_FOUND,
+                f"❌ '{stock_name}' 종목을 찾을 수 없습니다."
+            )
 
         # 예측 정규화
-        pred = prediction.lower()
-        if pred in ["상승", "오름", "up", "롱", "매수"]:
-            pred = "UP"
-        elif pred in ["하락", "내림", "down", "숏", "매도"]:
-            pred = "DOWN"
-        else:
-            return {"success": False, "message": "❌ 예측은 '상승' 또는 '하락'으로 입력해주세요."}
+        pred = cls._normalize_prediction(prediction)
+        if not pred:
+            return error_response(
+                ErrorCode.INVALID_PARAMETER,
+                "❌ 예측은 '상승' 또는 '하락'으로 입력해주세요."
+            )
 
-        # 배팅금 차감 (중복 참여 허용)
-        user.cash -= bet
+        # 트랜잭션: 배팅금 차감 및 배틀 생성
+        try:
+            user.cash = safe_subtract(user.cash, bet)
 
-        # 배틀 생성
-        battle = Battle(
-            challenger_id=challenger_id,
-            stock_code=stock_info["code"],
-            stock_name=stock_info["name"],
-            bet_amount=bet,
-            challenger_prediction=pred,
-            duration_minutes=dur,
-            status="WAITING"
-        )
+            battle = Battle(
+                challenger_id=challenger_id,
+                stock_code=stock_info["code"],
+                stock_name=stock_info["name"],
+                bet_amount=bet,
+                challenger_prediction=pred,
+                duration_minutes=dur,
+                status="WAITING"
+            )
 
-        db.add(battle)
-        db.commit()
-        db.refresh(battle)
+            db.add(battle)
+            db.commit()
+            db.refresh(battle)
+        except Exception as e:
+            db.rollback()
+            logger.error(f"배틀 생성 실패: {e}")
+            return error_response(ErrorCode.INTERNAL_ERROR, "❌ 배틀 생성 중 오류가 발생했습니다.")
 
         pred_emoji = "📈" if pred == "UP" else "📉"
         pred_text = "상승" if pred == "UP" else "하락"
@@ -111,58 +167,62 @@ class BattleService:
         """배틀 참가 (도전 수락)"""
         # 장이 열려있을 때만 가능 (정규장)
         if not is_market_open():
-            status_msg = get_market_status_message()
-            return {
-                "success": False,
-                "message": f"⚔️ 배틀은 정규장 시간에만 가능해요!\n\n{status_msg}\n\n⏰ 배틀 가능 시간:\n• 평일 09:00~15:30\n\n🎮 장 마감 후에는 미니게임을 즐겨보세요!"
-            }
+            return cls._get_market_closed_error()
 
         # 유저 확인
-        user = db.query(User).filter(User.kakao_id == opponent_id).first()
-        if not user:
-            return {"success": False, "message": "먼저 /시작 으로 게임을 시작해주세요."}
+        user, err = get_user_with_error(db, opponent_id)
+        if err:
+            return err
 
         # 배틀 확인
         battle = db.query(Battle).filter(Battle.id == battle_id).first()
         if not battle:
-            return {"success": False, "message": "❌ 해당 배틀을 찾을 수 없습니다."}
+            return error_response(ErrorCode.NOT_FOUND, "❌ 해당 배틀을 찾을 수 없습니다.")
 
         if battle.status != "WAITING":
-            return {"success": False, "message": "❌ 이미 진행 중이거나 종료된 배틀입니다."}
+            return error_response(
+                ErrorCode.INVALID_STATE,
+                "❌ 이미 진행 중이거나 종료된 배틀입니다."
+            )
 
         if battle.challenger_id == opponent_id:
-            return {"success": False, "message": "❌ 자신의 배틀에는 참가할 수 없습니다."}
+            return error_response(
+                ErrorCode.INVALID_PARAMETER,
+                "❌ 자신의 배틀에는 참가할 수 없습니다."
+            )
 
-        # 잔액 확인
-        if user.cash < battle.bet_amount:
-            return {
-                "success": False,
-                "message": f"❌ 잔액 부족!\n보유: {user.cash:,}원\n필요: {battle.bet_amount:,}원"
-            }
+        # 배팅금 검증
+        is_valid, err_msg = validate_bet(battle.bet_amount, user.cash)
+        if not is_valid:
+            return error_response(ErrorCode.INSUFFICIENT_CASH, f"❌ {err_msg}")
 
         # 현재 가격 조회
         stock_info = StockService.get_stock_price(battle.stock_name)
         if not stock_info:
-            return {"success": False, "message": "❌ 종목 정보를 가져올 수 없습니다."}
-
-        # 배팅금 차감
-        user.cash -= battle.bet_amount
+            return error_response(ErrorCode.STOCK_NOT_FOUND, "❌ 종목 정보를 가져올 수 없습니다.")
 
         # 상대방은 반대 예측
         opponent_pred = "DOWN" if battle.challenger_prediction == "UP" else "UP"
 
-        # 배틀 시작
-        battle.opponent_id = opponent_id
-        battle.opponent_prediction = opponent_pred
-        battle.start_price = stock_info["price"]
-        battle.started_at = datetime.utcnow()
-        battle.status = "ACTIVE"
+        # 트랜잭션: 배팅금 차감 및 배틀 시작
+        try:
+            user.cash = safe_subtract(user.cash, battle.bet_amount)
 
-        db.commit()
+            battle.opponent_id = opponent_id
+            battle.opponent_prediction = opponent_pred
+            battle.start_price = stock_info["price"]
+            battle.started_at = datetime.utcnow()
+            battle.status = "ACTIVE"
+
+            db.commit()
+        except Exception as e:
+            db.rollback()
+            logger.error(f"배틀 참가 실패: {e}")
+            return error_response(ErrorCode.INTERNAL_ERROR, "❌ 배틀 참가 중 오류가 발생했습니다.")
 
         challenger = db.query(User).filter(User.kakao_id == battle.challenger_id).first()
-        challenger_name = challenger.nickname or f"투자자{battle.challenger_id[-4:]}"
-        opponent_name = user.nickname or f"투자자{opponent_id[-4:]}"
+        challenger_name = cls._get_user_display_name(challenger, battle.challenger_id)
+        opponent_name = cls._get_user_display_name(user, opponent_id)
 
         ch_pred = "상승" if battle.challenger_prediction == "UP" else "하락"
         op_pred = "상승" if opponent_pred == "UP" else "하락"
@@ -186,13 +246,13 @@ class BattleService:
         """배틀 결과 확인"""
         battle = db.query(Battle).filter(Battle.id == battle_id).first()
         if not battle:
-            return {"success": False, "message": "❌ 해당 배틀을 찾을 수 없습니다."}
+            return error_response(ErrorCode.NOT_FOUND, "❌ 해당 배틀을 찾을 수 없습니다.")
 
         if battle.status == "WAITING":
-            return {"success": False, "message": "⏳ 아직 상대방을 기다리는 중입니다."}
+            return error_response(ErrorCode.INVALID_STATE, "⏳ 아직 상대방을 기다리는 중입니다.")
 
         if battle.status == "CANCELLED":
-            return {"success": False, "message": "❌ 취소된 배틀입니다."}
+            return error_response(ErrorCode.INVALID_STATE, "❌ 취소된 배틀입니다.")
 
         if battle.status == "FINISHED":
             # 이미 종료된 배틀 결과 반환
@@ -208,10 +268,10 @@ class BattleService:
             remaining = end_time - datetime.utcnow()
             mins = remaining.seconds // 60
             secs = remaining.seconds % 60
-            return {
-                "success": False,
-                "message": f"⏳ 배틀 진행 중!\n\n종목: {battle.stock_name}\n시작가: {battle.start_price:,}원\n남은 시간: {mins}분 {secs}초"
-            }
+            return error_response(
+                ErrorCode.INVALID_STATE,
+                f"⏳ 배틀 진행 중!\n\n종목: {battle.stock_name}\n시작가: {battle.start_price:,}원\n남은 시간: {mins}분 {secs}초"
+            )
 
         # 배틀 종료 처리
         return cls._finish_battle(db, battle)
@@ -222,11 +282,9 @@ class BattleService:
         # 현재 가격 조회
         stock_info = StockService.get_stock_price(battle.stock_name)
         if not stock_info:
-            return {"success": False, "message": "❌ 종목 정보를 가져올 수 없습니다."}
+            return error_response(ErrorCode.STOCK_NOT_FOUND, "❌ 종목 정보를 가져올 수 없습니다.")
 
         current_price = stock_info["price"]
-        battle.end_price = current_price
-        battle.ended_at = datetime.utcnow()
 
         # 승패 판정
         price_change = current_price - battle.start_price
@@ -237,31 +295,41 @@ class BattleService:
 
         # 유저 확인 (데이터 무결성 체크)
         if not challenger or not opponent:
-            battle.status = "CANCELLED"
-            db.commit()
-            return {"success": False, "message": "❌ 배틀 참가자 정보를 찾을 수 없습니다."}
+            try:
+                battle.status = "CANCELLED"
+                db.commit()
+            except Exception as e:
+                db.rollback()
+                logger.error(f"배틀 취소 실패: {e}")
+            return error_response(ErrorCode.USER_NOT_FOUND, "❌ 배틀 참가자 정보를 찾을 수 없습니다.")
 
         total_pot = battle.bet_amount * 2
 
-        if actual_direction == "DRAW":
-            # 무승부 - 배팅금 반환
-            challenger.cash += battle.bet_amount
-            opponent.cash += battle.bet_amount
-            battle.winner_id = None
-            result_msg = "🤝 무승부! 배팅금 반환"
-        elif battle.challenger_prediction == actual_direction:
-            # 도전자 승리
-            challenger.cash += total_pot
-            battle.winner_id = battle.challenger_id
-            result_msg = f"🏆 {challenger.nickname or f'투자자{battle.challenger_id[-4:]}'} 승리!"
-        else:
-            # 상대방 승리
-            opponent.cash += total_pot
-            battle.winner_id = battle.opponent_id
-            result_msg = f"🏆 {opponent.nickname or f'투자자{battle.opponent_id[-4:]}'} 승리!"
+        # 트랜잭션: 결과 처리
+        try:
+            battle.end_price = current_price
+            battle.ended_at = datetime.utcnow()
 
-        battle.status = "FINISHED"
-        db.commit()
+            if actual_direction == "DRAW":
+                # 무승부 - 배팅금 반환
+                challenger.cash = safe_add(challenger.cash, battle.bet_amount)
+                opponent.cash = safe_add(opponent.cash, battle.bet_amount)
+                battle.winner_id = None
+            elif battle.challenger_prediction == actual_direction:
+                # 도전자 승리
+                challenger.cash = safe_add(challenger.cash, total_pot)
+                battle.winner_id = battle.challenger_id
+            else:
+                # 상대방 승리
+                opponent.cash = safe_add(opponent.cash, total_pot)
+                battle.winner_id = battle.opponent_id
+
+            battle.status = "FINISHED"
+            db.commit()
+        except Exception as e:
+            db.rollback()
+            logger.error(f"배틀 결과 처리 실패: {e}")
+            return error_response(ErrorCode.INTERNAL_ERROR, "❌ 배틀 결과 처리 중 오류가 발생했습니다.")
 
         result = cls._get_finished_result(db, battle)
 
@@ -277,10 +345,11 @@ class BattleService:
         challenger = db.query(User).filter(User.kakao_id == battle.challenger_id).first()
         opponent = db.query(User).filter(User.kakao_id == battle.opponent_id).first()
 
-        ch_name = challenger.nickname or f"투자자{battle.challenger_id[-4:]}" if challenger else "???"
-        op_name = opponent.nickname or f"투자자{battle.opponent_id[-4:]}" if opponent else "???"
+        ch_name = cls._get_user_display_name(challenger, battle.challenger_id) if challenger else "???"
+        op_name = cls._get_user_display_name(opponent, battle.opponent_id) if opponent else "???"
 
         price_change = battle.end_price - battle.start_price
+        # 0으로 나누기 방지
         change_rate = (price_change / battle.start_price) * 100 if battle.start_price > 0 else 0
 
         if battle.winner_id == battle.challenger_id:
@@ -315,10 +384,17 @@ class BattleService:
         """대기 중인 배틀 목록"""
         battles = db.query(Battle).filter(Battle.status == "WAITING").all()
 
+        # N+1 최적화: 모든 유저 ID 수집 후 배치 조회
+        challenger_ids = {b.challenger_id for b in battles}
+        users_map = {}
+        if challenger_ids:
+            users = db.query(User).filter(User.kakao_id.in_(challenger_ids)).all()
+            users_map = {u.kakao_id: u for u in users}
+
         result = []
         for b in battles:
-            user = db.query(User).filter(User.kakao_id == b.challenger_id).first()
-            name = user.nickname or f"투자자{b.challenger_id[-4:]}"
+            user = users_map.get(b.challenger_id)
+            name = cls._get_user_display_name(user, b.challenger_id)
             pred = "상승" if b.challenger_prediction == "UP" else "하락"
 
             result.append({
@@ -350,3 +426,37 @@ class BattleService:
             })
 
         return result
+
+    @classmethod
+    def cancel_battle(cls, db: Session, kakao_id: str, battle_id: int) -> Dict:
+        """대기 중인 배틀 취소"""
+        battle = db.query(Battle).filter(Battle.id == battle_id).first()
+        if not battle:
+            return error_response(ErrorCode.NOT_FOUND, "❌ 해당 배틀을 찾을 수 없습니다.")
+
+        if battle.challenger_id != kakao_id:
+            return error_response(ErrorCode.PERMISSION_DENIED, "❌ 본인이 생성한 배틀만 취소할 수 있습니다.")
+
+        if battle.status != "WAITING":
+            return error_response(ErrorCode.INVALID_STATE, "❌ 대기 중인 배틀만 취소할 수 있습니다.")
+
+        user = db.query(User).filter(User.kakao_id == kakao_id).first()
+        if not user:
+            return error_response(ErrorCode.USER_NOT_FOUND, "❌ 유저 정보를 찾을 수 없습니다.")
+
+        try:
+            # 배팅금 환불
+            user.cash = safe_add(user.cash, battle.bet_amount)
+            battle.status = "CANCELLED"
+            db.commit()
+        except Exception as e:
+            db.rollback()
+            logger.error(f"배틀 취소 실패: {e}")
+            return error_response(ErrorCode.INTERNAL_ERROR, "❌ 배틀 취소 중 오류가 발생했습니다.")
+
+        return success_response(
+            f"✅ 배틀이 취소되었습니다.\n💰 {battle.bet_amount:,}원 환불 완료!",
+            battle_id=battle_id,
+            refund=battle.bet_amount,
+            cash=user.cash
+        )

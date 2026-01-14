@@ -529,7 +529,7 @@ class Messages:
 📈 {name} {quantity:,}주
 💵 체결가: {price:,}원
 💰 총 금액: {total:,}원
-📍 수수료: {fee:,}원
+📍 수수료: -{fee:,}원
 
 잔여 현금: {cash:,}원"""
 
@@ -538,7 +538,7 @@ class Messages:
 📉 {name} {quantity:,}주
 💵 체결가: {price:,}원
 💰 총 금액: {total:,}원
-📍 수수료: {fee:,}원
+📍 수수료: -{fee:,}원
 {profit_text}
 
 잔여 현금: {cash:,}원"""
