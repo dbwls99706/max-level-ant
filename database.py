@@ -3,6 +3,7 @@
 """
 from sqlalchemy import create_engine, text, inspect
 from sqlalchemy.orm import sessionmaker, declarative_base
+from sqlalchemy.exc import SQLAlchemyError
 from config import DATABASE_URL
 from utils import get_handler_logger
 
@@ -101,7 +102,7 @@ def _migrate_db():
                     conn.commit()
                     logger.info(f"컬럼 추가됨: users.{col_name}")
                     added_count += 1
-                except Exception as e:
+                except SQLAlchemyError as e:
                     logger.warning(f"컬럼 추가 실패 ({col_name}): {e}")
 
     if added_count > 0:

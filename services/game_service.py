@@ -11,14 +11,11 @@ from typing import Dict
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import SQLAlchemyError
 
-from models import User
-from config import GameConfig, GameProbability, Messages
+from config import GameConfig, GameProbability
 from services.common import (
     get_user_with_error,
     validate_bet,
     check_market_closed_for_game,
-    safe_transaction,
-    success_response,
     error_response,
     calculate_profit,
     safe_add,

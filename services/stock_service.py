@@ -5,7 +5,7 @@
 - 개선된 캐시 전략 (TTL + 무효화)
 """
 from datetime import datetime, timedelta
-from typing import Optional, Dict, List, Set
+from typing import Optional, Dict, List
 from cachetools import TTLCache
 import requests
 from requests.exceptions import RequestException, Timeout

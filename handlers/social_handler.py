@@ -9,7 +9,7 @@ from services import (
     UserService, RankingService, MissionService,
     BattleService, ChallengeService, MilestoneService, AssetService
 )
-from utils import KakaoResponse, get_streak_display
+from utils import KakaoResponse
 from config import GameConfig, Messages
 
 from .base_handler import BaseHandlerMixin

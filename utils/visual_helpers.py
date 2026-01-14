@@ -5,7 +5,6 @@
 - 등급별 이모지
 """
 import re
-from typing import Tuple
 
 
 def get_streak_display(streak: int) -> str:
