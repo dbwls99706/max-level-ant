@@ -235,6 +235,12 @@ class BattleService:
         challenger = db.query(User).filter(User.kakao_id == battle.challenger_id).first()
         opponent = db.query(User).filter(User.kakao_id == battle.opponent_id).first()
 
+        # 유저 확인 (데이터 무결성 체크)
+        if not challenger or not opponent:
+            battle.status = "CANCELLED"
+            db.commit()
+            return {"success": False, "message": "❌ 배틀 참가자 정보를 찾을 수 없습니다."}
+
         total_pot = battle.bet_amount * 2
 
         if actual_direction == "DRAW":
@@ -271,11 +277,11 @@ class BattleService:
         challenger = db.query(User).filter(User.kakao_id == battle.challenger_id).first()
         opponent = db.query(User).filter(User.kakao_id == battle.opponent_id).first()
 
-        ch_name = challenger.nickname or f"투자자{battle.challenger_id[-4:]}"
+        ch_name = challenger.nickname or f"투자자{battle.challenger_id[-4:]}" if challenger else "???"
         op_name = opponent.nickname or f"투자자{battle.opponent_id[-4:]}" if opponent else "???"
 
         price_change = battle.end_price - battle.start_price
-        change_rate = (price_change / battle.start_price) * 100
+        change_rate = (price_change / battle.start_price) * 100 if battle.start_price > 0 else 0
 
         if battle.winner_id == battle.challenger_id:
             winner_name = ch_name

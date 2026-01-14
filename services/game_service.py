@@ -9,7 +9,7 @@ from typing import Dict, Tuple, Optional
 from sqlalchemy.orm import Session
 
 from models import User
-from config import is_market_closed, get_market_status_message, GameConfig
+from config import is_market_closed, get_market_status_message, GameConfig, Messages
 
 
 def _get_market_closed_error(emoji: str) -> Dict:
@@ -17,7 +17,7 @@ def _get_market_closed_error(emoji: str) -> Dict:
     status_msg = get_market_status_message()
     return {
         "success": False,
-        "message": f"{emoji} 미니게임은 장 마감 후에만 가능해요!\n\n{status_msg}\n\n🎮 게임 가능 시간:\n• 평일 18:00 이후\n• 평일 08:30 이전\n• 주말/공휴일 종일"
+        "message": f"{emoji} " + Messages.MARKET_CLOSED_GAME.format(status_msg=status_msg)
     }
 
 
@@ -60,7 +60,7 @@ class GameService:
         """
         user = db.query(User).filter(User.kakao_id == kakao_id).first()
         if not user:
-            return {"success": False, "message": "먼저 /시작 으로 게임을 시작해주세요."}
+            return {"success": False, "message": Messages.USER_NOT_FOUND}
 
         # 날짜가 바뀌었으면 카운트 리셋
         today = date.today()
@@ -145,7 +145,7 @@ class GameService:
 
         user = db.query(User).filter(User.kakao_id == kakao_id).first()
         if not user:
-            return {"success": False, "message": "먼저 /시작 으로 게임을 시작해주세요."}
+            return {"success": False, "message": Messages.USER_NOT_FOUND}
 
         if user.cash < bet:
             return {
@@ -223,7 +223,7 @@ class GameService:
 
         user = db.query(User).filter(User.kakao_id == kakao_id).first()
         if not user:
-            return {"success": False, "message": "먼저 /시작 으로 게임을 시작해주세요."}
+            return {"success": False, "message": Messages.USER_NOT_FOUND}
 
         min_bet = GameConfig.MIN_BET
         if bet < min_bet:
@@ -304,7 +304,7 @@ class GameService:
 
         user = db.query(User).filter(User.kakao_id == kakao_id).first()
         if not user:
-            return {"success": False, "message": "먼저 /시작 으로 게임을 시작해주세요."}
+            return {"success": False, "message": Messages.USER_NOT_FOUND}
 
         min_bet = GameConfig.MIN_BET
         if bet < min_bet:
@@ -386,7 +386,7 @@ class GameService:
 
         user = db.query(User).filter(User.kakao_id == kakao_id).first()
         if not user:
-            return {"success": False, "message": "먼저 /시작 으로 게임을 시작해주세요."}
+            return {"success": False, "message": Messages.USER_NOT_FOUND}
 
         min_bet = GameConfig.MIN_BET
         if bet < min_bet:

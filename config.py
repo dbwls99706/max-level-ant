@@ -385,3 +385,30 @@ class Messages:
     UNKNOWN_COMMAND = """❓ 알 수 없는 명령어입니다.
 
 /도움말 을 입력하여 명령어를 확인하세요."""
+
+    # 공통 에러 메시지
+    USER_NOT_FOUND = "먼저 /시작 으로 게임을 시작해주세요."
+
+    MARKET_CLOSED_TRADING = """🚫 현재 거래 불가능한 시간입니다.
+
+{status_msg}
+
+⏰ 거래 가능 시간:
+• 동시호가: 08:30~09:00
+• 정규장: 09:00~15:30
+• 시간외: 15:40~18:00"""
+
+    MARKET_CLOSED_GAME = """미니게임은 장 마감 후에만 가능해요!
+
+{status_msg}
+
+🎮 게임 가능 시간:
+• 평일 18:00 이후
+• 평일 08:30 이전
+• 주말/공휴일 종일"""
+
+    INSUFFICIENT_BALANCE_GAME = "잔액 부족! (보유: {cash:,}원, 필요: {bet:,}원)"
+
+    MIN_TRADE_AMOUNT_ERROR = "최소 {min_amount}주 이상 거래해야 합니다."
+
+    STOCK_PRICE_FAIL = "'{name}' 시세 조회 실패. 잠시 후 다시 시도해주세요."

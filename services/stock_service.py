@@ -156,8 +156,8 @@ class KISAPIClient:
                                 "change": float(item.get("prdy_ctrt", 0) or 0),
                                 "volume": int(item.get("acml_vol", 0) or 0),
                             })
-                        except:
-                            pass
+                        except (ValueError, TypeError, KeyError):
+                            continue
                     return results
 
         except Exception as e:

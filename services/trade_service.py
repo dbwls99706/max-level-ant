@@ -11,7 +11,7 @@ from models import User, Holding, Transaction
 from services.stock_service import StockService
 from services.user_service import UserService
 from services.mission_service import MissionService
-from config import GameConfig, is_trading_available, get_market_status_message
+from config import GameConfig, Messages, is_trading_available, get_market_status_message
 
 
 class TradeService:
@@ -67,7 +67,7 @@ class TradeService:
             return {
                 "success": False,
                 "error_code": "MARKET_CLOSED",
-                "message": f"🚫 현재 거래 불가능한 시간입니다.\n\n{status_msg}\n\n⏰ 거래 가능 시간:\n• 동시호가: 08:30~09:00\n• 정규장: 09:00~15:30\n• 시간외: 15:40~18:00"
+                "message": Messages.MARKET_CLOSED_TRADING.format(status_msg=status_msg)
             }
 
         # 유저 확인
@@ -202,7 +202,7 @@ class TradeService:
             return {
                 "success": False,
                 "error_code": "MARKET_CLOSED",
-                "message": f"🚫 현재 거래 불가능한 시간입니다.\n\n{status_msg}\n\n⏰ 거래 가능 시간:\n• 동시호가: 08:30~09:00\n• 정규장: 09:00~15:30\n• 시간외: 15:40~18:00"
+                "message": Messages.MARKET_CLOSED_TRADING.format(status_msg=status_msg)
             }
 
         # 유저 확인

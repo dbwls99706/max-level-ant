@@ -634,14 +634,14 @@ class CommandHandler:
             )
         
         msg = Messages.BALANCE.format(cash=cash)
-        
-        return KakaoResponse.quick_replies(
-            msg,
-            [
-                {"label": "💼 포트폴리오", "action": "message", "messageText": "/포트폴리오"},
-                {"label": "📈 인기종목", "action": "message", "messageText": "/인기"}
-            ]
-        )
+
+        buttons = [
+            {"label": "💼 포트폴리오", "action": "message", "messageText": "/포트폴리오"},
+            {"label": "📈 인기종목", "action": "message", "messageText": "/인기"}
+        ]
+        buttons.extend(self._get_game_buttons())
+
+        return KakaoResponse.quick_replies(msg, buttons)
     
     def handle_portfolio(self) -> Dict:
         """포트폴리오 조회"""
@@ -690,6 +690,9 @@ class CommandHandler:
 
         if not buttons:
             buttons = [{"label": "📊 인기종목", "action": "message", "messageText": "/인기"}]
+
+        # 장 마감 시 게임 버튼 추가
+        buttons.extend(self._get_game_buttons())
 
         return KakaoResponse.quick_replies(msg, buttons)
     
