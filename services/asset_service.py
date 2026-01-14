@@ -7,6 +7,7 @@
 from datetime import date, timedelta
 from typing import Dict, List, Set
 from sqlalchemy.orm import Session
+from sqlalchemy.exc import SQLAlchemyError
 
 from models import AssetHistory, User, Holding
 from services.stock_service import StockService
@@ -85,9 +86,9 @@ class AssetService:
             )
             db.add(history)
             db.commit()
-        except Exception as e:
+        except SQLAlchemyError as e:
             db.rollback()
-            logger.error(f"자산 기록 실패: {e}")
+            logger.error(f"자산 기록 DB 실패: {e}")
             return {"success": False, "message": "기록 저장 실패"}
 
         return {

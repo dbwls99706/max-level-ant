@@ -9,6 +9,7 @@ import json
 from datetime import date, datetime
 from typing import Dict, List, Optional, Tuple
 from sqlalchemy.orm import Session
+from sqlalchemy.exc import SQLAlchemyError
 
 from models import User
 from config import GameConfig
@@ -129,9 +130,9 @@ class MissionService:
                 user.daily_trade_count = 0
                 user.mission_completed = 0
                 db.commit()
-            except Exception as e:
+            except SQLAlchemyError as e:
                 db.rollback()
-                logger.error(f"일간 미션 리셋 실패: {e}")
+                logger.error(f"일간 미션 리셋 DB 실패: {e}")
 
         return {
             "completed": user.mission_completed == 1,
@@ -185,9 +186,9 @@ class MissionService:
 
             db.commit()
             return reward_info
-        except Exception as e:
+        except SQLAlchemyError as e:
             db.rollback()
-            logger.error(f"거래 횟수 증가 실패: {e}")
+            logger.error(f"거래 횟수 증가 DB 실패: {e}")
             return None
 
     @staticmethod
@@ -275,9 +276,9 @@ class MissionService:
         try:
             user.achievements = json.dumps(achieved_ids)
             db.commit()
-        except Exception as e:
+        except SQLAlchemyError as e:
             db.rollback()
-            logger.error(f"업적 저장 실패: {e}")
+            logger.error(f"업적 저장 DB 실패: {e}")
             return []
 
         return new_achievements

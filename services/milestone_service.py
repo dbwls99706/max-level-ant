@@ -6,6 +6,7 @@
 from datetime import datetime
 from typing import Dict, List, Optional
 from sqlalchemy.orm import Session
+from sqlalchemy.exc import SQLAlchemyError
 
 from models import Milestone, User
 from services.common import (
@@ -189,9 +190,9 @@ class MilestoneService:
         if achieved:
             try:
                 db.commit()
-            except Exception as e:
+            except SQLAlchemyError as e:
                 db.rollback()
-                logger.error(f"마일스톤 달성 기록 실패: {e}")
+                logger.error(f"마일스톤 달성 기록 DB 실패: {e}")
                 return []
 
         return achieved
@@ -277,9 +278,9 @@ class MilestoneService:
             user.cash = safe_add(user.cash, reward)
             milestone.reward_claimed = 1
             db.commit()
-        except Exception as e:
+        except SQLAlchemyError as e:
             db.rollback()
-            logger.error(f"마일스톤 보상 지급 실패: {e}")
+            logger.error(f"마일스톤 보상 지급 DB 실패: {e}")
             return error_response(
                 ErrorCode.INTERNAL_ERROR,
                 "보상 지급 중 오류가 발생했습니다."
@@ -328,9 +329,9 @@ class MilestoneService:
                 claimed_milestones.append(milestone_info["name"])
 
             db.commit()
-        except Exception as e:
+        except SQLAlchemyError as e:
             db.rollback()
-            logger.error(f"마일스톤 일괄 보상 지급 실패: {e}")
+            logger.error(f"마일스톤 일괄 보상 지급 DB 실패: {e}")
             return error_response(
                 ErrorCode.INTERNAL_ERROR,
                 "보상 지급 중 오류가 발생했습니다."

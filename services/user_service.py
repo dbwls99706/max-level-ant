@@ -9,6 +9,7 @@ import re
 from datetime import date, timedelta
 from typing import Optional, Tuple, Dict
 from sqlalchemy.orm import Session
+from sqlalchemy.exc import SQLAlchemyError
 
 from models import User
 from config import GameConfig
@@ -88,9 +89,9 @@ class UserService:
                         user.nickname = nickname
                         db.commit()
                         db.refresh(user)
-                    except Exception as e:
+                    except SQLAlchemyError as e:
                         db.rollback()
-                        logger.error(f"닉네임 업데이트 실패: {e}")
+                        logger.error(f"닉네임 업데이트 DB 실패: {e}")
             return user, False
 
         # 닉네임 검증
@@ -112,9 +113,9 @@ class UserService:
             db.add(user)
             db.commit()
             db.refresh(user)
-        except Exception as e:
+        except SQLAlchemyError as e:
             db.rollback()
-            logger.error(f"유저 생성 실패: {e}")
+            logger.error(f"유저 생성 DB 실패: {e}")
             # 재시도: 동시 생성 가능성
             user = cls.get_user(db, kakao_id)
             if user:
@@ -159,9 +160,9 @@ class UserService:
             user.cash = safe_add(user.cash, reward)
             db.commit()
             db.refresh(user)
-        except Exception as e:
+        except SQLAlchemyError as e:
             db.rollback()
-            logger.error(f"출석 체크 실패: {e}")
+            logger.error(f"출석 체크 DB 실패: {e}")
             return False, 0, 0, user.cash
 
         return True, reward, user.attendance_streak, user.cash
@@ -195,9 +196,9 @@ class UserService:
         try:
             user.cash = new_cash
             db.commit()
-        except Exception as e:
+        except SQLAlchemyError as e:
             db.rollback()
-            logger.error(f"현금 업데이트 실패: {e}")
+            logger.error(f"현금 업데이트 DB 실패: {e}")
             return False
 
         return True
@@ -276,9 +277,9 @@ class UserService:
             user.nickname_change_count = change_count + 1
             user.last_nickname_change = today
             db.commit()
-        except Exception as e:
+        except SQLAlchemyError as e:
             db.rollback()
-            logger.error(f"닉네임 변경 실패: {e}")
+            logger.error(f"닉네임 변경 DB 실패: {e}")
             return False, "❌ 닉네임 변경 중 오류가 발생했습니다."
 
         return True, f"✅ 닉네임이 '{new_nickname}'(으)로 설정되었습니다!\n{remaining_msg}"
