@@ -66,6 +66,7 @@ class TradeService:
             status_msg = get_market_status_message()
             return {
                 "success": False,
+                "error_code": "MARKET_CLOSED",
                 "message": f"🚫 현재 거래 불가능한 시간입니다.\n\n{status_msg}\n\n⏰ 거래 가능 시간:\n• 동시호가: 08:30~09:00\n• 정규장: 09:00~15:30\n• 시간외: 15:40~18:00"
             }
 
@@ -200,6 +201,7 @@ class TradeService:
             status_msg = get_market_status_message()
             return {
                 "success": False,
+                "error_code": "MARKET_CLOSED",
                 "message": f"🚫 현재 거래 불가능한 시간입니다.\n\n{status_msg}\n\n⏰ 거래 가능 시간:\n• 동시호가: 08:30~09:00\n• 정규장: 09:00~15:30\n• 시간외: 15:40~18:00"
             }
 

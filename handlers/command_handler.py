@@ -108,7 +108,7 @@ class CommandHandler:
         elif cmd.startswith("/슬롯머신") or cmd.startswith("/ㅅㄹㅁ"):
             return self.handle_slot()
 
-        elif cmd.startswith("/동전") or cmd.startswith("/코인"):
+        elif cmd.startswith("/동전") or cmd.startswith("/코인") or cmd.startswith("/ㄷㅈ"):
             return self.handle_coin()
 
         elif cmd.startswith("/하이로우") or cmd.startswith("/ㅎㅇㄹㅇ"):
@@ -325,7 +325,7 @@ class CommandHandler:
 
         if not result["success"]:
             # 거래 불가 시간 (장 마감) - 미니게임 안내
-            if "거래 불가능" in result["message"]:
+            if result.get("error_code") == "MARKET_CLOSED":
                 return KakaoResponse.quick_replies(
                     result["message"],
                     [
@@ -427,7 +427,7 @@ class CommandHandler:
 
         if not result["success"]:
             # 거래 불가 시간 (장 마감) - 미니게임 안내
-            if "거래 불가능" in result["message"]:
+            if result.get("error_code") == "MARKET_CLOSED":
                 return KakaoResponse.quick_replies(
                     result["message"],
                     [
@@ -516,7 +516,7 @@ class CommandHandler:
 
         if not result["success"]:
             # 거래 불가 시간 (장 마감) - 미니게임 안내
-            if "거래 불가능" in result["message"]:
+            if result.get("error_code") == "MARKET_CLOSED":
                 return KakaoResponse.quick_replies(
                     result["message"],
                     [
@@ -580,7 +580,7 @@ class CommandHandler:
 
         if not result["success"]:
             # 거래 불가 시간 (장 마감) - 미니게임 안내
-            if "거래 불가능" in result["message"]:
+            if result.get("error_code") == "MARKET_CLOSED":
                 return KakaoResponse.quick_replies(
                     result["message"],
                     [
@@ -1102,8 +1102,8 @@ class CommandHandler:
             return KakaoResponse.quick_replies(
                 result["message"],
                 [
-                    {"label": "🎰 슬롯머신", "action": "message", "messageText": "/슬롯머신 10000"},
-                    {"label": "🪙 동전던지기", "action": "message", "messageText": "/동전 10000"},
+                    {"label": "🎰 슬롯머신", "action": "message", "messageText": "/슬롯머신 50000"},
+                    {"label": "🪙 동전던지기", "action": "message", "messageText": "/동전 50000 앞"},
                     {"label": "🚀 급등주", "action": "message", "messageText": "/급등"}
                 ]
             )
