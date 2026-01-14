@@ -7,8 +7,6 @@
 import re
 from typing import Tuple
 
-from config import GameConfig
-
 
 def get_streak_display(streak: int) -> str:
     """
@@ -104,51 +102,6 @@ def get_tier_title(total_asset: int) -> str:
         return "🌱 초보 투자자"
     else:
         return "😢 파산 위기"
-
-
-def validate_quantity(quantity_str: str) -> Tuple[bool, int, str]:
-    """
-    거래 수량 유효성 검사
-    Returns: (is_valid, quantity, error_message)
-    """
-    try:
-        quantity = int(quantity_str.replace(",", ""))
-    except ValueError:
-        return False, 0, "수량은 숫자로 입력해주세요."
-
-    if quantity <= 0:
-        return False, 0, "수량은 1 이상이어야 합니다."
-
-    if quantity > GameConfig.MAX_QUANTITY:
-        return False, 0, f"한 번에 최대 {GameConfig.MAX_QUANTITY:,}주까지 거래 가능합니다."
-
-    return True, quantity, ""
-
-
-def validate_bet_amount(amount_str: str, min_bet: int = None, max_bet: int = None) -> Tuple[bool, int, str]:
-    """
-    배팅 금액 유효성 검사
-    Returns: (is_valid, amount, error_message)
-    """
-    if min_bet is None:
-        min_bet = GameConfig.MIN_BET
-
-    try:
-        amount = int(amount_str.replace(",", ""))
-    except ValueError:
-        return False, 0, "금액은 숫자로 입력해주세요."
-
-    if amount < min_bet:
-        return False, 0, f"최소 배팅금은 {min_bet:,}원입니다."
-
-    if max_bet and amount > max_bet:
-        return False, 0, f"최대 배팅금은 {max_bet:,}원입니다."
-
-    # 너무 큰 금액 방지 (100억 이상)
-    if amount > 10_000_000_000:
-        return False, 0, "배팅 금액이 너무 큽니다."
-
-    return True, amount, ""
 
 
 def sanitize_input(text: str, max_length: int = 100) -> str:
