@@ -7,7 +7,6 @@ from datetime import datetime, timedelta
 from typing import Optional, Dict, List
 from cachetools import TTLCache
 import requests
-import json
 
 from config import CacheConfig, KISConfig
 from database import SessionLocal
@@ -156,8 +155,8 @@ class KISAPIClient:
                                 "change": float(item.get("prdy_ctrt", 0) or 0),
                                 "volume": int(item.get("acml_vol", 0) or 0),
                             })
-                        except:
-                            pass
+                        except (ValueError, TypeError, KeyError):
+                            continue
                     return results
 
         except Exception as e:

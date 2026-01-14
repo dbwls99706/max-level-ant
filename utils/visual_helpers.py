@@ -7,6 +7,8 @@
 import re
 from typing import Tuple
 
+from config import GameConfig
+
 
 def get_streak_display(streak: int) -> str:
     """
@@ -145,8 +147,8 @@ def validate_quantity(quantity_str: str) -> Tuple[bool, int, str]:
     if quantity <= 0:
         return False, 0, "❌ 수량은 1 이상이어야 합니다."
 
-    if quantity > 1_000_000:
-        return False, 0, "❌ 한 번에 최대 100만주까지 거래 가능합니다."
+    if quantity > GameConfig.MAX_QUANTITY:
+        return False, 0, f"❌ 한 번에 최대 {GameConfig.MAX_QUANTITY:,}주까지 거래 가능합니다."
 
     return True, quantity, ""
 

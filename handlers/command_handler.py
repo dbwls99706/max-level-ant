@@ -46,11 +46,7 @@ class CommandHandler:
         
         elif cmd.startswith("/출석") or cmd.startswith("/ㅊㅅ"):
             return self.handle_attendance()
-        
-        # 광고 기능 비활성화 (수익 발생 방지)
-        elif cmd.startswith("/광고") or cmd.startswith("/ㄱㄱ"):
-            return KakaoResponse.simple_text("🚫 광고 기능은 현재 비활성화되어 있습니다.")
-        
+
         elif cmd.startswith("/시세") or cmd.startswith("/ㅅㅅ"):
             return self.handle_price()
         
@@ -60,10 +56,10 @@ class CommandHandler:
         elif cmd.startswith("/매도") or cmd.startswith("/ㅁㄷ"):
             return self.handle_sell()
         
-        elif cmd.startswith("/전량매수"):
+        elif cmd.startswith("/전량매수") or cmd.startswith("/ㅈㅁㅅ"):
             return self.handle_buy_max()
-        
-        elif cmd.startswith("/전량매도"):
+
+        elif cmd.startswith("/전량매도") or cmd.startswith("/ㅈㅁㄷ"):
             return self.handle_sell_all()
         
         elif cmd.startswith("/잔고") or cmd.startswith("/ㅈㄱ"):
@@ -75,16 +71,16 @@ class CommandHandler:
         elif cmd.startswith("/랭킹") or cmd.startswith("/ㄹㅋ"):
             return self.handle_ranking()
         
-        elif cmd.startswith("/내순위"):
+        elif cmd.startswith("/내순위") or cmd.startswith("/ㄴㅅㅇ"):
             return self.handle_my_rank()
-        
-        elif cmd.startswith("/검색"):
+
+        elif cmd.startswith("/검색") or cmd.startswith("/ㄱㅅ"):
             return self.handle_search()
-        
-        elif cmd.startswith("/인기") or cmd.startswith("/거래량"):
+
+        elif cmd.startswith("/인기") or cmd.startswith("/거래량") or cmd.startswith("/ㅇㄱ"):
             return self.handle_top_volume()
 
-        elif cmd.startswith("/급등") or cmd.startswith("/상승"):
+        elif cmd.startswith("/급등") or cmd.startswith("/상승") or cmd.startswith("/ㄱㄷ"):
             return self.handle_top_gainers()
 
         elif cmd.startswith("/급락") or cmd.startswith("/하락"):
@@ -112,7 +108,7 @@ class CommandHandler:
         elif cmd.startswith("/슬롯머신") or cmd.startswith("/ㅅㄹㅁ"):
             return self.handle_slot()
 
-        elif cmd.startswith("/동전") or cmd.startswith("/코인"):
+        elif cmd.startswith("/동전") or cmd.startswith("/코인") or cmd.startswith("/ㄷㅈ"):
             return self.handle_coin()
 
         elif cmd.startswith("/하이로우") or cmd.startswith("/ㅎㅇㄹㅇ"):
@@ -174,7 +170,7 @@ class CommandHandler:
         if is_new:
             welcome_msg = Messages.WELCOME.format(initial_cash=GameConfig.INITIAL_CASH)
             buttons = [
-                {"label": "📅 출석 +200만", "action": "message", "messageText": "/출석"},
+                {"label": "📅 출석 +30만", "action": "message", "messageText": "/출석"},
                 {"label": "🎫 무료복권", "action": "message", "messageText": "/복권"},
                 {"label": "🚀 급등주", "action": "message", "messageText": "/급등"},
             ]
@@ -329,7 +325,7 @@ class CommandHandler:
 
         if not result["success"]:
             # 거래 불가 시간 (장 마감) - 미니게임 안내
-            if "거래 불가능" in result["message"]:
+            if result.get("error_code") == "MARKET_CLOSED":
                 return KakaoResponse.quick_replies(
                     result["message"],
                     [
@@ -431,7 +427,7 @@ class CommandHandler:
 
         if not result["success"]:
             # 거래 불가 시간 (장 마감) - 미니게임 안내
-            if "거래 불가능" in result["message"]:
+            if result.get("error_code") == "MARKET_CLOSED":
                 return KakaoResponse.quick_replies(
                     result["message"],
                     [
@@ -520,7 +516,7 @@ class CommandHandler:
 
         if not result["success"]:
             # 거래 불가 시간 (장 마감) - 미니게임 안내
-            if "거래 불가능" in result["message"]:
+            if result.get("error_code") == "MARKET_CLOSED":
                 return KakaoResponse.quick_replies(
                     result["message"],
                     [
@@ -584,7 +580,7 @@ class CommandHandler:
 
         if not result["success"]:
             # 거래 불가 시간 (장 마감) - 미니게임 안내
-            if "거래 불가능" in result["message"]:
+            if result.get("error_code") == "MARKET_CLOSED":
                 return KakaoResponse.quick_replies(
                     result["message"],
                     [
@@ -638,14 +634,14 @@ class CommandHandler:
             )
         
         msg = Messages.BALANCE.format(cash=cash)
-        
-        return KakaoResponse.quick_replies(
-            msg,
-            [
-                {"label": "💼 포트폴리오", "action": "message", "messageText": "/포트폴리오"},
-                {"label": "📈 인기종목", "action": "message", "messageText": "/인기"}
-            ]
-        )
+
+        buttons = [
+            {"label": "💼 포트폴리오", "action": "message", "messageText": "/포트폴리오"},
+            {"label": "📈 인기종목", "action": "message", "messageText": "/인기"}
+        ]
+        buttons.extend(self._get_game_buttons())
+
+        return KakaoResponse.quick_replies(msg, buttons)
     
     def handle_portfolio(self) -> Dict:
         """포트폴리오 조회"""
@@ -694,6 +690,9 @@ class CommandHandler:
 
         if not buttons:
             buttons = [{"label": "📊 인기종목", "action": "message", "messageText": "/인기"}]
+
+        # 장 마감 시 게임 버튼 추가
+        buttons.extend(self._get_game_buttons())
 
         return KakaoResponse.quick_replies(msg, buttons)
     
@@ -791,6 +790,7 @@ class CommandHandler:
         # 검색 결과 버튼
         buttons = [{"label": f"📊 {r['name']}", "action": "message", "messageText": f"/시세 {r['name']}"} for r in results[:3]]
         buttons.append({"label": "🚀 급등주", "action": "message", "messageText": "/급등"})
+        buttons.extend(self._get_game_buttons())
 
         return KakaoResponse.quick_replies(msg, buttons)
     
@@ -991,6 +991,7 @@ class CommandHandler:
                 t = t[:35] + "..."
             msg += f"\n{i}. {t}"
 
+        buttons.extend(self._get_game_buttons())
         return KakaoResponse.quick_replies(msg, buttons)
 
     def handle_mission(self) -> Dict:
@@ -1092,7 +1093,8 @@ class CommandHandler:
                 {"label": "🎫 복권", "action": "message", "messageText": "/복권"},
                 {"label": "🎰 슬롯머신", "action": "message", "messageText": "/슬롯머신 50000"},
                 {"label": "🎡 룰렛", "action": "message", "messageText": "/룰렛 50000 빨강"},
-                {"label": "🚀 급등주", "action": "message", "messageText": "/급등"}
+                {"label": "🪙 동전던지기", "action": "message", "messageText": "/동전 50000 앞"},
+                {"label": "🎲 하이로우", "action": "message", "messageText": "/하이로우 50000 높"}
             ]
         )
 
@@ -1105,8 +1107,8 @@ class CommandHandler:
             return KakaoResponse.quick_replies(
                 result["message"],
                 [
-                    {"label": "🎰 슬롯머신", "action": "message", "messageText": "/슬롯머신 10000"},
-                    {"label": "🪙 동전던지기", "action": "message", "messageText": "/동전 10000"},
+                    {"label": "🎰 슬롯머신", "action": "message", "messageText": "/슬롯머신 50000"},
+                    {"label": "🪙 동전던지기", "action": "message", "messageText": "/동전 50000 앞"},
                     {"label": "🚀 급등주", "action": "message", "messageText": "/급등"}
                 ]
             )
@@ -1244,7 +1246,7 @@ class CommandHandler:
                 ]
             )
 
-        choice = parts[2]
+        choice = parts[2].strip()
         result = GameService.play_coin_flip(self.db, self.kakao_id, bet, choice)
 
         if not result["success"]:
@@ -1309,7 +1311,7 @@ class CommandHandler:
                 ]
             )
 
-        choice = parts[2]
+        choice = parts[2].strip()
         result = GameService.play_high_low(self.db, self.kakao_id, bet, choice)
 
         if not result["success"]:
@@ -1387,7 +1389,7 @@ class CommandHandler:
                 ]
             )
 
-        choice = parts[2]
+        choice = parts[2].strip()
         result = GameService.play_roulette(self.db, self.kakao_id, bet, choice)
 
         if not result["success"]:
