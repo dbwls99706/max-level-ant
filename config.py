@@ -320,10 +320,126 @@ class GameConfig:
     LOTTERY_COST = 10_000  # 복권 가격
     MAX_LOTTERY_PER_DAY = 5  # 복권 1일 최대 횟수
     MIN_BET = 10_000  # 미니게임 최소 배팅금
+    MAX_BET = 10_000_000_000  # 최대 배팅금 100억 (오버플로우 방지)
     DEFAULT_BET = 50_000  # 미니게임 기본 배팅금
 
     # 거래 설정
     MAX_QUANTITY = 1_000_000  # 1회 최대 거래 수량
+    MAX_CASH = 10_000_000_000_000  # 최대 현금 10조 (오버플로우 방지)
+
+
+# ===========================================
+# 게임 확률 설정 (기대값 검증 포함)
+# ===========================================
+class GameProbability:
+    """
+    게임 확률 상수 (기대값 검증 포함)
+
+    모든 확률은 합이 1.0이어야 하며,
+    기대값(EV)은 합리적인 범위 내에 있어야 합니다.
+    """
+
+    # 복권 확률 (기대값 약 90%)
+    # 각 티어: (확률, 최소보상, 최대보상)
+    LOTTERY = {
+        "1등": {"prob": 0.002, "min_reward": 500_000, "max_reward": 1_000_000},  # 0.2%
+        "2등": {"prob": 0.018, "min_reward": 50_000, "max_reward": 100_000},     # 1.8%
+        "3등": {"prob": 0.05, "min_reward": 15_000, "max_reward": 30_000},       # 5%
+        "4등": {"prob": 0.10, "min_reward": 8_000, "max_reward": 12_000},        # 10%
+        "5등": {"prob": 0.30, "min_reward": 10_000, "max_reward": 10_000},       # 30% (본전)
+        "꽝": {"prob": 0.53, "min_reward": 0, "max_reward": 1_000},              # 53%
+    }
+
+    # 슬롯머신 확률
+    SLOT_SYMBOLS = ["🍒", "🍋", "🍊", "🍇", "💎", "7️⃣", "🚀"]
+
+    # (심볼, 배수, 확률)
+    SLOT_PAYOUTS = [
+        ("7️⃣", 50, 0.0005),   # 0.05% - 잭팟 (희귀)
+        ("💎", 20, 0.0015),    # 0.15% (희귀)
+        ("🚀", 10, 0.003),     # 0.3% (희귀)
+        ("🍇", 5, 0.012),      # 1.2%
+        ("🍊", 3, 0.025),      # 2.5%
+        ("🍋", 2, 0.0575),     # 5.75%
+        ("🍒", 1.5, 0.10),     # 10%
+        ("MATCH2", 1, 0.35),   # 35% - 2개 일치 (본전)
+        ("LOSE", 0, 0.4505),   # 45.05% - 꽝
+    ]
+
+    # 룰렛 확률 (기대값 90%)
+    ROULETTE = {
+        "빨강": {"prob": 0.45, "multiplier": 2},
+        "검정": {"prob": 0.45, "multiplier": 2},
+        "초록": {"prob": 0.10, "multiplier": 9},
+    }
+
+    # 하이로우 (기대값 90%)
+    HIGHLOW_MULTIPLIER = 1.8  # 맞추면 1.8배
+
+    # 동전던지기 (기대값 100%)
+    COINFLIP_MULTIPLIER = 2.0  # 맞추면 2배
+
+    @classmethod
+    def validate_probabilities(cls) -> bool:
+        """모든 확률이 유효한지 검증"""
+        errors = []
+
+        # 복권 확률 합계 검증
+        lottery_sum = sum(tier["prob"] for tier in cls.LOTTERY.values())
+        if not (0.999 <= lottery_sum <= 1.001):
+            errors.append(f"복권 확률 합계 오류: {lottery_sum}")
+
+        # 슬롯 확률 합계 검증
+        slot_sum = sum(prob for _, _, prob in cls.SLOT_PAYOUTS)
+        if not (0.999 <= slot_sum <= 1.001):
+            errors.append(f"슬롯 확률 합계 오류: {slot_sum}")
+
+        # 룰렛 확률 합계 검증
+        roulette_sum = sum(color["prob"] for color in cls.ROULETTE.values())
+        if not (0.999 <= roulette_sum <= 1.001):
+            errors.append(f"룰렛 확률 합계 오류: {roulette_sum}")
+
+        if errors:
+            for error in errors:
+                print(f"⚠️ 확률 검증 실패: {error}")
+            return False
+
+        print("✅ 게임 확률 검증 완료")
+        return True
+
+    @classmethod
+    def calculate_expected_value(cls, game: str) -> float:
+        """게임별 기대값 계산"""
+        if game == "lottery":
+            # 복권 기대값 (10,000원 기준)
+            cost = GameConfig.LOTTERY_COST
+            ev = 0
+            for tier in cls.LOTTERY.values():
+                avg_reward = (tier["min_reward"] + tier["max_reward"]) / 2
+                ev += tier["prob"] * avg_reward
+            return (ev / cost) * 100  # % 반환
+
+        elif game == "slot":
+            # 슬롯 기대값
+            ev = sum(mult * prob for _, mult, prob in cls.SLOT_PAYOUTS)
+            return ev * 100  # % 반환
+
+        elif game == "roulette":
+            # 룰렛 기대값
+            ev = sum(color["prob"] * color["multiplier"] for color in cls.ROULETTE.values())
+            return ev * 100  # % 반환
+
+        elif game == "highlow":
+            # 하이로우 기대값 (50은 무승부)
+            # P(win) = 49/99 (1-49 또는 51-100), P(draw) = 1/100
+            p_win = 49 / 100
+            return p_win * cls.HIGHLOW_MULTIPLIER * 100
+
+        elif game == "coinflip":
+            # 동전던지기 기대값
+            return 0.5 * cls.COINFLIP_MULTIPLIER * 100
+
+        return 0
 
 
 # ===========================================

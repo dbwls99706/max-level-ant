@@ -1,15 +1,19 @@
 """
-주식 시세 조회 서비스
+주식 시세 조회 서비스 (개선)
 - 한국투자증권 KIS API 사용 (공식 API)
 - 실시간 주가, 거래량, 등락률 조회
+- 개선된 캐시 전략 (TTL + 무효화)
 """
 from datetime import datetime, timedelta
-from typing import Optional, Dict, List
+from typing import Optional, Dict, List, Set
 from cachetools import TTLCache
 import requests
 
 from config import CacheConfig, KISConfig
 from database import SessionLocal
+from utils import get_handler_logger
+
+logger = get_handler_logger()
 
 
 class KISAPIClient:
@@ -22,7 +26,7 @@ class KISAPIClient:
     def get_access_token(cls) -> Optional[str]:
         """OAuth 접근 토큰 발급 (24시간 유효)"""
         if not KISConfig.is_configured():
-            print("❌ KIS API 설정이 없습니다. 환경변수를 확인하세요.")
+            logger.warning("KIS API 설정이 없습니다. 환경변수를 확인하세요.")
             return None
 
         # 토큰이 아직 유효하면 재사용
@@ -46,14 +50,14 @@ class KISAPIClient:
                 cls._access_token = data.get("access_token")
                 # 토큰 만료시간 설정 (23시간 - 여유 1시간)
                 cls._token_expires_at = datetime.now() + timedelta(hours=23)
-                print("✅ KIS API 토큰 발급 성공")
+                logger.info("KIS API 토큰 발급 성공")
                 return cls._access_token
             else:
-                print(f"❌ KIS 토큰 발급 실패: {resp.status_code} - {resp.text}")
+                logger.error(f"KIS 토큰 발급 실패: {resp.status_code}")
                 return None
 
         except Exception as e:
-            print(f"❌ KIS 토큰 발급 에러: {e}")
+            logger.error(f"KIS 토큰 발급 에러: {e}")
             return None
 
     @classmethod
@@ -105,10 +109,10 @@ class KISAPIClient:
                         "volume": int(output.get("acml_vol", 0)),
                     }
                 else:
-                    print(f"❌ KIS API 에러: {data.get('msg1')}")
+                    logger.warning(f"KIS API 에러: {data.get('msg1')}")
 
         except Exception as e:
-            print(f"❌ 주식 시세 조회 실패 ({stock_code}): {e}")
+            logger.error(f"주식 시세 조회 실패 ({stock_code}): {e}")
 
         return None
 
@@ -120,7 +124,7 @@ class KISAPIClient:
         """
         headers = cls._get_headers("FHPST01710000")
         if not headers:
-            print("❌ 거래량 순위: 헤더 생성 실패")
+            logger.warning("거래량 순위: 헤더 생성 실패")
             return []
 
         try:
@@ -160,7 +164,7 @@ class KISAPIClient:
                     return results
 
         except Exception as e:
-            print(f"❌ 거래량 순위 조회 실패: {e}")
+            logger.error(f"거래량 순위 조회 실패: {e}")
 
         return []
 
@@ -211,7 +215,7 @@ class KISAPIClient:
                     }
 
         except Exception as e:
-            print(f"❌ 지수 조회 실패 ({index_code}): {e}")
+            logger.error(f"지수 조회 실패 ({index_code}): {e}")
 
         return None
 
@@ -306,11 +310,11 @@ class StockService:
                     cls._dynamic_stocks_by_name[stock.stock_name] = stock.stock_code
                     cls._dynamic_stocks_by_code[stock.stock_code] = stock.stock_name
                 cls._cache_loaded = True
-                print(f"✅ 종목 캐시 로드 완료: {len(cached_stocks)}개")
+                logger.info(f"종목 캐시 로드 완료: {len(cached_stocks)}개")
             finally:
                 db.close()
         except Exception as e:
-            print(f"⚠️ 종목 캐시 로드 실패: {e}")
+            logger.warning(f"종목 캐시 로드 실패: {e}")
 
     @classmethod
     def _cache_stock(cls, code: str, name: str):
