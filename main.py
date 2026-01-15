@@ -84,9 +84,9 @@ async def root():
     }
 
 
-@app.get("/health")
+@app.api_route("/health", methods=["GET", "HEAD"])
 async def health_check():
-    """헬스체크"""
+    """헬스체크 (UptimeRobot 등 모니터링 서비스용)"""
     return {"status": "healthy"}
 
 
