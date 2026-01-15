@@ -8,9 +8,6 @@ from .visual_helpers import (
     get_rank_emoji,
     get_profit_emoji,
     get_tier_title,
-    validate_nickname,
-    validate_quantity,
-    validate_bet_amount,
     sanitize_input,
     format_money
 )
@@ -30,9 +27,6 @@ __all__ = [
     "get_rank_emoji",
     "get_profit_emoji",
     "get_tier_title",
-    "validate_nickname",
-    "validate_quantity",
-    "validate_bet_amount",
     "sanitize_input",
     "format_money",
     "setup_logger",

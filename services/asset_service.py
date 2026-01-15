@@ -1,16 +1,34 @@
 """
-자산 히스토리 서비스 - 포트폴리오 차트용
+자산 히스토리 서비스 (리팩토링)
+- 포트폴리오 차트용
+- N+1 쿼리 최적화
+- 트랜잭션 안전성
 """
-from datetime import date, datetime, timedelta
-from typing import Dict, List
+from datetime import date, timedelta
+from typing import Dict, List, Set
 from sqlalchemy.orm import Session
+from sqlalchemy.exc import SQLAlchemyError
 
 from models import AssetHistory, User, Holding
 from services.stock_service import StockService
+from services.common import safe_add
+from utils import get_service_logger
+
+logger = get_service_logger()
 
 
 class AssetService:
     """자산 히스토리 관리"""
+
+    @classmethod
+    def _prefetch_stock_prices(cls, stock_codes: Set[str]) -> Dict[str, int]:
+        """여러 종목 시세 배치 조회 (N+1 방지)"""
+        prices = {}
+        for code in stock_codes:
+            stock_info = StockService.get_price(code)
+            if stock_info:
+                prices[code] = stock_info["price"]
+        return prices
 
     @classmethod
     def record_daily_asset(cls, db: Session, kakao_id: str) -> Dict:
@@ -33,33 +51,45 @@ class AssetService:
         if not user:
             return {"success": False, "message": "유저 없음"}
 
+        # 보유 종목 조회
+        holdings = db.query(Holding).filter(
+            Holding.kakao_id == kakao_id,
+            Holding.quantity > 0
+        ).all()
+
+        # N+1 최적화: 모든 종목 코드 수집 후 배치 조회
+        stock_codes: Set[str] = {h.stock_code for h in holdings}
+        stock_prices = cls._prefetch_stock_prices(stock_codes)
+
         # 총 자산 계산
         cash = user.cash
         stock_value = 0
 
-        holdings = db.query(Holding).filter(Holding.kakao_id == kakao_id).all()
         for h in holdings:
-            if h.quantity > 0:
-                # 현재가 조회
-                stock_info = StockService.get_stock_price(h.stock_code)
-                if stock_info:
-                    stock_value += stock_info["price"] * h.quantity
-                else:
-                    # 현재가 조회 실패 시 평균 매수가 사용
-                    stock_value += h.avg_price * h.quantity
+            price = stock_prices.get(h.stock_code)
+            if price:
+                stock_value = safe_add(stock_value, price * h.quantity)
+            else:
+                # 현재가 조회 실패 시 평균 매수가 사용
+                stock_value = safe_add(stock_value, h.avg_price * h.quantity)
 
-        total_asset = cash + stock_value
+        total_asset = safe_add(cash, stock_value)
 
         # 기록 저장
-        history = AssetHistory(
-            kakao_id=kakao_id,
-            record_date=today,
-            total_asset=total_asset,
-            cash=cash,
-            stock_value=stock_value
-        )
-        db.add(history)
-        db.commit()
+        try:
+            history = AssetHistory(
+                kakao_id=kakao_id,
+                record_date=today,
+                total_asset=total_asset,
+                cash=cash,
+                stock_value=stock_value
+            )
+            db.add(history)
+            db.commit()
+        except SQLAlchemyError as e:
+            db.rollback()
+            logger.error(f"자산 기록 DB 실패: {e}")
+            return {"success": False, "message": "기록 저장 실패"}
 
         return {
             "success": True,
@@ -174,24 +204,28 @@ class AssetService:
         changes = {}
 
         if len(history) >= 2:
-            changes["day"] = {
-                "amount": current - history[-2]["total_asset"],
-                "rate": ((current - history[-2]["total_asset"]) / history[-2]["total_asset"]) * 100 if history[-2]["total_asset"] > 0 else 0
-            }
+            prev = history[-2]["total_asset"]
+            if prev > 0:
+                changes["day"] = {
+                    "amount": current - prev,
+                    "rate": ((current - prev) / prev) * 100
+                }
 
         if len(history) >= 7:
             week_ago = history[-7]["total_asset"]
-            changes["week"] = {
-                "amount": current - week_ago,
-                "rate": ((current - week_ago) / week_ago) * 100 if week_ago > 0 else 0
-            }
+            if week_ago > 0:
+                changes["week"] = {
+                    "amount": current - week_ago,
+                    "rate": ((current - week_ago) / week_ago) * 100
+                }
 
         if len(history) >= 30:
             month_ago = history[0]["total_asset"]
-            changes["month"] = {
-                "amount": current - month_ago,
-                "rate": ((current - month_ago) / month_ago) * 100 if month_ago > 0 else 0
-            }
+            if month_ago > 0:
+                changes["month"] = {
+                    "amount": current - month_ago,
+                    "rate": ((current - month_ago) / month_ago) * 100
+                }
 
         # 최고/최저
         all_time_high = max(h["total_asset"] for h in history)

@@ -3,7 +3,11 @@
 """
 from sqlalchemy import create_engine, text, inspect
 from sqlalchemy.orm import sessionmaker, declarative_base
+from sqlalchemy.exc import SQLAlchemyError
 from config import DATABASE_URL
+from utils import get_handler_logger
+
+logger = get_handler_logger()
 
 # SQLite를 사용할 경우 check_same_thread 옵션 필요
 connect_args = {}
@@ -55,7 +59,7 @@ def init_db():
 
     # 테이블 생성
     Base.metadata.create_all(bind=engine)
-    print("✅ 데이터베이스 테이블 생성 완료!")
+    logger.info("데이터베이스 테이블 생성 완료")
 
     # 기존 테이블에 누락된 컬럼 추가 (마이그레이션)
     _migrate_db()
@@ -88,6 +92,7 @@ def _migrate_db():
         'last_nickname_change': 'DATE',
     }
 
+    added_count = 0
     with engine.connect() as conn:
         for col_name, col_type in new_columns.items():
             if col_name not in existing_columns:
@@ -95,11 +100,15 @@ def _migrate_db():
                     sql = f'ALTER TABLE users ADD COLUMN {col_name} {col_type}'
                     conn.execute(text(sql))
                     conn.commit()
-                    print(f"✅ 컬럼 추가됨: users.{col_name}")
-                except Exception as e:
-                    print(f"⚠️ 컬럼 추가 실패 ({col_name}): {e}")
+                    logger.info(f"컬럼 추가됨: users.{col_name}")
+                    added_count += 1
+                except SQLAlchemyError as e:
+                    logger.warning(f"컬럼 추가 실패 ({col_name}): {e}")
 
-    print("✅ 데이터베이스 마이그레이션 완료!")
+    if added_count > 0:
+        logger.info(f"데이터베이스 마이그레이션 완료 ({added_count}개 컬럼 추가)")
+    else:
+        logger.debug("마이그레이션: 추가할 컬럼 없음")
 
 
 def reset_db():
@@ -111,10 +120,10 @@ def reset_db():
 
     # 모든 테이블 삭제
     Base.metadata.drop_all(bind=engine)
-    print("🗑️ 모든 테이블 삭제 완료!")
+    logger.warning("모든 테이블 삭제됨")
 
     # 테이블 재생성
     Base.metadata.create_all(bind=engine)
-    print("✅ 테이블 재생성 완료!")
+    logger.info("테이블 재생성 완료")
 
     return True

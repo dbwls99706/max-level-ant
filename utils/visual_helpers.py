@@ -5,9 +5,6 @@
 - 등급별 이모지
 """
 import re
-from typing import Tuple
-
-from config import GameConfig
 
 
 def get_streak_display(streak: int) -> str:
@@ -104,94 +101,6 @@ def get_tier_title(total_asset: int) -> str:
         return "🌱 초보 투자자"
     else:
         return "😢 파산 위기"
-
-
-def validate_nickname(nickname: str) -> Tuple[bool, str]:
-    """
-    닉네임 유효성 검사 (강화된 검증)
-    Returns: (is_valid, error_message)
-    """
-    if not nickname:
-        return False, "닉네임을 입력해주세요."
-
-    nickname = nickname.strip()
-
-    # 길이 체크
-    if len(nickname) < 2:
-        return False, "닉네임은 2자 이상이어야 합니다."
-    if len(nickname) > 10:
-        return False, "닉네임은 10자 이하로 설정해주세요."
-
-    # XSS 방지 - 위험한 문자 체크
-    dangerous_chars = ['<', '>', '"', "'", '&', '\\', '/', ';', '`', '{', '}']
-    if any(char in nickname for char in dangerous_chars):
-        return False, "특수문자는 사용할 수 없습니다."
-
-    # 허용 문자 체크 (한글, 영문, 숫자, 언더스코어)
-    if not re.match(r'^[가-힣a-zA-Z0-9_]+$', nickname):
-        return False, "닉네임은 한글/영문/숫자/언더스코어만 사용 가능합니다."
-
-    # 공백만 있는 경우 체크
-    if not nickname.replace("_", "").strip():
-        return False, "유효한 닉네임을 입력해주세요."
-
-    # 금칙어 체크
-    forbidden = ["admin", "관리자", "운영자", "시스템", "test", "주식왕", "root", "system"]
-    if nickname.lower() in forbidden:
-        return False, f"'{nickname}'은(는) 사용할 수 없는 닉네임입니다."
-
-    # 금칙어 포함 여부 체크
-    forbidden_contains = ["관리", "운영", "어드민", "admin"]
-    for word in forbidden_contains:
-        if word.lower() in nickname.lower():
-            return False, f"'{word}'이(가) 포함된 닉네임은 사용할 수 없습니다."
-
-    return True, ""
-
-
-def validate_quantity(quantity_str: str) -> Tuple[bool, int, str]:
-    """
-    거래 수량 유효성 검사
-    Returns: (is_valid, quantity, error_message)
-    """
-    try:
-        quantity = int(quantity_str.replace(",", ""))
-    except ValueError:
-        return False, 0, "수량은 숫자로 입력해주세요."
-
-    if quantity <= 0:
-        return False, 0, "수량은 1 이상이어야 합니다."
-
-    if quantity > GameConfig.MAX_QUANTITY:
-        return False, 0, f"한 번에 최대 {GameConfig.MAX_QUANTITY:,}주까지 거래 가능합니다."
-
-    return True, quantity, ""
-
-
-def validate_bet_amount(amount_str: str, min_bet: int = None, max_bet: int = None) -> Tuple[bool, int, str]:
-    """
-    배팅 금액 유효성 검사
-    Returns: (is_valid, amount, error_message)
-    """
-    if min_bet is None:
-        min_bet = GameConfig.MIN_BET
-
-    try:
-        amount = int(amount_str.replace(",", ""))
-    except ValueError:
-        return False, 0, "금액은 숫자로 입력해주세요."
-
-    if amount < min_bet:
-        return False, 0, f"최소 배팅금은 {min_bet:,}원입니다."
-
-    if max_bet and amount > max_bet:
-        return False, 0, f"최대 배팅금은 {max_bet:,}원입니다."
-
-    # 너무 큰 금액 방지 (100억 이상)
-    if amount > 10_000_000_000:
-        return False, 0, "배팅 금액이 너무 큽니다."
-
-    return True, amount, ""
 
 
 def sanitize_input(text: str, max_length: int = 100) -> str:

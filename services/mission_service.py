@@ -1,16 +1,22 @@
 """
-미션 및 업적 서비스
+미션 및 업적 서비스 (리팩토링)
 - 일간 미션
 - 업적 시스템
 - 주간 보너스
+- safe_add 적용, 예외 처리 개선
 """
 import json
 from datetime import date, datetime
 from typing import Dict, List, Optional, Tuple
 from sqlalchemy.orm import Session
+from sqlalchemy.exc import SQLAlchemyError
 
 from models import User
 from config import GameConfig
+from services.common import safe_add
+from utils import get_service_logger
+
+logger = get_service_logger()
 
 
 # 업적 정의
@@ -92,6 +98,20 @@ class MissionService:
     """미션 및 업적 관련 서비스"""
 
     @staticmethod
+    def _parse_achievements(achievements_json: str) -> List[str]:
+        """업적 JSON 안전하게 파싱"""
+        if not achievements_json:
+            return []
+        try:
+            result = json.loads(achievements_json)
+            if isinstance(result, list):
+                return result
+            return []
+        except (json.JSONDecodeError, TypeError) as e:
+            logger.warning(f"업적 JSON 파싱 실패: {e}")
+            return []
+
+    @staticmethod
     def check_daily_mission(db: Session, kakao_id: str) -> Dict:
         """
         일간 미션 상태 확인
@@ -105,10 +125,14 @@ class MissionService:
 
         # 날짜가 바뀌었으면 리셋
         if user.last_mission_date != today:
-            user.last_mission_date = today
-            user.daily_trade_count = 0
-            user.mission_completed = 0
-            db.commit()
+            try:
+                user.last_mission_date = today
+                user.daily_trade_count = 0
+                user.mission_completed = 0
+                db.commit()
+            except SQLAlchemyError as e:
+                db.rollback()
+                logger.error(f"일간 미션 리셋 DB 실패: {e}")
 
         return {
             "completed": user.mission_completed == 1,
@@ -129,38 +153,43 @@ class MissionService:
 
         today = date.today()
 
-        # 날짜가 바뀌었으면 리셋
-        if user.last_mission_date != today:
-            user.last_mission_date = today
-            user.daily_trade_count = 0
-            user.mission_completed = 0
+        try:
+            # 날짜가 바뀌었으면 리셋
+            if user.last_mission_date != today:
+                user.last_mission_date = today
+                user.daily_trade_count = 0
+                user.mission_completed = 0
 
-        # 거래 횟수 증가
-        user.daily_trade_count += 1
-        user.total_trades += 1
+            # 거래 횟수 증가
+            user.daily_trade_count += 1
+            user.total_trades += 1
 
-        # 미션 완료 체크 (아직 미완료 상태일 때만)
-        reward_info = None
-        if (user.mission_completed == 0 and
-                user.daily_trade_count >= GameConfig.DAILY_MISSION_TRADE_COUNT):
-            user.mission_completed = 1
+            # 미션 완료 체크 (아직 미완료 상태일 때만)
+            reward_info = None
+            if (user.mission_completed == 0 and
+                    user.daily_trade_count >= GameConfig.DAILY_MISSION_TRADE_COUNT):
+                user.mission_completed = 1
 
-            # 주간 보너스 체크
-            multiplier = 1.0
-            if datetime.now().weekday() == GameConfig.WEEKLY_BONUS_DAY:
-                multiplier = GameConfig.WEEKLY_BONUS_MULTIPLIER
+                # 주간 보너스 체크
+                multiplier = 1.0
+                if datetime.now().weekday() == GameConfig.WEEKLY_BONUS_DAY:
+                    multiplier = GameConfig.WEEKLY_BONUS_MULTIPLIER
 
-            reward = int(GameConfig.DAILY_MISSION_REWARD * multiplier)
-            user.cash += reward
+                reward = int(GameConfig.DAILY_MISSION_REWARD * multiplier)
+                user.cash = safe_add(user.cash, reward)
 
-            reward_info = {
-                "reward": reward,
-                "is_bonus_day": multiplier > 1.0,
-                "multiplier": multiplier
-            }
+                reward_info = {
+                    "reward": reward,
+                    "is_bonus_day": multiplier > 1.0,
+                    "multiplier": multiplier
+                }
 
-        db.commit()
-        return reward_info
+            db.commit()
+            return reward_info
+        except SQLAlchemyError as e:
+            db.rollback()
+            logger.error(f"거래 횟수 증가 DB 실패: {e}")
+            return None
 
     @staticmethod
     def get_user_achievements(db: Session, kakao_id: str) -> List[Dict]:
@@ -171,10 +200,7 @@ class MissionService:
         if not user:
             return []
 
-        try:
-            achieved_ids = json.loads(user.achievements or "[]")
-        except json.JSONDecodeError:
-            achieved_ids = []
+        achieved_ids = MissionService._parse_achievements(user.achievements)
 
         result = []
         for ach_id in achieved_ids:
@@ -192,10 +218,7 @@ class MissionService:
         if not user:
             return list(ACHIEVEMENTS.values())
 
-        try:
-            achieved_ids = json.loads(user.achievements or "[]")
-        except json.JSONDecodeError:
-            achieved_ids = []
+        achieved_ids = MissionService._parse_achievements(user.achievements)
 
         result = []
         for ach_id, ach in ACHIEVEMENTS.items():
@@ -218,24 +241,24 @@ class MissionService:
         if not user:
             return []
 
-        try:
-            achieved_ids = json.loads(user.achievements or "[]")
-        except json.JSONDecodeError:
-            achieved_ids = []
+        achieved_ids = MissionService._parse_achievements(user.achievements)
 
         # 실현 수익 업데이트
         if trade_profit > 0:
-            user.total_profit_realized += trade_profit
+            user.total_profit_realized = safe_add(
+                user.total_profit_realized or 0,
+                trade_profit
+            )
 
         new_achievements = []
 
         # 업적 체크
         checks = [
             ("first_trade", user.total_trades >= 1),
-            ("first_profit", user.total_profit_realized > 0),
-            ("profit_1m", user.total_profit_realized >= 1_000_000),
-            ("profit_10m", user.total_profit_realized >= 10_000_000),
-            ("profit_100m", user.total_profit_realized >= 100_000_000),
+            ("first_profit", (user.total_profit_realized or 0) > 0),
+            ("profit_1m", (user.total_profit_realized or 0) >= 1_000_000),
+            ("profit_10m", (user.total_profit_realized or 0) >= 10_000_000),
+            ("profit_100m", (user.total_profit_realized or 0) >= 100_000_000),
             ("trades_10", user.total_trades >= 10),
             ("trades_50", user.total_trades >= 50),
             ("trades_100", user.total_trades >= 100),
@@ -246,12 +269,17 @@ class MissionService:
             if condition and ach_id not in achieved_ids:
                 achieved_ids.append(ach_id)
                 ach = ACHIEVEMENTS[ach_id]
-                user.cash += ach["reward"]
+                user.cash = safe_add(user.cash, ach["reward"])
                 new_achievements.append(ach)
 
         # 저장
-        user.achievements = json.dumps(achieved_ids)
-        db.commit()
+        try:
+            user.achievements = json.dumps(achieved_ids)
+            db.commit()
+        except SQLAlchemyError as e:
+            db.rollback()
+            logger.error(f"업적 저장 DB 실패: {e}")
+            return []
 
         return new_achievements
 
@@ -289,5 +317,5 @@ class MissionService:
             "is_bonus_day": is_bonus,
             "bonus_multiplier": multiplier,
             "total_trades": user.total_trades,
-            "total_profit_realized": user.total_profit_realized
+            "total_profit_realized": user.total_profit_realized or 0
         }

@@ -9,7 +9,7 @@ from services import (
     UserService, RankingService, MissionService,
     BattleService, ChallengeService, MilestoneService, AssetService
 )
-from utils import KakaoResponse, get_streak_display, validate_nickname
+from utils import KakaoResponse
 from config import GameConfig, Messages
 
 from .base_handler import BaseHandlerMixin
@@ -173,12 +173,7 @@ class SocialHandlerMixin(BaseHandlerMixin):
 
         new_nickname = parts[1].strip()
 
-        is_valid, error_msg = validate_nickname(new_nickname)
-        if not is_valid:
-            return KakaoResponse.simple_text(f"❌ {error_msg}")
-
-        if UserService.is_nickname_taken(self.db, new_nickname, self.kakao_id):
-            return KakaoResponse.simple_text(f"❌ '{new_nickname}'은(는) 이미 사용 중인 닉네임입니다.\n다른 닉네임을 선택해주세요.")
+        # UserService.update_nickname에서 검증, 중복 확인, 변경 횟수 체크를 모두 처리
 
         success, msg = UserService.update_nickname(self.db, self.kakao_id, new_nickname)
 
@@ -241,18 +236,19 @@ class SocialHandlerMixin(BaseHandlerMixin):
         parts = self.utterance.split()
 
         if len(parts) < 3:
+            default_bet = GameConfig.DEFAULT_BATTLE_BET
             return KakaoResponse.quick_replies(
-                "⚔️ 배틀 생성\n\n사용법: /배틀 [종목] [상승/하락] [금액]\n예: /배틀 삼성전자 상승 100000\n\n❓ /배틀설명 으로 자세한 설명 확인",
+                f"⚔️ 배틀 생성\n\n사용법: /배틀 [종목] [상승/하락] [금액]\n예: /배틀 삼성전자 상승 {default_bet}\n\n❓ /배틀설명 으로 자세한 설명 확인",
                 [
                     {"label": "❓ 배틀설명", "action": "message", "messageText": "/배틀설명"},
-                    {"label": "⚔️ 삼성전자 상승", "action": "message", "messageText": "/배틀 삼성전자 상승 100000"},
+                    {"label": "⚔️ 삼성전자 상승", "action": "message", "messageText": f"/배틀 삼성전자 상승 {default_bet}"},
                     {"label": "📋 배틀목록", "action": "message", "messageText": "/배틀목록"}
                 ]
             )
 
         stock_name = parts[1]
         prediction = parts[2]
-        bet = 100_000
+        bet = GameConfig.DEFAULT_BATTLE_BET
         if len(parts) >= 4:
             try:
                 bet = int(parts[3].replace(",", ""))

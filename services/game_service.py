@@ -1,66 +1,43 @@
 """
-미니게임 서비스
-- 복권, 슬롯, 동전, 하이로우
-- 장 마감 시간에만 플레이 가능 (18:00 이후, 08:30 이전, 주말, 공휴일)
+미니게임 서비스 (리팩토링)
+- 복권, 슬롯, 동전, 하이로우, 룰렛
+- 장 마감 시간에만 플레이 가능 (복권 제외)
+- 공통 유틸리티 사용으로 중복 제거
+- 확률 상수화 및 검증
 """
 import random
-from datetime import date, datetime
-from typing import Dict, Tuple, Optional
+from datetime import date
+from typing import Dict
 from sqlalchemy.orm import Session
+from sqlalchemy.exc import SQLAlchemyError
 
-from models import User
-from config import is_market_closed, get_market_status_message, GameConfig, Messages
+from config import GameConfig, GameProbability
+from services.common import (
+    get_user_with_error,
+    validate_bet,
+    check_market_closed_for_game,
+    error_response,
+    calculate_profit,
+    safe_add,
+    safe_multiply
+)
+from utils import get_service_logger
 
-
-def _get_market_closed_error(emoji: str) -> Dict:
-    """장 마감 시간 에러 메시지 (중복 제거)"""
-    status_msg = get_market_status_message()
-    return {
-        "success": False,
-        "message": f"{emoji} " + Messages.MARKET_CLOSED_GAME.format(status_msg=status_msg)
-    }
+logger = get_service_logger()
 
 
 class GameService:
     """미니게임 서비스"""
-
-    # 슬롯머신 심볼
-    SLOT_SYMBOLS = ["🍒", "🍋", "🍊", "🍇", "💎", "7️⃣", "🚀"]
-
-    # 슬롯 배당률 (원래 배수 유지)
-    SLOT_PAYOUTS = {
-        "7️⃣7️⃣7️⃣": 50,      # 잭팟 50배
-        "💎💎💎": 20,         # 다이아 20배
-        "🚀🚀🚀": 10,         # 로켓 10배
-        "🍇🍇🍇": 5,          # 포도 5배
-        "🍊🍊🍊": 3,          # 오렌지 3배
-        "🍋🍋🍋": 2,          # 레몬 2배
-        "🍒🍒🍒": 1.5,        # 체리 1.5배
-    }
-
-    # 슬롯 확률 (잭팟/다이아/로켓은 희귀하게 유지)
-    SLOT_PROBABILITIES = [
-        ("7️⃣", 50, 0.0005),   # 0.05% - 잭팟 (희귀)
-        ("💎", 20, 0.0015),    # 0.15% (희귀)
-        ("🚀", 10, 0.003),     # 0.3% (희귀)
-        ("🍇", 5, 0.012),      # 1.2%
-        ("🍊", 3, 0.025),      # 2.5%
-        ("🍋", 2, 0.0575),     # 5.75%
-        ("🍒", 1.5, 0.10),     # 10%
-        ("MATCH2", 1, 0.35),   # 35% - 2개 일치 (본전)
-        ("LOSE", 0, 0.4505),   # 45.05% - 꽝
-    ]
 
     @classmethod
     def play_lottery(cls, db: Session, kakao_id: str) -> Dict:
         """
         복권 긁기 (1일 5회, 1장 10,000원)
         - 일일 제한이 있으므로 장 시간 무관하게 가능
-        Returns: {"success": bool, "reward": int, "message": str}
         """
-        user = db.query(User).filter(User.kakao_id == kakao_id).first()
-        if not user:
-            return {"success": False, "message": Messages.USER_NOT_FOUND}
+        user, error = get_user_with_error(db, kakao_id)
+        if error:
+            return error
 
         # 날짜가 바뀌었으면 카운트 리셋
         today = date.today()
@@ -70,57 +47,58 @@ class GameService:
 
         # 오늘 최대 횟수 체크
         if user.lottery_count_today >= GameConfig.MAX_LOTTERY_PER_DAY:
-            return {
-                "success": False,
-                "message": f"🎫 오늘 복권은 모두 긁었어요! ({GameConfig.MAX_LOTTERY_PER_DAY}회)\n내일 다시 도전하세요 🍀"
-            }
+            return error_response(
+                "DAILY_LIMIT",
+                f"🎫 오늘 복권은 모두 긁었어요! ({GameConfig.MAX_LOTTERY_PER_DAY}회)\n내일 다시 도전하세요 🍀"
+            )
 
         # 잔액 확인
         if user.cash < GameConfig.LOTTERY_COST:
-            return {
-                "success": False,
-                "message": f"❌ 잔액 부족!\n복권 가격: {GameConfig.LOTTERY_COST:,}원\n보유: {user.cash:,}원"
-            }
+            return error_response(
+                "INSUFFICIENT_BALANCE",
+                f"❌ 잔액 부족!\n복권 가격: {GameConfig.LOTTERY_COST:,}원\n보유: {user.cash:,}원"
+            )
 
         # 복권 구매 (비용 차감)
         user.cash -= GameConfig.LOTTERY_COST
-
-        # 복권 사용 기록
         user.lottery_count_today += 1
         remaining = GameConfig.MAX_LOTTERY_PER_DAY - user.lottery_count_today
 
-        # 복권 확률 (기준: 복권 1장 10,000원, 기대값 90%)
+        # 확률 기반 결과 결정 (GameProbability 사용)
         roll = random.random()
+        cumulative = 0
+        tier = "꽝"
+        reward = 0
 
-        if roll < 0.002:  # 0.2% - 1등 (50~100배)
-            reward = random.randint(500_000, 1_000_000)
-            tier = "🥇 1등"
-            msg = "대박! 축하합니다!"
-        elif roll < 0.02:  # 1.8% - 2등 (5~10배)
-            reward = random.randint(50_000, 100_000)
-            tier = "🥈 2등"
-            msg = "좋아요!"
-        elif roll < 0.07:  # 5% - 3등 (1.5~3배)
-            reward = random.randint(15_000, 30_000)
-            tier = "🥉 3등"
-            msg = "괜찮네요!"
-        elif roll < 0.17:  # 10% - 4등 (0.8~1.2배)
-            reward = random.randint(8_000, 12_000)
-            tier = "🎁 4등"
-            msg = "조금이나마..."
-        elif roll < 0.47:  # 30% - 5등 (본전 1배)
-            reward = 10_000
-            tier = "💫 5등"
-            msg = "본전!"
-        else:  # 43% - 꽝
-            reward = random.randint(0, 1_000)
-            tier = "😅 꽝"
-            msg = "다음 기회에..."
+        tier_display = {
+            "1등": ("🥇 1등", "대박! 축하합니다!"),
+            "2등": ("🥈 2등", "좋아요!"),
+            "3등": ("🥉 3등", "괜찮네요!"),
+            "4등": ("🎁 4등", "조금이나마..."),
+            "5등": ("💫 5등", "본전!"),
+            "꽝": ("😅 꽝", "다음 기회에..."),
+        }
 
-        user.cash += reward
-        db.commit()
+        for tier_name, tier_info in GameProbability.LOTTERY.items():
+            cumulative += tier_info["prob"]
+            if roll < cumulative:
+                tier = tier_name
+                reward = random.randint(tier_info["min_reward"], tier_info["max_reward"])
+                break
 
-        # 순이익 계산
+        tier_text, tier_msg = tier_display.get(tier, ("😅 꽝", "다음 기회에..."))
+
+        # 보상 지급 (오버플로우 방지)
+        user.cash = safe_add(user.cash, reward)
+
+        # 트랜잭션 커밋
+        try:
+            db.commit()
+        except SQLAlchemyError as e:
+            db.rollback()
+            logger.error(f"복권 DB 커밋 실패: {e}")
+            return error_response("DB_ERROR", "데이터베이스 오류가 발생했습니다.")
+
         profit = reward - GameConfig.LOTTERY_COST
 
         return {
@@ -128,48 +106,39 @@ class GameService:
             "cost": GameConfig.LOTTERY_COST,
             "reward": reward,
             "profit": profit,
-            "tier": tier,
-            "message": msg,
+            "tier": tier_text,
+            "message": tier_msg,
             "cash": user.cash,
             "remaining": remaining
         }
 
     @classmethod
     def play_slot(cls, db: Session, kakao_id: str, bet: int = 50_000) -> Dict:
-        """
-        슬롯머신 (배팅 금액 필요)
-        """
+        """슬롯머신 (배팅 금액 필요)"""
         # 장 마감 시간에만 가능
-        if not is_market_closed():
-            return _get_market_closed_error("🎰")
+        can_play, market_error = check_market_closed_for_game("🎰")
+        if not can_play:
+            return market_error
 
-        user = db.query(User).filter(User.kakao_id == kakao_id).first()
-        if not user:
-            return {"success": False, "message": Messages.USER_NOT_FOUND}
+        user, error = get_user_with_error(db, kakao_id)
+        if error:
+            return error
 
         # 배팅금 검증
-        min_bet = GameConfig.MIN_BET
-        if bet <= 0:
-            return {"success": False, "message": "배팅금은 0보다 커야 합니다."}
-        if bet < min_bet:
-            return {"success": False, "message": f"최소 배팅금은 {min_bet:,}원입니다."}
-
-        if user.cash < bet:
-            return {
-                "success": False,
-                "message": f"잔액 부족! (보유: {user.cash:,}원, 필요: {bet:,}원)"
-            }
+        is_valid, bet_error = validate_bet(bet, user.cash)
+        if not is_valid:
+            return error_response("INVALID_BET", bet_error)
 
         # 배팅금 차감
         user.cash -= bet
 
-        # 확률 기반 결과 결정
+        # 확률 기반 결과 결정 (GameProbability 사용)
         roll = random.random()
         cumulative = 0
-        outcome_symbol = None
+        outcome_symbol = "LOSE"
         multiplier = 0
 
-        for symbol, mult, prob in cls.SLOT_PROBABILITIES:
+        for symbol, mult, prob in GameProbability.SLOT_PAYOUTS:
             cumulative += prob
             if roll < cumulative:
                 outcome_symbol = symbol
@@ -177,44 +146,58 @@ class GameService:
                 break
 
         # 슬롯 심볼 생성
-        if outcome_symbol == "LOSE":
-            # 꽝: 모두 다른 심볼
-            symbols = random.sample(cls.SLOT_SYMBOLS, 3)
-            slot1, slot2, slot3 = symbols
-        elif outcome_symbol == "MATCH2":
-            # 2개 일치 (본전)
-            match_symbol = random.choice(cls.SLOT_SYMBOLS)
-            other_symbols = [s for s in cls.SLOT_SYMBOLS if s != match_symbol]
-            other = random.choice(other_symbols)
-            pattern = random.choice([
-                [match_symbol, match_symbol, other],
-                [match_symbol, other, match_symbol],
-                [other, match_symbol, match_symbol]
-            ])
-            slot1, slot2, slot3 = pattern
-        else:
-            # 3개 일치
-            slot1 = slot2 = slot3 = outcome_symbol
+        slot1, slot2, slot3 = cls._generate_slot_symbols(outcome_symbol)
 
-        result = f"{slot1}{slot2}{slot3}"
+        # 당첨금 계산 (오버플로우 방지)
+        winnings = safe_multiply(bet, multiplier)
+        user.cash = safe_add(user.cash, winnings)
 
-        winnings = int(bet * multiplier)
-        user.cash += winnings
-        db.commit()
+        try:
+            db.commit()
+        except SQLAlchemyError as e:
+            db.rollback()
+            logger.error(f"슬롯 DB 커밋 실패: {e}")
+            return error_response("DB_ERROR", "데이터베이스 오류가 발생했습니다.")
 
-        profit = winnings - bet
+        profit_info = calculate_profit(bet, winnings)
 
         return {
             "success": True,
             "slots": [slot1, slot2, slot3],
-            "result": result,
+            "result": f"{slot1}{slot2}{slot3}",
             "bet": bet,
             "multiplier": multiplier,
             "winnings": winnings,
-            "profit": profit,
+            "profit": profit_info["profit"],
             "cash": user.cash,
             "jackpot": multiplier >= 20
         }
+
+    @classmethod
+    def _generate_slot_symbols(cls, outcome_symbol: str) -> tuple:
+        """슬롯 심볼 생성"""
+        symbols = GameProbability.SLOT_SYMBOLS
+
+        if outcome_symbol == "LOSE":
+            # 꽝: 모두 다른 심볼
+            selected = random.sample(symbols, 3)
+            return tuple(selected)
+
+        elif outcome_symbol == "MATCH2":
+            # 2개 일치 (본전)
+            match_symbol = random.choice(symbols)
+            other_symbols = [s for s in symbols if s != match_symbol]
+            other = random.choice(other_symbols)
+            pattern = random.choice([
+                (match_symbol, match_symbol, other),
+                (match_symbol, other, match_symbol),
+                (other, match_symbol, match_symbol)
+            ])
+            return pattern
+
+        else:
+            # 3개 일치
+            return (outcome_symbol, outcome_symbol, outcome_symbol)
 
     @classmethod
     def play_roulette(cls, db: Session, kakao_id: str, bet: int, choice: str) -> Dict:
@@ -222,76 +205,65 @@ class GameService:
         룰렛 (빨강/검정/초록)
         - 빨강/검정: 2배 (45% 확률)
         - 초록: 9배 (10% 확률)
-        - 기대값 90%
         """
-        # 장 마감 시간에만 가능
-        if not is_market_closed():
-            return _get_market_closed_error("🎡")
+        can_play, market_error = check_market_closed_for_game("🎡")
+        if not can_play:
+            return market_error
 
-        user = db.query(User).filter(User.kakao_id == kakao_id).first()
-        if not user:
-            return {"success": False, "message": Messages.USER_NOT_FOUND}
+        user, error = get_user_with_error(db, kakao_id)
+        if error:
+            return error
 
-        min_bet = GameConfig.MIN_BET
-        if bet <= 0:
-            return {"success": False, "message": "배팅금은 0보다 커야 합니다."}
-        if bet < min_bet:
-            return {"success": False, "message": f"최소 배팅금은 {min_bet:,}원입니다."}
+        is_valid, bet_error = validate_bet(bet, user.cash)
+        if not is_valid:
+            return error_response("INVALID_BET", bet_error)
 
-        if user.cash < bet:
-            return {
-                "success": False,
-                "message": f"잔액 부족! (보유: {user.cash:,}원)"
-            }
-
-        choice = choice.lower()
-        if choice not in ["빨강", "검정", "초록", "red", "black", "green", "빨", "검", "초"]:
-            return {"success": False, "message": "빨강, 검정, 초록 중 선택해주세요."}
-
-        # 정규화
-        if choice in ["red", "빨강", "빨"]:
-            choice = "빨강"
-        elif choice in ["black", "검정", "검"]:
-            choice = "검정"
-        else:
-            choice = "초록"
+        # 선택 정규화
+        choice_normalized = cls._normalize_roulette_choice(choice)
+        if not choice_normalized:
+            return error_response("INVALID_CHOICE", "빨강, 검정, 초록 중 선택해주세요.")
 
         # 배팅금 차감
         user.cash -= bet
 
-        # 룰렛 결과 (기대값 90%: 빨강 45%, 검정 45%, 초록 10%)
+        # 룰렛 결과 (GameProbability 사용)
         roll = random.random()
-        if roll < 0.45:
-            result = "빨강"
-            emoji = "🔴"
-        elif roll < 0.90:
-            result = "검정"
-            emoji = "⚫"
-        else:
-            result = "초록"
-            emoji = "🟢"
+        cumulative = 0
+        result = "빨강"
+
+        for color, info in GameProbability.ROULETTE.items():
+            cumulative += info["prob"]
+            if roll < cumulative:
+                result = color
+                break
+
+        emoji_map = {"빨강": "🔴", "검정": "⚫", "초록": "🟢"}
+        emoji = emoji_map[result]
 
         # 당첨 확인
-        won = (choice == result)
+        won = (choice_normalized == result)
 
         if won:
-            if result == "초록":
-                multiplier = 9  # 10% × 9 = 90% EV
-            else:
-                multiplier = 2  # 45% × 2 = 90% EV
-            winnings = bet * multiplier
+            multiplier = GameProbability.ROULETTE[result]["multiplier"]
+            winnings = safe_multiply(bet, multiplier)
         else:
             multiplier = 0
             winnings = 0
 
-        user.cash += winnings
-        db.commit()
+        user.cash = safe_add(user.cash, winnings)
+
+        try:
+            db.commit()
+        except SQLAlchemyError as e:
+            db.rollback()
+            logger.error(f"룰렛 DB 커밋 실패: {e}")
+            return error_response("DB_ERROR", "데이터베이스 오류가 발생했습니다.")
 
         return {
             "success": True,
             "result": result,
             "emoji": emoji,
-            "choice": choice,
+            "choice": choice_normalized,
             "won": won,
             "bet": bet,
             "multiplier": multiplier,
@@ -301,41 +273,39 @@ class GameService:
         }
 
     @classmethod
+    def _normalize_roulette_choice(cls, choice: str) -> str:
+        """룰렛 선택 정규화"""
+        choice = choice.lower().strip()
+        if choice in ["red", "빨강", "빨"]:
+            return "빨강"
+        elif choice in ["black", "검정", "검"]:
+            return "검정"
+        elif choice in ["green", "초록", "초"]:
+            return "초록"
+        return ""
+
+    @classmethod
     def play_high_low(cls, db: Session, kakao_id: str, bet: int, choice: str) -> Dict:
         """
         하이로우 게임
         - 1-100 숫자 중 50보다 높은지 낮은지
-        - 맞추면 1.8배 (기대값 90%)
         """
-        # 장 마감 시간에만 가능
-        if not is_market_closed():
-            return _get_market_closed_error("🎲")
+        can_play, market_error = check_market_closed_for_game("🎲")
+        if not can_play:
+            return market_error
 
-        user = db.query(User).filter(User.kakao_id == kakao_id).first()
-        if not user:
-            return {"success": False, "message": Messages.USER_NOT_FOUND}
+        user, error = get_user_with_error(db, kakao_id)
+        if error:
+            return error
 
-        min_bet = GameConfig.MIN_BET
-        if bet <= 0:
-            return {"success": False, "message": "배팅금은 0보다 커야 합니다."}
-        if bet < min_bet:
-            return {"success": False, "message": f"최소 배팅금은 {min_bet:,}원입니다."}
+        is_valid, bet_error = validate_bet(bet, user.cash)
+        if not is_valid:
+            return error_response("INVALID_BET", bet_error)
 
-        if user.cash < bet:
-            return {
-                "success": False,
-                "message": f"잔액 부족! (보유: {user.cash:,}원)"
-            }
-
-        choice = choice.lower()
-        if choice not in ["높", "낮", "high", "low", "하이", "로우"]:
-            return {"success": False, "message": "높/낮 중 선택해주세요."}
-
-        # 정규화
-        if choice in ["high", "높", "하이"]:
-            choice = "높"
-        else:
-            choice = "낮"
+        # 선택 정규화
+        choice_normalized = cls._normalize_highlow_choice(choice)
+        if not choice_normalized:
+            return error_response("INVALID_CHOICE", "높/낮 중 선택해주세요.")
 
         # 배팅금 차감
         user.cash -= bet
@@ -346,12 +316,17 @@ class GameService:
         if number == 50:
             # 무승부 - 배팅금 반환
             user.cash += bet
-            db.commit()
+            try:
+                db.commit()
+            except SQLAlchemyError:
+                db.rollback()
+                return error_response("DB_ERROR", "데이터베이스 오류가 발생했습니다.")
+
             return {
                 "success": True,
                 "number": number,
-                "choice": choice,
-                "won": None,  # 무승부
+                "choice": choice_normalized,
+                "won": None,
                 "bet": bet,
                 "winnings": bet,
                 "profit": 0,
@@ -360,23 +335,29 @@ class GameService:
             }
 
         actual = "높" if number > 50 else "낮"
-        won = (choice == actual)
+        won = (choice_normalized == actual)
 
         if won:
-            multiplier = 1.8  # 50% × 1.8 = 90% EV
-            winnings = int(bet * multiplier)
+            multiplier = GameProbability.HIGHLOW_MULTIPLIER
+            winnings = safe_multiply(bet, multiplier)
         else:
             multiplier = 0
             winnings = 0
 
-        user.cash += winnings
-        db.commit()
+        user.cash = safe_add(user.cash, winnings)
+
+        try:
+            db.commit()
+        except SQLAlchemyError as e:
+            db.rollback()
+            logger.error(f"하이로우 DB 커밋 실패: {e}")
+            return error_response("DB_ERROR", "데이터베이스 오류가 발생했습니다.")
 
         return {
             "success": True,
             "number": number,
             "actual": actual,
-            "choice": choice,
+            "choice": choice_normalized,
             "won": won,
             "bet": bet,
             "multiplier": multiplier if won else 0,
@@ -386,40 +367,37 @@ class GameService:
         }
 
     @classmethod
+    def _normalize_highlow_choice(cls, choice: str) -> str:
+        """하이로우 선택 정규화"""
+        choice = choice.lower().strip()
+        if choice in ["high", "높", "하이"]:
+            return "높"
+        elif choice in ["low", "낮", "로우"]:
+            return "낮"
+        return ""
+
+    @classmethod
     def play_coin_flip(cls, db: Session, kakao_id: str, bet: int, choice: str) -> Dict:
         """
         동전 던지기
         - 앞/뒤 맞추면 2배 (기대값 100%)
         """
-        # 장 마감 시간에만 가능
-        if not is_market_closed():
-            return _get_market_closed_error("🪙")
+        can_play, market_error = check_market_closed_for_game("🪙")
+        if not can_play:
+            return market_error
 
-        user = db.query(User).filter(User.kakao_id == kakao_id).first()
-        if not user:
-            return {"success": False, "message": Messages.USER_NOT_FOUND}
+        user, error = get_user_with_error(db, kakao_id)
+        if error:
+            return error
 
-        min_bet = GameConfig.MIN_BET
-        if bet <= 0:
-            return {"success": False, "message": "배팅금은 0보다 커야 합니다."}
-        if bet < min_bet:
-            return {"success": False, "message": f"최소 배팅금은 {min_bet:,}원입니다."}
+        is_valid, bet_error = validate_bet(bet, user.cash)
+        if not is_valid:
+            return error_response("INVALID_BET", bet_error)
 
-        if user.cash < bet:
-            return {
-                "success": False,
-                "message": f"잔액 부족! (보유: {user.cash:,}원)"
-            }
-
-        choice = choice.lower()
-        if choice not in ["앞", "뒤", "head", "tail", "앞면", "뒷면"]:
-            return {"success": False, "message": "앞/뒤 중 선택해주세요."}
-
-        # 정규화
-        if choice in ["head", "앞", "앞면"]:
-            choice = "앞"
-        else:
-            choice = "뒤"
+        # 선택 정규화
+        choice_normalized = cls._normalize_coin_choice(choice)
+        if not choice_normalized:
+            return error_response("INVALID_CHOICE", "앞/뒤 중 선택해주세요.")
 
         # 배팅금 차감
         user.cash -= bet
@@ -428,23 +406,29 @@ class GameService:
         result = random.choice(["앞", "뒤"])
         emoji = "🪙" if result == "앞" else "💿"
 
-        won = (choice == result)
+        won = (choice_normalized == result)
 
         if won:
-            multiplier = 2.0  # 50% × 2.0 = 100% EV
-            winnings = int(bet * multiplier)
+            multiplier = GameProbability.COINFLIP_MULTIPLIER
+            winnings = safe_multiply(bet, multiplier)
         else:
             multiplier = 0
             winnings = 0
 
-        user.cash += winnings
-        db.commit()
+        user.cash = safe_add(user.cash, winnings)
+
+        try:
+            db.commit()
+        except SQLAlchemyError as e:
+            db.rollback()
+            logger.error(f"동전 DB 커밋 실패: {e}")
+            return error_response("DB_ERROR", "데이터베이스 오류가 발생했습니다.")
 
         return {
             "success": True,
             "result": result,
             "emoji": emoji,
-            "choice": choice,
+            "choice": choice_normalized,
             "won": won,
             "bet": bet,
             "multiplier": multiplier if won else 0,
@@ -452,3 +436,13 @@ class GameService:
             "profit": winnings - bet,
             "cash": user.cash
         }
+
+    @classmethod
+    def _normalize_coin_choice(cls, choice: str) -> str:
+        """동전 선택 정규화"""
+        choice = choice.lower().strip()
+        if choice in ["head", "앞", "앞면"]:
+            return "앞"
+        elif choice in ["tail", "뒤", "뒷면"]:
+            return "뒤"
+        return ""

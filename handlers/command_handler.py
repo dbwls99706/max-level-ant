@@ -3,7 +3,7 @@
 - 명령어 라우팅
 - 각 기능별 핸들러 믹스인 사용
 """
-from typing import Dict, Callable, Optional
+from typing import Dict, Optional
 from sqlalchemy.orm import Session
 
 from services import UserService

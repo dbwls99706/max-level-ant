@@ -1,11 +1,24 @@
 """
-마일스톤 서비스 - 자산 달성 보너스
+마일스톤 서비스 - 자산 달성 보너스 (리팩토링)
+- 트랜잭션 안전성 강화
+- next() 안전화
 """
 from datetime import datetime
 from typing import Dict, List, Optional
 from sqlalchemy.orm import Session
+from sqlalchemy.exc import SQLAlchemyError
 
 from models import Milestone, User
+from services.common import (
+    get_user_with_error,
+    error_response,
+    success_response,
+    safe_add,
+)
+from config import ErrorCode
+from utils import get_service_logger
+
+logger = get_service_logger()
 
 
 class MilestoneService:
@@ -175,7 +188,12 @@ class MilestoneService:
                 })
 
         if achieved:
-            db.commit()
+            try:
+                db.commit()
+            except SQLAlchemyError as e:
+                db.rollback()
+                logger.error(f"마일스톤 달성 기록 DB 실패: {e}")
+                return []
 
         return achieved
 
@@ -205,12 +223,17 @@ class MilestoneService:
             }
 
             if m_type in achieved_types:
-                milestone = next(m for m in achieved_milestones if m.milestone_type == m_type)
-                milestone_data["achieved_at"] = str(milestone.achieved_at)
-                milestone_data["reward_claimed"] = milestone.reward_claimed == 1
+                # 안전한 검색: next()에 기본값 제공
+                milestone = next(
+                    (m for m in achieved_milestones if m.milestone_type == m_type),
+                    None
+                )
+                if milestone:
+                    milestone_data["achieved_at"] = str(milestone.achieved_at)
+                    milestone_data["reward_claimed"] = milestone.reward_claimed == 1
 
-                if not milestone_data["reward_claimed"]:
-                    result["unclaimed_rewards"] += info["reward"]
+                    if not milestone_data["reward_claimed"]:
+                        result["unclaimed_rewards"] += info["reward"]
 
                 result["achieved"].append(milestone_data)
             else:
@@ -222,7 +245,10 @@ class MilestoneService:
     def claim_milestone_reward(cls, db: Session, kakao_id: str, milestone_type: str) -> Dict:
         """마일스톤 보상 수령"""
         if milestone_type not in cls.MILESTONES:
-            return {"success": False, "message": "존재하지 않는 마일스톤입니다."}
+            return error_response(
+                ErrorCode.NOT_FOUND,
+                "존재하지 않는 마일스톤입니다."
+            )
 
         milestone = db.query(Milestone).filter(
             Milestone.kakao_id == kakao_id,
@@ -230,25 +256,42 @@ class MilestoneService:
         ).first()
 
         if not milestone:
-            return {"success": False, "message": "아직 달성하지 않은 마일스톤입니다."}
+            return error_response(
+                ErrorCode.NOT_FOUND,
+                "아직 달성하지 않은 마일스톤입니다."
+            )
 
         if milestone.reward_claimed == 1:
-            return {"success": False, "message": "이미 보상을 수령했습니다."}
+            return error_response(
+                ErrorCode.INVALID_STATE,
+                "이미 보상을 수령했습니다."
+            )
 
         # 보상 지급
-        user = db.query(User).filter(User.kakao_id == kakao_id).first()
+        user, err = get_user_with_error(db, kakao_id)
+        if err:
+            return err
+
         reward = cls.MILESTONES[milestone_type]["reward"]
-        user.cash += reward
-        milestone.reward_claimed = 1
 
-        db.commit()
+        try:
+            user.cash = safe_add(user.cash, reward)
+            milestone.reward_claimed = 1
+            db.commit()
+        except SQLAlchemyError as e:
+            db.rollback()
+            logger.error(f"마일스톤 보상 지급 DB 실패: {e}")
+            return error_response(
+                ErrorCode.INTERNAL_ERROR,
+                "보상 지급 중 오류가 발생했습니다."
+            )
 
-        return {
-            "success": True,
-            "milestone": cls.MILESTONES[milestone_type]["name"],
-            "reward": reward,
-            "cash": user.cash
-        }
+        return success_response(
+            f"🏆 {cls.MILESTONES[milestone_type]['name']} 보상 수령!",
+            milestone=cls.MILESTONES[milestone_type]["name"],
+            reward=reward,
+            cash=user.cash
+        )
 
     @classmethod
     def claim_all_rewards(cls, db: Session, kakao_id: str) -> Dict:
@@ -259,25 +302,82 @@ class MilestoneService:
         ).all()
 
         if not milestones:
-            return {"success": False, "message": "수령할 보상이 없습니다."}
+            return error_response(
+                ErrorCode.NOT_FOUND,
+                "수령할 보상이 없습니다."
+            )
 
-        user = db.query(User).filter(User.kakao_id == kakao_id).first()
+        user, err = get_user_with_error(db, kakao_id)
+        if err:
+            return err
+
         total_reward = 0
         claimed_milestones = []
 
-        for m in milestones:
-            reward = cls.MILESTONES[m.milestone_type]["reward"]
-            user.cash += reward
-            total_reward += reward
-            m.reward_claimed = 1
-            claimed_milestones.append(cls.MILESTONES[m.milestone_type]["name"])
+        try:
+            for m in milestones:
+                # 안전한 접근: milestone_type이 MILESTONES에 없을 수 있음
+                milestone_info = cls.MILESTONES.get(m.milestone_type)
+                if not milestone_info:
+                    logger.warning(f"알 수 없는 마일스톤 타입: {m.milestone_type}")
+                    continue
 
-        db.commit()
+                reward = milestone_info["reward"]
+                user.cash = safe_add(user.cash, reward)
+                total_reward += reward
+                m.reward_claimed = 1
+                claimed_milestones.append(milestone_info["name"])
+
+            db.commit()
+        except SQLAlchemyError as e:
+            db.rollback()
+            logger.error(f"마일스톤 일괄 보상 지급 DB 실패: {e}")
+            return error_response(
+                ErrorCode.INTERNAL_ERROR,
+                "보상 지급 중 오류가 발생했습니다."
+            )
+
+        if not claimed_milestones:
+            return error_response(
+                ErrorCode.NOT_FOUND,
+                "수령할 보상이 없습니다."
+            )
+
+        return success_response(
+            f"🎉 {len(claimed_milestones)}개 마일스톤 보상 수령!",
+            total_reward=total_reward,
+            count=len(claimed_milestones),
+            milestones=claimed_milestones,
+            cash=user.cash
+        )
+
+    @classmethod
+    def get_next_milestone(cls, db: Session, kakao_id: str, category: str = "asset") -> Optional[Dict]:
+        """다음 달성 가능한 마일스톤 조회"""
+        achieved_milestones = db.query(Milestone).filter(
+            Milestone.kakao_id == kakao_id
+        ).all()
+
+        achieved_types = {m.milestone_type for m in achieved_milestones}
+
+        # 해당 카테고리에서 미달성 마일스톤 중 threshold가 가장 낮은 것 찾기
+        candidates = [
+            (m_type, info)
+            for m_type, info in cls.MILESTONES.items()
+            if info["category"] == category and m_type not in achieved_types
+        ]
+
+        if not candidates:
+            return None
+
+        # threshold 기준 정렬
+        candidates.sort(key=lambda x: x[1]["threshold"])
+        m_type, info = candidates[0]
 
         return {
-            "success": True,
-            "total_reward": total_reward,
-            "count": len(milestones),
-            "milestones": claimed_milestones,
-            "cash": user.cash
+            "type": m_type,
+            "name": info["name"],
+            "description": info["description"],
+            "threshold": info["threshold"],
+            "reward": info["reward"]
         }

@@ -5,6 +5,7 @@
 from typing import Dict
 
 from services import GameService
+from config import GameConfig
 from utils import KakaoResponse
 
 from .base_handler import BaseHandlerMixin
@@ -25,14 +26,15 @@ class GameHandlerMixin(BaseHandlerMixin):
 
 ⏰ 슬롯/룰렛/동전/하이로우는 장 마감 후 이용 가능"""
 
+        bet = GameConfig.DEFAULT_BET
         return KakaoResponse.quick_replies(
             msg,
             [
                 {"label": "🎫 복권", "action": "message", "messageText": "/복권"},
-                {"label": "🎰 슬롯머신", "action": "message", "messageText": "/슬롯머신 50000"},
-                {"label": "🎡 룰렛", "action": "message", "messageText": "/룰렛 50000 빨강"},
-                {"label": "🪙 동전던지기", "action": "message", "messageText": "/동전 50000 앞"},
-                {"label": "🎲 하이로우", "action": "message", "messageText": "/하이로우 50000 높"}
+                {"label": "🎰 슬롯머신", "action": "message", "messageText": f"/슬롯머신 {bet}"},
+                {"label": "🎡 룰렛", "action": "message", "messageText": f"/룰렛 {bet} 빨강"},
+                {"label": "🪙 동전던지기", "action": "message", "messageText": f"/동전 {bet} 앞"},
+                {"label": "🎲 하이로우", "action": "message", "messageText": f"/하이로우 {bet} 높"}
             ]
         )
 
@@ -41,11 +43,12 @@ class GameHandlerMixin(BaseHandlerMixin):
         result = GameService.play_lottery(self.db, self.kakao_id)
 
         if not result["success"]:
+            bet = GameConfig.DEFAULT_BET
             return KakaoResponse.quick_replies(
                 result["message"],
                 [
-                    {"label": "🎰 슬롯머신", "action": "message", "messageText": "/슬롯머신 50000"},
-                    {"label": "🪙 동전던지기", "action": "message", "messageText": "/동전 50000 앞"},
+                    {"label": "🎰 슬롯머신", "action": "message", "messageText": f"/슬롯머신 {bet}"},
+                    {"label": "🪙 동전던지기", "action": "message", "messageText": f"/동전 {bet} 앞"},
                     {"label": "🚀 급등주", "action": "message", "messageText": "/급등"}
                 ]
             )
@@ -82,7 +85,7 @@ class GameHandlerMixin(BaseHandlerMixin):
         if remaining > 0:
             buttons.append({"label": "🎫 한번 더!", "action": "message", "messageText": "/복권"})
         buttons.extend([
-            {"label": "🎰 슬롯머신", "action": "message", "messageText": "/슬롯머신 50000"},
+            {"label": "🎰 슬롯머신", "action": "message", "messageText": f"/슬롯머신 {GameConfig.DEFAULT_BET}"},
             {"label": "🚀 급등주", "action": "message", "messageText": "/급등"},
         ])
 
@@ -92,7 +95,7 @@ class GameHandlerMixin(BaseHandlerMixin):
         """슬롯머신"""
         parts = self.utterance.split()
 
-        bet = 50_000
+        bet = GameConfig.DEFAULT_BET
         if len(parts) >= 2:
             try:
                 bet = int(parts[1].replace(",", ""))

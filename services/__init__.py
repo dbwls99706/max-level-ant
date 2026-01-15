@@ -12,6 +12,20 @@ from .battle_service import BattleService
 from .challenge_service import ChallengeService
 from .milestone_service import MilestoneService
 from .asset_service import AssetService
+from .common import (
+    get_user_with_error,
+    validate_bet,
+    validate_quantity,
+    safe_commit,
+    safe_transaction,
+    check_market_closed_for_game,
+    error_response,
+    success_response,
+    calculate_profit,
+    safe_add,
+    safe_subtract,
+    safe_multiply
+)
 
 __all__ = [
     "UserService",
@@ -24,5 +38,18 @@ __all__ = [
     "BattleService",
     "ChallengeService",
     "MilestoneService",
-    "AssetService"
+    "AssetService",
+    # Common utilities
+    "get_user_with_error",
+    "validate_bet",
+    "validate_quantity",
+    "safe_commit",
+    "safe_transaction",
+    "check_market_closed_for_game",
+    "error_response",
+    "success_response",
+    "calculate_profit",
+    "safe_add",
+    "safe_subtract",
+    "safe_multiply"
 ]
