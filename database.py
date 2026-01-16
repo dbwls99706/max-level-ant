@@ -45,6 +45,20 @@ def get_db():
         db.close()
 
 
+def check_db_health() -> bool:
+    """
+    데이터베이스 연결 상태 확인
+    헬스체크용
+    """
+    try:
+        with engine.connect() as conn:
+            conn.execute(text("SELECT 1"))
+        return True
+    except SQLAlchemyError as e:
+        logger.error(f"DB 헬스체크 실패: {e}")
+        return False
+
+
 def init_db():
     """
     데이터베이스 테이블 생성 및 마이그레이션

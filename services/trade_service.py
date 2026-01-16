@@ -15,12 +15,13 @@ from services.user_service import UserService
 from services.mission_service import MissionService
 from services.common import (
     get_user_with_error,
+    get_user_with_error_for_update,
     validate_quantity,
     error_response,
     safe_add,
     safe_subtract
 )
-from config import GameConfig, Messages, ErrorCode, is_trading_available, get_market_status_message
+from config import GameConfig, Messages, ErrorCode, TradeType, is_trading_available, get_market_status_message
 from utils import get_service_logger
 
 logger = get_service_logger()
@@ -112,8 +113,8 @@ class TradeService:
         if time_error:
             return time_error
 
-        # 유저 확인
-        user, error = get_user_with_error(db, kakao_id)
+        # 유저 확인 (FOR UPDATE로 동시성 제어)
+        user, error = get_user_with_error_for_update(db, kakao_id)
         if error:
             return error
 
@@ -130,6 +131,14 @@ class TradeService:
         code = stock_info["code"]
         name = stock_info["name"]
         price = stock_info["price"]
+
+        # 가격 유효성 검사 (0원 또는 음수 방지)
+        if price <= 0:
+            logger.warning(f"비정상 주가 감지: {name}({code}) = {price}원")
+            return error_response(
+                ErrorCode.API_ERROR,
+                f"'{name}' 시세가 비정상입니다. 잠시 후 다시 시도해주세요."
+            )
 
         # 종목 캐시 저장
         StockService._cache_stock(code, name)
@@ -195,7 +204,7 @@ class TradeService:
                 kakao_id=kakao_id,
                 stock_code=code,
                 stock_name=name,
-                trade_type="BUY",
+                trade_type=TradeType.BUY,
                 quantity=quantity,
                 price=price,
                 total_amount=total_amount,
@@ -244,8 +253,8 @@ class TradeService:
         if time_error:
             return time_error
 
-        # 유저 확인
-        user, error = get_user_with_error(db, kakao_id)
+        # 유저 확인 (FOR UPDATE로 동시성 제어)
+        user, error = get_user_with_error_for_update(db, kakao_id)
         if error:
             return error
 
@@ -287,6 +296,14 @@ class TradeService:
                 Holding.stock_code == code
             ).first()
 
+        # 가격 유효성 검사 (0원 또는 음수 방지)
+        if price <= 0:
+            logger.warning(f"비정상 주가 감지: {name}({code}) = {price}원")
+            return error_response(
+                ErrorCode.API_ERROR,
+                f"'{name}' 시세가 비정상입니다. 잠시 후 다시 시도해주세요."
+            )
+
         if not holding or holding.quantity < quantity:
             holding_qty = holding.quantity if holding else 0
             return error_response(
@@ -306,7 +323,7 @@ class TradeService:
         # 수익 계산
         cost_basis = holding.avg_price * quantity
         profit = net_amount - cost_basis
-        profit_rate = (profit / cost_basis) * 100 if cost_basis > 0 else 0
+        profit_rate = round((profit / cost_basis) * 100, 2) if cost_basis > 0 else 0.0
 
         try:
             # 보유 수량 감소
@@ -327,7 +344,7 @@ class TradeService:
                 kakao_id=kakao_id,
                 stock_code=code,
                 stock_name=name,
-                trade_type="SELL",
+                trade_type=TradeType.SELL,
                 quantity=quantity,
                 price=price,
                 total_amount=total_amount,
@@ -458,7 +475,7 @@ class TradeService:
             current_value = current_price * h.quantity
             cost = h.avg_price * h.quantity
             profit = current_value - cost
-            profit_rate = (profit / cost) * 100 if cost > 0 else 0
+            profit_rate = round((profit / cost) * 100, 2) if cost > 0 else 0.0
 
             portfolio["holdings"].append({
                 "code": h.stock_code,
@@ -475,7 +492,7 @@ class TradeService:
 
         portfolio["total_asset"] = portfolio["cash"] + portfolio["total_stock_value"]
         portfolio["total_profit"] = portfolio["total_asset"] - portfolio["initial_cash"]
-        portfolio["profit_rate"] = (portfolio["total_profit"] / portfolio["initial_cash"]) * 100
+        portfolio["profit_rate"] = round((portfolio["total_profit"] / portfolio["initial_cash"]) * 100, 2)
 
         return portfolio
 

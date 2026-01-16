@@ -59,9 +59,9 @@ class RankingService:
                 price = stock_prices.get(h.stock_code, h.avg_price)
                 total_asset += price * h.quantity
 
-        # 수익률 계산 (0으로 나누기 방지)
+        # 수익률 계산 (0으로 나누기 방지, 소수점 2자리 반올림)
         if user.initial_cash > 0:
-            profit_rate = ((total_asset - user.initial_cash) / user.initial_cash) * 100
+            profit_rate = round(((total_asset - user.initial_cash) / user.initial_cash) * 100, 2)
         else:
             profit_rate = 0.0
 
@@ -137,9 +137,9 @@ class RankingService:
                 # 시세 조회 실패 시 평균 매수가 사용
                 total_asset += h.avg_price * h.quantity
 
-        # 수익률 계산 (0으로 나누기 방지)
+        # 수익률 계산 (0으로 나누기 방지, 소수점 2자리 반올림)
         if user.initial_cash > 0:
-            profit_rate = ((total_asset - user.initial_cash) / user.initial_cash) * 100
+            profit_rate = round(((total_asset - user.initial_cash) / user.initial_cash) * 100, 2)
         else:
             profit_rate = 0.0
 

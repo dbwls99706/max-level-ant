@@ -70,7 +70,7 @@ class Holding(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
     
     # 유저 ID
-    kakao_id = Column(String(100), ForeignKey("users.kakao_id"), nullable=False)
+    kakao_id = Column(String(100), ForeignKey("users.kakao_id"), nullable=False, index=True)
     
     # 종목 정보
     stock_code = Column(String(20), nullable=False)  # 종목 코드
@@ -104,7 +104,7 @@ class Transaction(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
     
     # 유저 ID
-    kakao_id = Column(String(100), ForeignKey("users.kakao_id"), nullable=False)
+    kakao_id = Column(String(100), ForeignKey("users.kakao_id"), nullable=False, index=True)
     
     # 종목 정보
     stock_code = Column(String(20), nullable=False)
@@ -140,10 +140,10 @@ class Battle(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
 
     # 도전자 (배틀 생성자)
-    challenger_id = Column(String(100), ForeignKey("users.kakao_id"), nullable=False)
+    challenger_id = Column(String(100), ForeignKey("users.kakao_id"), nullable=False, index=True)
 
     # 상대방 (배틀 수락자)
-    opponent_id = Column(String(100), ForeignKey("users.kakao_id"), nullable=True)
+    opponent_id = Column(String(100), ForeignKey("users.kakao_id"), nullable=True, index=True)
 
     # 배틀 대상 종목
     stock_code = Column(String(20), nullable=False)
@@ -160,7 +160,7 @@ class Battle(Base):
     opponent_prediction = Column(String(10), nullable=True)
 
     # 배틀 상태 (WAITING, ACTIVE, FINISHED, CANCELLED)
-    status = Column(String(20), default="WAITING")
+    status = Column(String(20), default="WAITING", index=True)
 
     # 최종 결과 가격
     end_price = Column(Integer, nullable=True)
@@ -215,8 +215,8 @@ class UserChallenge(Base):
 
     id = Column(Integer, primary_key=True, autoincrement=True)
 
-    kakao_id = Column(String(100), ForeignKey("users.kakao_id"), nullable=False)
-    challenge_id = Column(Integer, ForeignKey("weekly_challenges.id"), nullable=False)
+    kakao_id = Column(String(100), ForeignKey("users.kakao_id"), nullable=False, index=True)
+    challenge_id = Column(Integer, ForeignKey("weekly_challenges.id"), nullable=False, index=True)
 
     # 현재 진행값
     current_value = Column(Integer, default=0)
@@ -241,7 +241,7 @@ class Milestone(Base):
 
     id = Column(Integer, primary_key=True, autoincrement=True)
 
-    kakao_id = Column(String(100), ForeignKey("users.kakao_id"), nullable=False)
+    kakao_id = Column(String(100), ForeignKey("users.kakao_id"), nullable=False, index=True)
 
     # 마일스톤 타입 (ASSET_10M, ASSET_50M, ASSET_100M, TRADE_100, etc.)
     milestone_type = Column(String(50), nullable=False)
@@ -269,7 +269,7 @@ class AssetHistory(Base):
 
     id = Column(Integer, primary_key=True, autoincrement=True)
 
-    kakao_id = Column(String(100), ForeignKey("users.kakao_id"), nullable=False)
+    kakao_id = Column(String(100), ForeignKey("users.kakao_id"), nullable=False, index=True)
 
     # 기록 날짜
     record_date = Column(Date, nullable=False)

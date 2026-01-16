@@ -1,6 +1,6 @@
 """
 서비스 공통 유틸리티
-- 트랜잭션 헬퍼: safe_commit, safe_transaction
+- 트랜잭션 헬퍼: safe_commit
 - 검증 유틸: validate_bet, validate_quantity
 - 유저 헬퍼: get_user_with_error
 - 응답 빌더: error_response, success_response
@@ -43,36 +43,6 @@ def safe_commit(db: Session, error_message: str = "데이터베이스 오류가 
         return False, error_message
 
 
-def safe_transaction(db: Session):
-    """
-    트랜잭션 컨텍스트 매니저
-
-    Usage:
-        with safe_transaction(db):
-            user.cash -= amount
-            db.add(transaction)
-        # 자동 commit 또는 rollback
-    """
-    class TransactionContext:
-        def __enter__(self):
-            return self
-
-        def __exit__(self, exc_type, exc_val, exc_tb):
-            if exc_type is not None:
-                db.rollback()
-                logger.error(f"트랜잭션 롤백: {exc_type.__name__}: {exc_val}")
-                return False
-            try:
-                db.commit()
-                return True
-            except SQLAlchemyError as e:
-                db.rollback()
-                logger.error(f"커밋 실패, 롤백: {e}")
-                raise
-
-    return TransactionContext()
-
-
 # ===========================================
 # 유저 관련 헬퍼
 # ===========================================
@@ -80,6 +50,17 @@ def safe_transaction(db: Session):
 def get_user_or_none(db: Session, kakao_id: str) -> Optional[User]:
     """유저 조회 (없으면 None)"""
     return db.query(User).filter(User.kakao_id == kakao_id).first()
+
+
+def get_user_for_update(db: Session, kakao_id: str) -> Optional[User]:
+    """
+    유저 조회 with FOR UPDATE (Row Lock)
+    - 동시성 제어가 필요한 거래에서 사용
+    - 트랜잭션 종료 시까지 해당 row lock 유지
+    """
+    return db.query(User).filter(
+        User.kakao_id == kakao_id
+    ).with_for_update().first()
 
 
 def get_user_with_error(db: Session, kakao_id: str) -> Tuple[Optional[User], Optional[Dict]]:
@@ -90,6 +71,25 @@ def get_user_with_error(db: Session, kakao_id: str) -> Tuple[Optional[User], Opt
         (user, error_response) - 유저가 있으면 (user, None), 없으면 (None, error_dict)
     """
     user = get_user_or_none(db, kakao_id)
+    if not user:
+        return None, {
+            "success": False,
+            "error_code": ErrorCode.USER_NOT_FOUND,
+            "message": Messages.USER_NOT_FOUND
+        }
+    return user, None
+
+
+def get_user_with_error_for_update(db: Session, kakao_id: str) -> Tuple[Optional[User], Optional[Dict]]:
+    """
+    유저 조회 with FOR UPDATE and 에러 응답
+    - 거래 등 동시성 제어가 필요한 작업에서 사용
+    - Race condition 방지
+
+    Returns:
+        (user, error_response) - 유저가 있으면 (user, None), 없으면 (None, error_dict)
+    """
+    user = get_user_for_update(db, kakao_id)
     if not user:
         return None, {
             "success": False,

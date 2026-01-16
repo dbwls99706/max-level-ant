@@ -19,7 +19,7 @@ from services.common import (
     error_response,
     success_response,
 )
-from config import is_market_open, is_market_closed, get_market_status_message, ErrorCode
+from config import is_market_open, is_market_closed, get_market_status_message, ErrorCode, BattleStatus
 from utils import get_service_logger
 
 logger = get_service_logger()
@@ -136,7 +136,7 @@ class BattleService:
                 bet_amount=bet,
                 challenger_prediction=pred,
                 duration_minutes=dur,
-                status="WAITING"
+                status=BattleStatus.WAITING
             )
 
             db.add(battle)
@@ -180,7 +180,7 @@ class BattleService:
         if not battle:
             return error_response(ErrorCode.NOT_FOUND, "❌ 해당 배틀을 찾을 수 없습니다.")
 
-        if battle.status != "WAITING":
+        if battle.status != BattleStatus.WAITING:
             return error_response(
                 ErrorCode.INVALID_STATE,
                 "❌ 이미 진행 중이거나 종료된 배틀입니다."
@@ -213,7 +213,7 @@ class BattleService:
             battle.opponent_prediction = opponent_pred
             battle.start_price = stock_info["price"]
             battle.started_at = datetime.utcnow()
-            battle.status = "ACTIVE"
+            battle.status = BattleStatus.ACTIVE
 
             db.commit()
         except SQLAlchemyError as e:
@@ -249,13 +249,13 @@ class BattleService:
         if not battle:
             return error_response(ErrorCode.NOT_FOUND, "❌ 해당 배틀을 찾을 수 없습니다.")
 
-        if battle.status == "WAITING":
+        if battle.status == BattleStatus.WAITING:
             return error_response(ErrorCode.INVALID_STATE, "⏳ 아직 상대방을 기다리는 중입니다.")
 
-        if battle.status == "CANCELLED":
+        if battle.status == BattleStatus.CANCELLED:
             return error_response(ErrorCode.INVALID_STATE, "❌ 취소된 배틀입니다.")
 
-        if battle.status == "FINISHED":
+        if battle.status == BattleStatus.FINISHED:
             # 이미 종료된 배틀 결과 반환
             return cls._get_finished_result(db, battle)
 
@@ -297,7 +297,7 @@ class BattleService:
         # 유저 확인 (데이터 무결성 체크)
         if not challenger or not opponent:
             try:
-                battle.status = "CANCELLED"
+                battle.status = BattleStatus.CANCELLED
                 db.commit()
             except SQLAlchemyError as e:
                 db.rollback()
@@ -325,7 +325,7 @@ class BattleService:
                 opponent.cash = safe_add(opponent.cash, total_pot)
                 battle.winner_id = battle.opponent_id
 
-            battle.status = "FINISHED"
+            battle.status = BattleStatus.FINISHED
             db.commit()
         except SQLAlchemyError as e:
             db.rollback()
@@ -383,7 +383,7 @@ class BattleService:
     @classmethod
     def get_waiting_battles(cls, db: Session) -> List[Dict]:
         """대기 중인 배틀 목록"""
-        battles = db.query(Battle).filter(Battle.status == "WAITING").all()
+        battles = db.query(Battle).filter(Battle.status == BattleStatus.WAITING).all()
 
         # N+1 최적화: 모든 유저 ID 수집 후 배치 조회
         challenger_ids = {b.challenger_id for b in battles}
@@ -438,7 +438,7 @@ class BattleService:
         if battle.challenger_id != kakao_id:
             return error_response(ErrorCode.PERMISSION_DENIED, "❌ 본인이 생성한 배틀만 취소할 수 있습니다.")
 
-        if battle.status != "WAITING":
+        if battle.status != BattleStatus.WAITING:
             return error_response(ErrorCode.INVALID_STATE, "❌ 대기 중인 배틀만 취소할 수 있습니다.")
 
         user = db.query(User).filter(User.kakao_id == kakao_id).first()
@@ -448,7 +448,7 @@ class BattleService:
         try:
             # 배팅금 환불
             user.cash = safe_add(user.cash, battle.bet_amount)
-            battle.status = "CANCELLED"
+            battle.status = BattleStatus.CANCELLED
             db.commit()
         except SQLAlchemyError as e:
             db.rollback()

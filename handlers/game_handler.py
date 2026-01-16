@@ -124,14 +124,31 @@ class GameHandlerMixin(BaseHandlerMixin):
         slots = result["slots"]
         slot_display = f"[ {slots[0]} | {slots[1]} | {slots[2]} ]"
 
+        # 배율별 흥분도 차등 메시지
+        multiplier = result["multiplier"]
         if result["jackpot"]:
-            effect = "🎆 JACKPOT!!! 🎆"
-        elif result["multiplier"] >= 5:
+            effect = "🎆🎇🎆 LEGENDARY JACKPOT!!! 🎆🎇🎆"
+            encourage = "전설이 되셨습니다! 👑"
+        elif multiplier >= 10:
+            effect = "💎 EPIC WIN! 💎"
+            encourage = "믿기 힘든 행운! 🌟"
+        elif multiplier >= 5:
             effect = "🎉 BIG WIN! 🎉"
-        elif result["multiplier"] > 0:
+            encourage = "대박! 계속 도전하세요! 🔥"
+        elif multiplier >= 2:
             effect = "✨ WIN! ✨"
+            encourage = "좋아요! 🎯"
+        elif multiplier > 0:
+            effect = "💫 SMALL WIN 💫"
+            encourage = "아깝네요, 한번 더!"
         else:
-            effect = "💨 실패..."
+            # 근접 실패 감지 (2개 일치)
+            if slots[0] == slots[1] or slots[1] == slots[2] or slots[0] == slots[2]:
+                effect = "😱 아깝다!! 2개 일치!"
+                encourage = "거의 다 왔어요! 🔥 다시 한번!"
+            else:
+                effect = "💨 실패..."
+                encourage = "다음엔 될 거예요! 💪"
 
         if result["profit"] >= 0:
             profit_text = f"📈 +{result['profit']:,}원"
@@ -143,6 +160,7 @@ class GameHandlerMixin(BaseHandlerMixin):
 {slot_display}
 
 {effect}
+{encourage}
 
 💰 배팅: {result['bet']:,}원
 🎯 배율: x{result['multiplier']}
@@ -272,11 +290,30 @@ class GameHandlerMixin(BaseHandlerMixin):
 
 💵 잔고: {result['cash']:,}원"""
         else:
+            number = result['number']
             if result["won"]:
-                effect = "🎉 WIN!"
+                # 승리 - 확실한 승리 vs 아슬아슬한 승리
+                if abs(number - 50) <= 5:
+                    effect = "🎉 아슬아슬 WIN! 🎉"
+                    encourage = "간발의 차이! 짜릿해요! ⚡"
+                elif abs(number - 50) >= 40:
+                    effect = "🎊 완벽한 WIN! 🎊"
+                    encourage = "확실한 승리! 👏"
+                else:
+                    effect = "🎉 WIN!"
+                    encourage = "좋아요! 계속 가보세요! 🔥"
                 profit_text = f"📈 +{result['profit']:,}원"
             else:
-                effect = "💨 LOSE"
+                # 패배 - 근접 실패 감지
+                if abs(number - 50) <= 3:
+                    effect = "😱 앗!! 거의 맞출 뻔!"
+                    encourage = f"50에서 {abs(number-50)}만 차이! 다시 도전! 🔥"
+                elif abs(number - 50) <= 10:
+                    effect = "😤 아깝다!"
+                    encourage = "조금만 더! 💪"
+                else:
+                    effect = "💨 LOSE"
+                    encourage = "다음엔 될 거예요!"
                 profit_text = f"📉 {result['profit']:,}원"
 
             arrow = "🔼" if result["actual"] == "높" else "🔽"
@@ -287,6 +324,7 @@ class GameHandlerMixin(BaseHandlerMixin):
 🎯 선택: {result['choice']} / 정답: {result['actual']}
 
 {effect}
+{encourage}
 
 💰 배팅: {result['bet']:,}원
 {profit_text}

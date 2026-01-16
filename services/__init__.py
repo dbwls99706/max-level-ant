@@ -14,10 +14,11 @@ from .milestone_service import MilestoneService
 from .asset_service import AssetService
 from .common import (
     get_user_with_error,
+    get_user_with_error_for_update,
+    get_user_for_update,
     validate_bet,
     validate_quantity,
     safe_commit,
-    safe_transaction,
     check_market_closed_for_game,
     error_response,
     success_response,
@@ -41,10 +42,11 @@ __all__ = [
     "AssetService",
     # Common utilities
     "get_user_with_error",
+    "get_user_with_error_for_update",
+    "get_user_for_update",
     "validate_bet",
     "validate_quantity",
     "safe_commit",
-    "safe_transaction",
     "check_market_closed_for_game",
     "error_response",
     "success_response",

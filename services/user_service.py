@@ -13,7 +13,7 @@ from sqlalchemy.exc import SQLAlchemyError
 
 from models import User
 from config import GameConfig
-from services.common import safe_add, safe_subtract
+from services.common import safe_add, safe_subtract, get_user_for_update
 from utils import get_service_logger
 
 logger = get_service_logger()
@@ -127,10 +127,11 @@ class UserService:
     @classmethod
     def check_attendance(cls, db: Session, kakao_id: str) -> Tuple[bool, int, int, int]:
         """
-        출석 체크
+        출석 체크 (FOR UPDATE로 동시성 제어)
         Returns: (success, reward, streak, current_cash)
         """
-        user = cls.get_user(db, kakao_id)
+        # FOR UPDATE로 row lock 획득 (중복 출석 방지)
+        user = get_user_for_update(db, kakao_id)
         if not user:
             return False, 0, 0, 0
 
@@ -178,10 +179,11 @@ class UserService:
     @staticmethod
     def update_cash(db: Session, kakao_id: str, amount: int) -> bool:
         """
-        현금 업데이트
+        현금 업데이트 (FOR UPDATE로 동시성 제어)
         amount: 양수면 증가, 음수면 감소
         """
-        user = UserService.get_user(db, kakao_id)
+        # FOR UPDATE로 row lock 획득 (동시 수정 방지)
+        user = get_user_for_update(db, kakao_id)
         if not user:
             return False
 

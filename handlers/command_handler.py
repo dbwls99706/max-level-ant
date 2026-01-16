@@ -177,7 +177,8 @@ class CommandHandler(
         user, is_new = UserService.create_user(self.db, self.kakao_id, self.nickname)
 
         if is_new:
-            logger.info(f"새 유저 가입: {self.kakao_id}")
+            masked_id = f"{self.kakao_id[:4]}****" if len(self.kakao_id) > 4 else "****"
+            logger.info(f"새 유저 가입: {masked_id}")
             welcome_msg = Messages.WELCOME.format(initial_cash=GameConfig.INITIAL_CASH)
             buttons = [
                 {"label": "📅 출석 +30만", "action": "message", "messageText": "/출석"},
@@ -208,18 +209,46 @@ class CommandHandler(
 
         streak_emoji = get_streak_display(streak)
 
+        # 스트릭 기반 동기부여 메시지
+        def get_streak_motivation(s: int, is_new: bool) -> str:
+            if s >= 7:
+                if s == 7 and is_new:
+                    return "🎊🎊 7일 연속 달성! 최대 보너스 획득! 🎊🎊"
+                elif s == 14 and is_new:
+                    return "👑 2주 연속! 당신은 진정한 충성 플레이어! 👑"
+                elif s == 30 and is_new:
+                    return "🏆 한 달 연속!!! 전설의 투자자! 🏆"
+                return f"🔥 최대 보너스 유지 중! ({s}일)"
+            elif s >= 5:
+                return f"🎯 내일 7일 달성하면 2배 보너스! ({7-s}일 남음)"
+            elif s >= 3:
+                return f"📈 5일 달성하면 50% 보너스! ({5-s}일 남음)"
+            elif s >= 1:
+                return f"💪 3일 달성하면 20% 보너스! ({3-s}일 남음)"
+            return "🌱 연속 출석 시작! 보너스가 커져요!"
+
         if success:
+            motivation = get_streak_motivation(streak, True)
             msg = f"""✅ 출석 완료!
 
 💰 +{reward:,}원 지급!
 {streak_emoji} 연속 출석: {streak}일
 
+{motivation}
+
 현재 잔고: {cash:,}원"""
         else:
+            motivation = get_streak_motivation(streak, False)
+            # 스트릭 유지 경고
+            if streak >= 3:
+                warning = f"⚠️ 내일 출석 안 하면 {streak}일 스트릭이 리셋됩니다!"
+            else:
+                warning = "내일 다시 출석해주세요."
             msg = f"""⚠️ 오늘은 이미 출석했습니다!
 
-내일 다시 출석해주세요.
-{streak_emoji} 현재 연속 출석: {streak}일"""
+{warning}
+{streak_emoji} 현재 연속 출석: {streak}일
+{motivation}"""
 
         buttons = [
             {"label": "🚀 급등주", "action": "message", "messageText": "/급등"},
