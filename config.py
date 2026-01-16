@@ -91,8 +91,15 @@ class TradeType:
 # ===========================================
 class SecurityConfig:
     """보안 관련 설정"""
-    # 관리자 토큰 (환경변수에서 읽거나 랜덤 생성)
-    ADMIN_TOKEN = os.getenv("ADMIN_TOKEN", secrets.token_urlsafe(32))
+    # 관리자 토큰 (환경변수 필수 - 없으면 랜덤 생성 후 경고)
+    _admin_token = os.getenv("ADMIN_TOKEN")
+    if not _admin_token:
+        _admin_token = secrets.token_urlsafe(32)
+        _config_logger.warning(
+            f"ADMIN_TOKEN 환경변수가 설정되지 않았습니다. "
+            f"임시 토큰 생성됨 (재시작 시 변경됨): {_admin_token[:8]}..."
+        )
+    ADMIN_TOKEN = _admin_token
 
     # CORS 허용 도메인
     ALLOWED_ORIGINS = [
@@ -195,7 +202,9 @@ def get_market_status() -> str:
     - REGULAR: 정규장 (09:00~15:30)
     - AFTER_HOURS: 시간외 거래 (15:40~18:00)
     """
-    now = datetime.now(KST)
+    # UTC에서 명시적으로 KST로 변환 (서버 타임존 무관하게 동작)
+    from datetime import timezone
+    now = datetime.now(timezone.utc).astimezone(KST)
     today = now.date()
 
     # 주말 체크
@@ -244,7 +253,8 @@ def is_trading_available() -> bool:
 def get_market_status_message() -> str:
     """현재 장 상태 메시지"""
     status = get_market_status()
-    now = datetime.now(KST)
+    from datetime import timezone
+    now = datetime.now(timezone.utc).astimezone(KST)
 
     if status == "CLOSED":
         if now.weekday() >= 5:

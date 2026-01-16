@@ -185,8 +185,13 @@ async def kakao_skill(request: Request, db: Session = Depends(get_db)):
         logger.debug(f"카카오 유저 정보: {user_info}")
         logger.debug(f"닉네임: '{nickname}'")
 
-        # 유저 ID 없으면 에러
-        if not kakao_id:
+        # 유저 ID 검증 (빈값, 너무 긴 값 방지)
+        if not kakao_id or len(kakao_id) > 100:
+            return KakaoResponse.simple_text("유저 정보를 확인할 수 없습니다.")
+
+        # 악의적인 ID 패턴 차단 (SQL-like, 특수문자)
+        if not kakao_id.replace("-", "").replace("_", "").isalnum():
+            logger.warning(f"의심스러운 kakao_id 감지: {kakao_id[:20]}...")
             return KakaoResponse.simple_text("유저 정보를 확인할 수 없습니다.")
 
         # Rate limiting 체크
