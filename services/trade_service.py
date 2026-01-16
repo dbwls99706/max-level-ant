@@ -20,7 +20,7 @@ from services.common import (
     safe_add,
     safe_subtract
 )
-from config import GameConfig, Messages, ErrorCode, is_trading_available, get_market_status_message
+from config import GameConfig, Messages, ErrorCode, TradeType, is_trading_available, get_market_status_message
 from utils import get_service_logger
 
 logger = get_service_logger()
@@ -195,7 +195,7 @@ class TradeService:
                 kakao_id=kakao_id,
                 stock_code=code,
                 stock_name=name,
-                trade_type="BUY",
+                trade_type=TradeType.BUY,
                 quantity=quantity,
                 price=price,
                 total_amount=total_amount,
@@ -327,7 +327,7 @@ class TradeService:
                 kakao_id=kakao_id,
                 stock_code=code,
                 stock_name=name,
-                trade_type="SELL",
+                trade_type=TradeType.SELL,
                 quantity=quantity,
                 price=price,
                 total_amount=total_amount,
