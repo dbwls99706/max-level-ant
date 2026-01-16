@@ -7,7 +7,7 @@
 """
 import random
 from datetime import date
-from typing import Dict
+from typing import Dict, Tuple
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import SQLAlchemyError
 
@@ -174,7 +174,7 @@ class GameService:
         }
 
     @classmethod
-    def _generate_slot_symbols(cls, outcome_symbol: str) -> tuple:
+    def _generate_slot_symbols(cls, outcome_symbol: str) -> Tuple[str, str, str]:
         """슬롯 심볼 생성"""
         symbols = GameProbability.SLOT_SYMBOLS
 

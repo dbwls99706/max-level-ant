@@ -1,6 +1,6 @@
 """
 서비스 공통 유틸리티
-- 트랜잭션 헬퍼: safe_commit, safe_transaction
+- 트랜잭션 헬퍼: safe_commit
 - 검증 유틸: validate_bet, validate_quantity
 - 유저 헬퍼: get_user_with_error
 - 응답 빌더: error_response, success_response
@@ -41,36 +41,6 @@ def safe_commit(db: Session, error_message: str = "데이터베이스 오류가 
         db.rollback()
         logger.error(f"DB commit 실패: {e}")
         return False, error_message
-
-
-def safe_transaction(db: Session):
-    """
-    트랜잭션 컨텍스트 매니저
-
-    Usage:
-        with safe_transaction(db):
-            user.cash -= amount
-            db.add(transaction)
-        # 자동 commit 또는 rollback
-    """
-    class TransactionContext:
-        def __enter__(self):
-            return self
-
-        def __exit__(self, exc_type, exc_val, exc_tb):
-            if exc_type is not None:
-                db.rollback()
-                logger.error(f"트랜잭션 롤백: {exc_type.__name__}: {exc_val}")
-                return False
-            try:
-                db.commit()
-                return True
-            except SQLAlchemyError as e:
-                db.rollback()
-                logger.error(f"커밋 실패, 롤백: {e}")
-                raise
-
-    return TransactionContext()
 
 
 # ===========================================
