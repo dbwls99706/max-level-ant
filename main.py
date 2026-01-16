@@ -17,7 +17,7 @@ from database import get_db, init_db, reset_db, check_db_health
 from handlers import CommandHandler
 from utils import KakaoResponse, configure_root_logger, get_main_logger
 from services.stock_service import KISAPIClient, StockService
-from config import SecurityConfig
+from config import SecurityConfig, validate_config
 
 # 로깅 설정
 configure_root_logger()
@@ -90,6 +90,14 @@ async def lifespan(app: FastAPI):
     """앱 시작/종료 시 실행"""
     # 시작 시
     logger.info("주식왕 봇 서버 시작!")
+
+    # 설정 검증
+    is_valid, errors = validate_config()
+    if not is_valid:
+        logger.error(f"설정 검증 실패: {errors}")
+        # 중요: 설정 오류 시에도 서버는 시작 (경고만 출력)
+        # 실제 프로덕션에서는 raise RuntimeError() 고려
+
     init_db()  # DB 테이블 생성
 
     # 종목 캐시 로드 (DB에서 메모리로)

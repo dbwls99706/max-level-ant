@@ -239,6 +239,25 @@ class BaseHandlerMixin:
             return f"▼{rate:.2f}%"
         return "0.00%"
 
+    def _get_sell_celebration(self, profit_rate: float) -> str:
+        """수익률 기반 축하 메시지 (매도 시 사용)"""
+        if profit_rate >= 100:
+            return "🚀💰 대박!!! +100% 이상! 천재 트레이더! 👑"
+        elif profit_rate >= 50:
+            return "🔥 WOW! +50% 수익! 대성공! 🎉"
+        elif profit_rate >= 20:
+            return "🎊 훌륭해요! +20% 이상 수익! 🌟"
+        elif profit_rate >= 10:
+            return "📈 좋은 거래! 꾸준히 가세요! 💪"
+        elif profit_rate >= 0:
+            return "✨ 수익 실현! 축하해요!"
+        elif profit_rate >= -10:
+            return "💫 작은 손실, 다음 기회가 있어요!"
+        elif profit_rate >= -30:
+            return "😤 아쉽네요... 회복할 수 있어요!"
+        else:
+            return "😢 큰 손실... 다음엔 분할매수 해보세요!"
+
     def _add_celebration(self, msg: str, profit: int) -> str:
         """큰 수익에 축하 이펙트 추가"""
         celebration_msg, effect = self._get_profit_message(profit)

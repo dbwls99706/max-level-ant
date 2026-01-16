@@ -470,9 +470,68 @@ class GameProbability:
 class CacheConfig:
     # 주식 시세 캐시 시간 (초)
     STOCK_PRICE_TTL = 60  # 1분
-    
+
     # 랭킹 캐시 시간 (초)
     RANKING_TTL = 300  # 5분
+
+
+# ===========================================
+# 설정 검증
+# ===========================================
+def validate_config() -> tuple[bool, list[str]]:
+    """
+    모든 설정을 검증하고 결과 반환
+
+    Returns:
+        (is_valid, errors): 검증 통과 여부와 에러 목록
+    """
+    errors = []
+    warnings = []
+
+    # 1. 필수 환경변수 검증
+    if not KISConfig.is_configured():
+        warnings.append("KIS API 미설정 - 실시간 시세 조회 불가")
+
+    # 2. 데이터베이스 URL 검증
+    if not DATABASE_URL:
+        errors.append("DATABASE_URL이 설정되지 않았습니다")
+    elif "sqlite" in DATABASE_URL and not SecurityConfig.DEV_MODE:
+        warnings.append("프로덕션에서 SQLite 사용 중 - PostgreSQL 권장")
+
+    # 3. 게임 설정 값 범위 검증
+    if GameConfig.MIN_BET <= 0:
+        errors.append(f"MIN_BET는 양수여야 합니다: {GameConfig.MIN_BET}")
+    if GameConfig.MAX_BET <= GameConfig.MIN_BET:
+        errors.append(f"MAX_BET({GameConfig.MAX_BET})는 MIN_BET({GameConfig.MIN_BET})보다 커야 합니다")
+    if GameConfig.INITIAL_CASH <= 0:
+        errors.append(f"INITIAL_CASH는 양수여야 합니다: {GameConfig.INITIAL_CASH}")
+    if not (0 <= GameConfig.TRADE_FEE_RATE <= 0.1):
+        errors.append(f"TRADE_FEE_RATE는 0~10% 범위여야 합니다: {GameConfig.TRADE_FEE_RATE}")
+
+    # 4. 게임 확률 검증
+    if not GameProbability.validate_probabilities():
+        errors.append("게임 확률 설정 오류 - 확률 합계가 1이 아닙니다")
+
+    # 5. 기대값 검증 (과도하게 높거나 낮은 경우 경고)
+    for game in ["lottery", "slot", "roulette", "highlow", "coinflip"]:
+        ev = GameProbability.calculate_expected_value(game)
+        if ev > 150:
+            warnings.append(f"{game} 기대값이 너무 높음: {ev:.1f}%")
+        elif ev < 50:
+            warnings.append(f"{game} 기대값이 너무 낮음: {ev:.1f}%")
+
+    # 로그 출력
+    for warning in warnings:
+        _config_logger.warning(f"설정 경고: {warning}")
+    for error in errors:
+        _config_logger.error(f"설정 오류: {error}")
+
+    is_valid = len(errors) == 0
+
+    if is_valid:
+        _config_logger.info("설정 검증 완료 - 모든 필수 설정 확인됨")
+
+    return is_valid, errors
 
 
 # ===========================================

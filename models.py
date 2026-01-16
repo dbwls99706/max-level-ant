@@ -4,7 +4,7 @@
 from datetime import datetime, date
 from sqlalchemy import (
     Column, String, BigInteger, Integer, Float,
-    DateTime, Date, ForeignKey, UniqueConstraint
+    DateTime, Date, ForeignKey, UniqueConstraint, Index
 )
 from sqlalchemy.orm import relationship
 from database import Base
@@ -85,9 +85,10 @@ class Holding(Base):
     # 총 매수 금액 (평균가 계산용)
     total_invested = Column(BigInteger, default=0)
     
-    # 유니크 제약 (한 유저당 한 종목 하나의 레코드)
+    # 유니크 제약 + 복합 인덱스 (한 유저당 한 종목 하나의 레코드)
     __table_args__ = (
         UniqueConstraint('kakao_id', 'stock_code', name='unique_user_stock'),
+        Index('ix_holding_user_stock', 'kakao_id', 'stock_code'),  # 조회 성능 최적화
     )
     
     # 관계 설정
@@ -125,10 +126,15 @@ class Transaction(Base):
     
     # 거래 시간
     created_at = Column(DateTime, default=datetime.utcnow)
-    
+
+    # 인덱스 (최근 거래 조회 최적화)
+    __table_args__ = (
+        Index('ix_transaction_user_created', 'kakao_id', 'created_at'),
+    )
+
     # 관계 설정
     user = relationship("User", back_populates="transactions")
-    
+
     def __repr__(self):
         return f"<Transaction({self.trade_type} {self.stock_name} {self.quantity}주 @ {self.price:,})>"
 
