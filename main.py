@@ -3,14 +3,17 @@
 """
 import os
 import secrets
+import time
+from collections import defaultdict
 from fastapi import FastAPI, Request, Depends, HTTPException, Header
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 import uvicorn
 from contextlib import asynccontextmanager
 from typing import Optional
 
-from database import get_db, init_db, reset_db
+from database import get_db, init_db, reset_db, check_db_health
 from handlers import CommandHandler
 from utils import KakaoResponse, configure_root_logger, get_main_logger
 from services.stock_service import KISAPIClient, StockService
@@ -19,6 +22,64 @@ from config import SecurityConfig
 # 로깅 설정
 configure_root_logger()
 logger = get_main_logger()
+
+
+# ===========================================
+# 간단한 인메모리 Rate Limiter
+# ===========================================
+class RateLimiter:
+    """
+    간단한 인메모리 Rate Limiter
+    - 유저별 요청 횟수 제한
+    - 주기적으로 오래된 데이터 정리
+    """
+    def __init__(self, max_requests: int = 30, window_seconds: int = 60):
+        self.max_requests = max_requests
+        self.window_seconds = window_seconds
+        self.requests: dict = defaultdict(list)
+        self.last_cleanup = time.time()
+
+    def is_allowed(self, user_id: str) -> bool:
+        """요청 허용 여부 확인"""
+        now = time.time()
+
+        # 5분마다 오래된 데이터 정리
+        if now - self.last_cleanup > 300:
+            self._cleanup()
+            self.last_cleanup = now
+
+        # 해당 유저의 윈도우 내 요청 기록
+        user_requests = self.requests[user_id]
+        cutoff = now - self.window_seconds
+
+        # 윈도우 밖의 오래된 요청 제거
+        self.requests[user_id] = [ts for ts in user_requests if ts > cutoff]
+
+        # 제한 확인
+        if len(self.requests[user_id]) >= self.max_requests:
+            return False
+
+        # 현재 요청 기록
+        self.requests[user_id].append(now)
+        return True
+
+    def _cleanup(self):
+        """오래된 데이터 정리"""
+        now = time.time()
+        cutoff = now - self.window_seconds
+        expired_users = []
+
+        for user_id, timestamps in self.requests.items():
+            self.requests[user_id] = [ts for ts in timestamps if ts > cutoff]
+            if not self.requests[user_id]:
+                expired_users.append(user_id)
+
+        for user_id in expired_users:
+            del self.requests[user_id]
+
+
+# 분당 30회 제한 (카카오톡 특성상 넉넉하게)
+rate_limiter = RateLimiter(max_requests=30, window_seconds=60)
 
 
 # ===========================================
@@ -87,7 +148,13 @@ async def root():
 @app.api_route("/health", methods=["GET", "HEAD"])
 async def health_check():
     """헬스체크 (UptimeRobot 등 모니터링 서비스용)"""
-    return {"status": "healthy"}
+    db_healthy = check_db_health()
+    if not db_healthy:
+        return JSONResponse(
+            status_code=503,
+            content={"status": "unhealthy", "db": "disconnected"}
+        )
+    return {"status": "healthy", "db": "connected"}
 
 
 # ===========================================
@@ -97,14 +164,14 @@ async def health_check():
 async def kakao_skill(request: Request, db: Session = Depends(get_db)):
     """
     카카오톡 챗봇 스킬 엔드포인트
-    
+
     카카오 챗봇 관리자센터에서 이 URL을 스킬 서버로 등록합니다.
     예: https://your-domain.com/skill
     """
     try:
         # 요청 파싱
         body = await request.json()
-        
+
         # 유저 정보 추출
         user_request = body.get("userRequest", {})
         user_info = user_request.get("user", {})
@@ -122,12 +189,19 @@ async def kakao_skill(request: Request, db: Session = Depends(get_db)):
         if not kakao_id:
             return KakaoResponse.simple_text("유저 정보를 확인할 수 없습니다.")
 
+        # Rate limiting 체크
+        if not rate_limiter.is_allowed(kakao_id):
+            logger.warning(f"Rate limit exceeded: {kakao_id}")
+            return KakaoResponse.simple_text(
+                "⚠️ 요청이 너무 많습니다.\n잠시 후 다시 시도해주세요."
+            )
+
         # 명령어 처리
         handler = CommandHandler(db, kakao_id, utterance, nickname)
         response = handler.handle()
-        
+
         return response
-        
+
     except Exception as e:
         logger.error(f"스킬 처리 에러: {e}", exc_info=True)
 

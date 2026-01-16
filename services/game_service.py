@@ -14,6 +14,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from config import GameConfig, GameProbability, ErrorCode
 from services.common import (
     get_user_with_error,
+    get_user_with_error_for_update,
     validate_bet,
     check_market_closed_for_game,
     error_response,
@@ -35,7 +36,7 @@ class GameService:
         복권 긁기 (1일 5회, 1장 10,000원)
         - 일일 제한이 있으므로 장 시간 무관하게 가능
         """
-        user, error = get_user_with_error(db, kakao_id)
+        user, error = get_user_with_error_for_update(db, kakao_id)
         if error:
             return error
 
@@ -120,7 +121,7 @@ class GameService:
         if not can_play:
             return market_error
 
-        user, error = get_user_with_error(db, kakao_id)
+        user, error = get_user_with_error_for_update(db, kakao_id)
         if error:
             return error
 
@@ -210,7 +211,7 @@ class GameService:
         if not can_play:
             return market_error
 
-        user, error = get_user_with_error(db, kakao_id)
+        user, error = get_user_with_error_for_update(db, kakao_id)
         if error:
             return error
 
@@ -294,7 +295,7 @@ class GameService:
         if not can_play:
             return market_error
 
-        user, error = get_user_with_error(db, kakao_id)
+        user, error = get_user_with_error_for_update(db, kakao_id)
         if error:
             return error
 
@@ -387,7 +388,7 @@ class GameService:
         if not can_play:
             return market_error
 
-        user, error = get_user_with_error(db, kakao_id)
+        user, error = get_user_with_error_for_update(db, kakao_id)
         if error:
             return error
 

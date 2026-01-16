@@ -15,6 +15,7 @@ from services.user_service import UserService
 from services.mission_service import MissionService
 from services.common import (
     get_user_with_error,
+    get_user_with_error_for_update,
     validate_quantity,
     error_response,
     safe_add,
@@ -112,8 +113,8 @@ class TradeService:
         if time_error:
             return time_error
 
-        # 유저 확인
-        user, error = get_user_with_error(db, kakao_id)
+        # 유저 확인 (FOR UPDATE로 동시성 제어)
+        user, error = get_user_with_error_for_update(db, kakao_id)
         if error:
             return error
 
@@ -130,6 +131,14 @@ class TradeService:
         code = stock_info["code"]
         name = stock_info["name"]
         price = stock_info["price"]
+
+        # 가격 유효성 검사 (0원 또는 음수 방지)
+        if price <= 0:
+            logger.warning(f"비정상 주가 감지: {name}({code}) = {price}원")
+            return error_response(
+                ErrorCode.API_ERROR,
+                f"'{name}' 시세가 비정상입니다. 잠시 후 다시 시도해주세요."
+            )
 
         # 종목 캐시 저장
         StockService._cache_stock(code, name)
@@ -244,8 +253,8 @@ class TradeService:
         if time_error:
             return time_error
 
-        # 유저 확인
-        user, error = get_user_with_error(db, kakao_id)
+        # 유저 확인 (FOR UPDATE로 동시성 제어)
+        user, error = get_user_with_error_for_update(db, kakao_id)
         if error:
             return error
 
@@ -286,6 +295,14 @@ class TradeService:
                 Holding.kakao_id == kakao_id,
                 Holding.stock_code == code
             ).first()
+
+        # 가격 유효성 검사 (0원 또는 음수 방지)
+        if price <= 0:
+            logger.warning(f"비정상 주가 감지: {name}({code}) = {price}원")
+            return error_response(
+                ErrorCode.API_ERROR,
+                f"'{name}' 시세가 비정상입니다. 잠시 후 다시 시도해주세요."
+            )
 
         if not holding or holding.quantity < quantity:
             holding_qty = holding.quantity if holding else 0

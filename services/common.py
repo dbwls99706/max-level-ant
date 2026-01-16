@@ -52,6 +52,17 @@ def get_user_or_none(db: Session, kakao_id: str) -> Optional[User]:
     return db.query(User).filter(User.kakao_id == kakao_id).first()
 
 
+def get_user_for_update(db: Session, kakao_id: str) -> Optional[User]:
+    """
+    유저 조회 with FOR UPDATE (Row Lock)
+    - 동시성 제어가 필요한 거래에서 사용
+    - 트랜잭션 종료 시까지 해당 row lock 유지
+    """
+    return db.query(User).filter(
+        User.kakao_id == kakao_id
+    ).with_for_update().first()
+
+
 def get_user_with_error(db: Session, kakao_id: str) -> Tuple[Optional[User], Optional[Dict]]:
     """
     유저 조회 with 에러 응답
@@ -60,6 +71,25 @@ def get_user_with_error(db: Session, kakao_id: str) -> Tuple[Optional[User], Opt
         (user, error_response) - 유저가 있으면 (user, None), 없으면 (None, error_dict)
     """
     user = get_user_or_none(db, kakao_id)
+    if not user:
+        return None, {
+            "success": False,
+            "error_code": ErrorCode.USER_NOT_FOUND,
+            "message": Messages.USER_NOT_FOUND
+        }
+    return user, None
+
+
+def get_user_with_error_for_update(db: Session, kakao_id: str) -> Tuple[Optional[User], Optional[Dict]]:
+    """
+    유저 조회 with FOR UPDATE and 에러 응답
+    - 거래 등 동시성 제어가 필요한 작업에서 사용
+    - Race condition 방지
+
+    Returns:
+        (user, error_response) - 유저가 있으면 (user, None), 없으면 (None, error_dict)
+    """
+    user = get_user_for_update(db, kakao_id)
     if not user:
         return None, {
             "success": False,
