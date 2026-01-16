@@ -11,7 +11,7 @@ from typing import Dict
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import SQLAlchemyError
 
-from config import GameConfig, GameProbability
+from config import GameConfig, GameProbability, ErrorCode
 from services.common import (
     get_user_with_error,
     validate_bet,
@@ -48,14 +48,14 @@ class GameService:
         # 오늘 최대 횟수 체크
         if user.lottery_count_today >= GameConfig.MAX_LOTTERY_PER_DAY:
             return error_response(
-                "DAILY_LIMIT",
+                ErrorCode.DAILY_LIMIT_REACHED,
                 f"🎫 오늘 복권은 모두 긁었어요! ({GameConfig.MAX_LOTTERY_PER_DAY}회)\n내일 다시 도전하세요 🍀"
             )
 
         # 잔액 확인
         if user.cash < GameConfig.LOTTERY_COST:
             return error_response(
-                "INSUFFICIENT_BALANCE",
+                ErrorCode.INSUFFICIENT_BALANCE,
                 f"❌ 잔액 부족!\n복권 가격: {GameConfig.LOTTERY_COST:,}원\n보유: {user.cash:,}원"
             )
 
@@ -97,7 +97,7 @@ class GameService:
         except SQLAlchemyError as e:
             db.rollback()
             logger.error(f"복권 DB 커밋 실패: {e}")
-            return error_response("DB_ERROR", "데이터베이스 오류가 발생했습니다.")
+            return error_response(ErrorCode.DB_ERROR, "데이터베이스 오류가 발생했습니다.")
 
         profit = reward - GameConfig.LOTTERY_COST
 
@@ -127,7 +127,7 @@ class GameService:
         # 배팅금 검증
         is_valid, bet_error = validate_bet(bet, user.cash)
         if not is_valid:
-            return error_response("INVALID_BET", bet_error)
+            return error_response(ErrorCode.INVALID_BET, bet_error)
 
         # 배팅금 차감
         user.cash -= bet
@@ -157,7 +157,7 @@ class GameService:
         except SQLAlchemyError as e:
             db.rollback()
             logger.error(f"슬롯 DB 커밋 실패: {e}")
-            return error_response("DB_ERROR", "데이터베이스 오류가 발생했습니다.")
+            return error_response(ErrorCode.DB_ERROR, "데이터베이스 오류가 발생했습니다.")
 
         profit_info = calculate_profit(bet, winnings)
 
@@ -216,12 +216,12 @@ class GameService:
 
         is_valid, bet_error = validate_bet(bet, user.cash)
         if not is_valid:
-            return error_response("INVALID_BET", bet_error)
+            return error_response(ErrorCode.INVALID_BET, bet_error)
 
         # 선택 정규화
         choice_normalized = cls._normalize_roulette_choice(choice)
         if not choice_normalized:
-            return error_response("INVALID_CHOICE", "빨강, 검정, 초록 중 선택해주세요.")
+            return error_response(ErrorCode.INVALID_CHOICE, "빨강, 검정, 초록 중 선택해주세요.")
 
         # 배팅금 차감
         user.cash -= bet
@@ -257,7 +257,7 @@ class GameService:
         except SQLAlchemyError as e:
             db.rollback()
             logger.error(f"룰렛 DB 커밋 실패: {e}")
-            return error_response("DB_ERROR", "데이터베이스 오류가 발생했습니다.")
+            return error_response(ErrorCode.DB_ERROR, "데이터베이스 오류가 발생했습니다.")
 
         return {
             "success": True,
@@ -300,12 +300,12 @@ class GameService:
 
         is_valid, bet_error = validate_bet(bet, user.cash)
         if not is_valid:
-            return error_response("INVALID_BET", bet_error)
+            return error_response(ErrorCode.INVALID_BET, bet_error)
 
         # 선택 정규화
         choice_normalized = cls._normalize_highlow_choice(choice)
         if not choice_normalized:
-            return error_response("INVALID_CHOICE", "높/낮 중 선택해주세요.")
+            return error_response(ErrorCode.INVALID_CHOICE, "높/낮 중 선택해주세요.")
 
         # 배팅금 차감
         user.cash -= bet
@@ -320,7 +320,7 @@ class GameService:
                 db.commit()
             except SQLAlchemyError:
                 db.rollback()
-                return error_response("DB_ERROR", "데이터베이스 오류가 발생했습니다.")
+                return error_response(ErrorCode.DB_ERROR, "데이터베이스 오류가 발생했습니다.")
 
             return {
                 "success": True,
@@ -351,7 +351,7 @@ class GameService:
         except SQLAlchemyError as e:
             db.rollback()
             logger.error(f"하이로우 DB 커밋 실패: {e}")
-            return error_response("DB_ERROR", "데이터베이스 오류가 발생했습니다.")
+            return error_response(ErrorCode.DB_ERROR, "데이터베이스 오류가 발생했습니다.")
 
         return {
             "success": True,
@@ -392,12 +392,12 @@ class GameService:
 
         is_valid, bet_error = validate_bet(bet, user.cash)
         if not is_valid:
-            return error_response("INVALID_BET", bet_error)
+            return error_response(ErrorCode.INVALID_BET, bet_error)
 
         # 선택 정규화
         choice_normalized = cls._normalize_coin_choice(choice)
         if not choice_normalized:
-            return error_response("INVALID_CHOICE", "앞/뒤 중 선택해주세요.")
+            return error_response(ErrorCode.INVALID_CHOICE, "앞/뒤 중 선택해주세요.")
 
         # 배팅금 차감
         user.cash -= bet
@@ -422,7 +422,7 @@ class GameService:
         except SQLAlchemyError as e:
             db.rollback()
             logger.error(f"동전 DB 커밋 실패: {e}")
-            return error_response("DB_ERROR", "데이터베이스 오류가 발생했습니다.")
+            return error_response(ErrorCode.DB_ERROR, "데이터베이스 오류가 발생했습니다.")
 
         return {
             "success": True,

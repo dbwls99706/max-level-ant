@@ -373,9 +373,9 @@ class StockService:
                     db.commit()
             finally:
                 db.close()
-        except SQLAlchemyError:
+        except SQLAlchemyError as e:
             # DB 저장 실패해도 메모리 캐시는 유지
-            pass
+            logger.warning(f"종목 캐시 DB 저장 실패 ({code}): {e}")
 
     @classmethod
     def search_stock(cls, query: str) -> Optional[Dict]:
