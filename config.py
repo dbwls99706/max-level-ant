@@ -74,6 +74,7 @@ class BattleStatus:
     WAITING = "WAITING"
     ACTIVE = "ACTIVE"
     FINISHED = "FINISHED"
+    CANCELLED = "CANCELLED"
 
 
 # ===========================================

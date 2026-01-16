@@ -318,8 +318,9 @@ class GameService:
             user.cash += bet
             try:
                 db.commit()
-            except SQLAlchemyError:
+            except SQLAlchemyError as e:
                 db.rollback()
+                logger.error(f"하이로우 무승부 DB 커밋 실패: {e}")
                 return error_response(ErrorCode.DB_ERROR, "데이터베이스 오류가 발생했습니다.")
 
             return {
