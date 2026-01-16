@@ -323,7 +323,7 @@ class TradeService:
         # 수익 계산
         cost_basis = holding.avg_price * quantity
         profit = net_amount - cost_basis
-        profit_rate = (profit / cost_basis) * 100 if cost_basis > 0 else 0
+        profit_rate = round((profit / cost_basis) * 100, 2) if cost_basis > 0 else 0.0
 
         try:
             # 보유 수량 감소
@@ -475,7 +475,7 @@ class TradeService:
             current_value = current_price * h.quantity
             cost = h.avg_price * h.quantity
             profit = current_value - cost
-            profit_rate = (profit / cost) * 100 if cost > 0 else 0
+            profit_rate = round((profit / cost) * 100, 2) if cost > 0 else 0.0
 
             portfolio["holdings"].append({
                 "code": h.stock_code,
@@ -492,7 +492,7 @@ class TradeService:
 
         portfolio["total_asset"] = portfolio["cash"] + portfolio["total_stock_value"]
         portfolio["total_profit"] = portfolio["total_asset"] - portfolio["initial_cash"]
-        portfolio["profit_rate"] = (portfolio["total_profit"] / portfolio["initial_cash"]) * 100
+        portfolio["profit_rate"] = round((portfolio["total_profit"] / portfolio["initial_cash"]) * 100, 2)
 
         return portfolio
 

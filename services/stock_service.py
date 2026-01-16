@@ -11,7 +11,7 @@ import requests
 from requests.exceptions import RequestException, Timeout
 from sqlalchemy.exc import SQLAlchemyError
 
-from config import CacheConfig, KISConfig
+from config import CacheConfig, KISConfig, GameConfig
 from database import SessionLocal
 from utils import get_service_logger
 
@@ -246,6 +246,13 @@ class StockService:
     # 시세 캐시 (TTL: 1분)
     _price_cache = TTLCache(maxsize=500, ttl=CacheConfig.STOCK_PRICE_TTL)
 
+    @staticmethod
+    def _cap_limit(limit: int, default: int = 10) -> int:
+        """검색 결과 limit 제한 (악의적 대량 요청 방지)"""
+        if limit <= 0:
+            return default
+        return min(limit, GameConfig.MAX_SEARCH_LIMIT)
+
     # 종목 코드-이름 매핑 (주요 종목)
     # 공개 정보로 KRX에서 제공하는 종목 코드
     STOCK_LIST = {
@@ -429,6 +436,7 @@ class StockService:
     @classmethod
     def search_similar_stocks(cls, query: str, limit: int = 5) -> List[Dict]:
         """유사 종목 검색"""
+        limit = cls._cap_limit(limit, default=5)
         query = query.strip().replace(" ", "")
         results = []
         seen_codes = set()
@@ -467,6 +475,7 @@ class StockService:
     @classmethod
     def search_stocks(cls, query: str, limit: int = 10) -> List[Dict]:
         """종목 검색 (여러 결과)"""
+        limit = cls._cap_limit(limit, default=10)
         query = query.strip().lower()
         results = []
         seen_codes = set()
@@ -519,6 +528,7 @@ class StockService:
     @classmethod
     def get_top_volume(cls, market: str = "KOSPI", limit: int = 10) -> List[Dict]:
         """거래량 상위 종목"""
+        limit = cls._cap_limit(limit, default=10)
         market_code = "J" if market == "KOSPI" else "Q"
         stocks = KISAPIClient.get_volume_rank(market_code)[:limit]
         # 캐시에 저장
@@ -529,6 +539,7 @@ class StockService:
     @classmethod
     def get_top_gainers(cls, limit: int = 10) -> List[Dict]:
         """급등주 (상승률 상위)"""
+        limit = cls._cap_limit(limit, default=10)
         stocks = KISAPIClient.get_fluctuation_rank(sort="1")[:limit]
         # 캐시에 저장
         for s in stocks:
@@ -538,6 +549,7 @@ class StockService:
     @classmethod
     def get_top_losers(cls, limit: int = 10) -> List[Dict]:
         """급락주 (하락률 상위)"""
+        limit = cls._cap_limit(limit, default=10)
         stocks = KISAPIClient.get_fluctuation_rank(sort="2")[:limit]
         # 캐시에 저장
         for s in stocks:

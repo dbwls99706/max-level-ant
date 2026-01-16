@@ -177,7 +177,8 @@ class CommandHandler(
         user, is_new = UserService.create_user(self.db, self.kakao_id, self.nickname)
 
         if is_new:
-            logger.info(f"새 유저 가입: {self.kakao_id}")
+            masked_id = f"{self.kakao_id[:4]}****" if len(self.kakao_id) > 4 else "****"
+            logger.info(f"새 유저 가입: {masked_id}")
             welcome_msg = Messages.WELCOME.format(initial_cash=GameConfig.INITIAL_CASH)
             buttons = [
                 {"label": "📅 출석 +30만", "action": "message", "messageText": "/출석"},

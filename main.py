@@ -181,9 +181,9 @@ async def kakao_skill(request: Request, db: Session = Depends(get_db)):
         # 닉네임 추출 (카카오 OpenBuilder에서 제공)
         nickname = user_info.get("properties", {}).get("nickname", "")
 
-        # 디버그: 카카오에서 받은 유저 정보 로그
-        logger.debug(f"카카오 유저 정보: {user_info}")
-        logger.debug(f"닉네임: '{nickname}'")
+        # 디버그: 카카오에서 받은 유저 정보 로그 (민감 정보 마스킹)
+        masked_id = f"{kakao_id[:4]}****" if len(kakao_id) > 4 else "****"
+        logger.debug(f"카카오 유저: id={masked_id}, has_nickname={bool(nickname)}")
 
         # 유저 ID 검증 (빈값, 너무 긴 값 방지)
         if not kakao_id or len(kakao_id) > 100:
@@ -196,7 +196,7 @@ async def kakao_skill(request: Request, db: Session = Depends(get_db)):
 
         # Rate limiting 체크
         if not rate_limiter.is_allowed(kakao_id):
-            logger.warning(f"Rate limit exceeded: {kakao_id}")
+            logger.warning(f"Rate limit exceeded: {masked_id}")
             return KakaoResponse.simple_text(
                 "⚠️ 요청이 너무 많습니다.\n잠시 후 다시 시도해주세요."
             )
