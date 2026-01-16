@@ -231,11 +231,30 @@ class TradingHandlerMixin(BaseHandlerMixin):
                 )
 
         data = result["data"]
+        profit_rate = data["profit_rate"]
+
+        # 수익률 기반 축하 메시지
+        if profit_rate >= 100:
+            celebrate = "🚀💰 대박!!! +100% 이상! 천재 트레이더! 👑"
+        elif profit_rate >= 50:
+            celebrate = "🔥 WOW! +50% 수익! 대성공! 🎉"
+        elif profit_rate >= 20:
+            celebrate = "🎊 훌륭해요! +20% 이상 수익! 🌟"
+        elif profit_rate >= 10:
+            celebrate = "📈 좋은 거래! 꾸준히 가세요! 💪"
+        elif profit_rate >= 0:
+            celebrate = "✨ 수익 실현! 축하해요!"
+        elif profit_rate >= -10:
+            celebrate = "💫 작은 손실, 다음 기회가 있어요!"
+        elif profit_rate >= -30:
+            celebrate = "😤 아쉽네요... 회복할 수 있어요!"
+        else:
+            celebrate = "😢 큰 손실... 다음엔 분할매수 해보세요!"
 
         if data["profit"] >= 0:
-            profit_text = f"📈 수익: +{data['profit']:,}원 (+{data['profit_rate']:.2f}%)"
+            profit_text = f"📈 수익: +{data['profit']:,}원 (+{profit_rate:.2f}%)\n{celebrate}"
         else:
-            profit_text = f"📉 손실: -{abs(data['profit']):,}원 ({data['profit_rate']:.2f}%)"
+            profit_text = f"📉 손실: -{abs(data['profit']):,}원 ({profit_rate:.2f}%)\n{celebrate}"
 
         msg = Messages.SELL_SUCCESS.format(
             name=data["name"],
@@ -354,11 +373,30 @@ class TradingHandlerMixin(BaseHandlerMixin):
             )
 
         data = result["data"]
+        profit_rate = data["profit_rate"]
+
+        # 수익률 기반 축하 메시지
+        if profit_rate >= 100:
+            celebrate = "🚀💰 대박!!! +100% 이상! 천재 트레이더! 👑"
+        elif profit_rate >= 50:
+            celebrate = "🔥 WOW! +50% 수익! 대성공! 🎉"
+        elif profit_rate >= 20:
+            celebrate = "🎊 훌륭해요! +20% 이상 수익! 🌟"
+        elif profit_rate >= 10:
+            celebrate = "📈 좋은 거래! 꾸준히 가세요! 💪"
+        elif profit_rate >= 0:
+            celebrate = "✨ 수익 실현! 축하해요!"
+        elif profit_rate >= -10:
+            celebrate = "💫 작은 손실, 다음 기회가 있어요!"
+        elif profit_rate >= -30:
+            celebrate = "😤 아쉽네요... 회복할 수 있어요!"
+        else:
+            celebrate = "😢 큰 손실... 다음엔 분할매수 해보세요!"
 
         if data["profit"] >= 0:
-            profit_text = f"📈 수익: +{data['profit']:,}원 (+{data['profit_rate']:.2f}%)"
+            profit_text = f"📈 수익: +{data['profit']:,}원 (+{profit_rate:.2f}%)\n{celebrate}"
         else:
-            profit_text = f"📉 손실: -{abs(data['profit']):,}원 ({data['profit_rate']:.2f}%)"
+            profit_text = f"📉 손실: -{abs(data['profit']):,}원 ({profit_rate:.2f}%)\n{celebrate}"
 
         msg = Messages.SELL_SUCCESS.format(
             name=data["name"],

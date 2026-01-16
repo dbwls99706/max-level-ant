@@ -66,12 +66,37 @@ class SocialHandlerMixin(BaseHandlerMixin):
                 [{"label": "🎮 게임 시작", "action": "message", "messageText": "/시작"}]
             )
 
-        msg = Messages.MY_RANK.format(
-            rank=rank_info["rank"],
-            total=rank_info["total"],
-            profit_rate=rank_info["profit_rate"],
-            total_asset=rank_info["total_asset"]
-        )
+        rank = rank_info["rank"]
+        total = rank_info["total"]
+        profit_rate = rank_info["profit_rate"]
+
+        # 퍼센타일 계산
+        percentile = ((total - rank + 1) / total) * 100 if total > 0 else 0
+
+        # 순위 기반 동기부여 메시지
+        if rank == 1:
+            motivation = "👑 당신이 1등! 전설의 투자자!"
+        elif rank <= 3:
+            motivation = f"🏆 TOP 3! 정상까지 {rank - 1}명 남았어요!"
+        elif percentile >= 90:
+            motivation = f"🌟 상위 {100 - percentile:.0f}%! 거의 다 왔어요!"
+        elif percentile >= 70:
+            motivation = f"📈 상위 {100 - percentile:.0f}%! 좋은 성적이에요!"
+        elif percentile >= 50:
+            motivation = f"💪 상위 {100 - percentile:.0f}%! 조금만 더 분발!"
+        else:
+            motivation = f"🔥 {rank}위! 역전의 기회는 있어요!"
+
+        # 수익률 기반 이모지
+        rate_emoji = "📈" if profit_rate >= 0 else "📉"
+
+        msg = f"""📍 내 순위
+
+🏆 {rank}위 / 전체 {total}명
+{rate_emoji} 수익률: {profit_rate:+.2f}%
+💰 총 자산: {rank_info['total_asset']:,}원
+
+{motivation}"""
 
         buttons = [
             {"label": "🏆 전체 랭킹", "action": "message", "messageText": "/랭킹"},
