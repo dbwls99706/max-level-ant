@@ -52,15 +52,13 @@ def get_profit_bar(profit_rate: float, width: int = 10) -> str:
 
 
 def get_rank_emoji(rank: int) -> str:
-    """순위별 이모지"""
+    """순위별 이모지 (일관된 형식)"""
     if rank == 1:
         return "🥇"
     elif rank == 2:
         return "🥈"
     elif rank == 3:
         return "🥉"
-    elif rank <= 10:
-        return f"{rank}."
     else:
         return f"{rank}위"
 

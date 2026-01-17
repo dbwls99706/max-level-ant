@@ -467,7 +467,7 @@ class TradeService:
 
         # 모든 종목 코드 수집 후 배치 조회
         stock_codes: Set[str] = {h.stock_code for h in holdings}
-        stock_prices = TradeService._prefetch_stock_prices(stock_codes)
+        stock_prices = StockService.batch_get_prices(stock_codes)
 
         for h in holdings:
             current_price = stock_prices.get(h.stock_code, h.avg_price)
@@ -495,16 +495,6 @@ class TradeService:
         portfolio["profit_rate"] = round((portfolio["total_profit"] / portfolio["initial_cash"]) * 100, 2)
 
         return portfolio
-
-    @staticmethod
-    def _prefetch_stock_prices(stock_codes: Set[str]) -> Dict[str, int]:
-        """여러 종목 시세 배치 조회 (N+1 방지)"""
-        prices = {}
-        for code in stock_codes:
-            stock_info = StockService.get_price(code)
-            if stock_info:
-                prices[code] = stock_info["price"]
-        return prices
 
     @staticmethod
     def get_transactions(

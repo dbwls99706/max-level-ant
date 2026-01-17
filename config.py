@@ -5,7 +5,7 @@ import os
 import secrets
 import logging
 from datetime import datetime, date
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, Tuple, List
 import pytz
 from dotenv import load_dotenv
 
@@ -255,11 +255,12 @@ def get_market_status_message() -> str:
     status = get_market_status()
     from datetime import timezone
     now = datetime.now(timezone.utc).astimezone(KST)
+    today = now.date()
 
     if status == "CLOSED":
         if now.weekday() >= 5:
             return "🔴 휴장 (주말)"
-        elif is_holiday():
+        elif is_holiday(today):
             return "🔴 휴장 (공휴일)"
         elif now.hour < 8 or (now.hour == 8 and now.minute < 30):
             return "🔴 휴장 (장 시작 전)"
@@ -478,7 +479,7 @@ class CacheConfig:
 # ===========================================
 # 설정 검증
 # ===========================================
-def validate_config() -> tuple[bool, list[str]]:
+def validate_config() -> Tuple[bool, List[str]]:
     """
     모든 설정을 검증하고 결과 반환
 

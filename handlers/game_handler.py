@@ -259,11 +259,13 @@ class GameHandlerMixin(BaseHandlerMixin):
 {profit_text}
 💵 잔고: {result['cash']:,}원"""
 
+        opposite = "뒤" if result["choice"] == "앞" else "앞"
         return KakaoResponse.quick_replies(
             msg,
             [
-                {"label": "🪙 한번 더!", "action": "message", "messageText": f"/동전 {bet} {choice}"},
-                {"label": "🪙 반대로!", "action": "message", "messageText": f"/동전 {bet} {'뒤' if choice == '앞' else '앞'}"},
+                {"label": "🪙 한번 더!", "action": "message", "messageText": f"/동전 {bet} {result['choice']}"},
+                {"label": "🪙 2배!", "action": "message", "messageText": f"/동전 {bet * 2} {result['choice']}"},
+                {"label": "🪙 반대로!", "action": "message", "messageText": f"/동전 {bet} {opposite}"},
                 {"label": "🚀 급등주", "action": "message", "messageText": "/급등"}
             ]
         )
@@ -361,6 +363,7 @@ class GameHandlerMixin(BaseHandlerMixin):
             [
                 {"label": "🔼 높!", "action": "message", "messageText": f"/하이로우 {bet} 높"},
                 {"label": "🔽 낮!", "action": "message", "messageText": f"/하이로우 {bet} 낮"},
+                {"label": "🎲 2배!", "action": "message", "messageText": f"/하이로우 {bet * 2} {result.get('choice', '높')}"},
                 {"label": "🚀 급등주", "action": "message", "messageText": "/급등"}
             ]
         )
@@ -423,11 +426,13 @@ class GameHandlerMixin(BaseHandlerMixin):
 {profit_text}
 💵 잔고: {result['cash']:,}원"""
 
+        choice_text = result.get("choice", "빨강")
         return KakaoResponse.quick_replies(
             msg,
             [
-                {"label": "🔴 빨강!", "action": "message", "messageText": f"/룰렛 {bet} 빨강"},
-                {"label": "⚫ 검정!", "action": "message", "messageText": f"/룰렛 {bet} 검정"},
-                {"label": "🟢 초록!", "action": "message", "messageText": f"/룰렛 {bet} 초록"}
+                {"label": f"🎡 {choice_text}!", "action": "message", "messageText": f"/룰렛 {bet} {choice_text}"},
+                {"label": "🎡 2배!", "action": "message", "messageText": f"/룰렛 {bet * 2} {choice_text}"},
+                {"label": "🟢 초록 9배!", "action": "message", "messageText": f"/룰렛 {bet} 초록"},
+                {"label": "🚀 급등주", "action": "message", "messageText": "/급등"}
             ]
         )
