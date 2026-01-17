@@ -114,16 +114,13 @@ def sanitize_input(text: str, max_length: int = 100) -> str:
     text = text[:max_length]
 
     # 위험한 문자 제거/이스케이프
-    dangerous_chars = {
-        '<': '&lt;',
-        '>': '&gt;',
-        '"': '&quot;',
-        "'": '&#39;',
-        '&': '&amp;',
-    }
-
-    for char, replacement in dangerous_chars.items():
-        text = text.replace(char, replacement)
+    # 중요: & 문자를 먼저 치환해야 다른 문자들이 &lt; 등으로 변환된 후
+    # &가 다시 &amp;lt;로 바뀌는 것을 방지
+    text = text.replace('&', '&amp;')
+    text = text.replace('<', '&lt;')
+    text = text.replace('>', '&gt;')
+    text = text.replace('"', '&quot;')
+    text = text.replace("'", '&#39;')
 
     return text.strip()
 

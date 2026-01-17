@@ -416,9 +416,21 @@ class TradingHandlerMixin(BaseHandlerMixin):
         buttons = []
         if portfolio["holdings"]:
             holdings_text = ""
+
+            # 최고/최저 수익률 종목 찾기
+            best_stock = max(portfolio["holdings"], key=lambda x: x["profit_rate"])
+            worst_stock = min(portfolio["holdings"], key=lambda x: x["profit_rate"])
+
             for h in portfolio["holdings"]:
                 emoji = "🔺" if h["profit_rate"] >= 0 else "🔻"
-                holdings_text += f"\n{h['name']} {h['quantity']:,}주"
+                # 최고 수익률 종목 하이라이트
+                if h["name"] == best_stock["name"] and h["profit_rate"] > 0:
+                    holdings_text += f"\n🏆 {h['name']} {h['quantity']:,}주 ★베스트"
+                # 최저 수익률 종목 하이라이트 (손실 중일 때만)
+                elif h["name"] == worst_stock["name"] and h["profit_rate"] < -5:
+                    holdings_text += f"\n⚠️ {h['name']} {h['quantity']:,}주 ★주의"
+                else:
+                    holdings_text += f"\n{h['name']} {h['quantity']:,}주"
                 holdings_text += f"\n  {h['current_price']:,}원 ({h['profit_rate']:+.1f}%) {emoji}\n"
                 if len(buttons) < 4:
                     buttons.append({

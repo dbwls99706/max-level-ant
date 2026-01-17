@@ -29,7 +29,7 @@ class MarketHandlerMixin(BaseHandlerMixin):
             )
 
         query = parts[1].strip()
-        results = StockService.search_stocks(query, limit=3)
+        results = StockService.search_stocks(query, limit=5)
 
         if not results:
             return KakaoResponse.quick_replies(
@@ -40,7 +40,16 @@ class MarketHandlerMixin(BaseHandlerMixin):
                 ]
             )
 
-        msg = f"🔍 '{query}' 검색 결과"
+        # 검색 결과에 시세 미리보기 추가
+        msg = f"🔍 '{query}' 검색 결과\n"
+        for i, r in enumerate(results[:5], 1):
+            stock_info = StockService.get_price(r.get("code") or r["name"])
+            if stock_info:
+                change_emoji = "📈" if stock_info["change"] >= 0 else "📉"
+                msg += f"\n{i}. {r['name']}"
+                msg += f"\n   {stock_info['price']:,}원 ({stock_info['change']:+.1f}%) {change_emoji}"
+            else:
+                msg += f"\n{i}. {r['name']}"
 
         buttons = [{"label": f"📊 {r['name']}", "action": "message", "messageText": f"/시세 {r['name']}"} for r in results[:3]]
         buttons.append({"label": "🚀 급등주", "action": "message", "messageText": "/급등"})
