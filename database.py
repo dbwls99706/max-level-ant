@@ -11,16 +11,27 @@ logger = get_handler_logger()
 
 # SQLite를 사용할 경우 check_same_thread 옵션 필요
 connect_args = {}
-if DATABASE_URL.startswith("sqlite"):
+is_sqlite = DATABASE_URL.startswith("sqlite")
+if is_sqlite:
     connect_args = {"check_same_thread": False}
 
-# 엔진 생성
-engine = create_engine(
-    DATABASE_URL,
-    connect_args=connect_args,
-    pool_pre_ping=True,  # 연결 상태 확인
-    echo=False  # SQL 로그 출력 (디버깅 시 True)
-)
+# 엔진 생성 (PostgreSQL용 커넥션 풀 설정 포함)
+engine_kwargs = {
+    "connect_args": connect_args,
+    "pool_pre_ping": True,  # 연결 상태 확인 (끊긴 연결 자동 재연결)
+    "echo": False,  # SQL 로그 출력 (디버깅 시 True)
+}
+
+# PostgreSQL인 경우 커넥션 풀 설정 추가
+if not is_sqlite:
+    engine_kwargs.update({
+        "pool_size": 5,  # 기본 연결 수
+        "max_overflow": 10,  # 추가 연결 허용 수 (최대 15개)
+        "pool_recycle": 1800,  # 30분마다 연결 갱신 (DB timeout 방지)
+        "pool_timeout": 30,  # 연결 대기 최대 시간 (초)
+    })
+
+engine = create_engine(DATABASE_URL, **engine_kwargs)
 
 # 세션 팩토리
 SessionLocal = sessionmaker(
@@ -141,3 +152,56 @@ def reset_db():
     logger.info("테이블 재생성 완료")
 
     return True
+
+
+def cleanup_old_records(
+    transaction_days: int = 90,
+    asset_history_days: int = 365
+) -> dict:
+    """
+    오래된 레코드 정리 (데이터베이스 용량 관리)
+
+    Args:
+        transaction_days: 거래 내역 보존 기간 (기본 90일)
+        asset_history_days: 자산 히스토리 보존 기간 (기본 365일)
+
+    Returns:
+        삭제된 레코드 수 정보
+    """
+    from datetime import datetime, timedelta
+    from models import Transaction, AssetHistory
+
+    result = {"transactions": 0, "asset_history": 0}
+
+    try:
+        db = SessionLocal()
+
+        # 오래된 거래 내역 삭제
+        transaction_cutoff = datetime.utcnow() - timedelta(days=transaction_days)
+        deleted_transactions = db.query(Transaction).filter(
+            Transaction.created_at < transaction_cutoff
+        ).delete(synchronize_session=False)
+        result["transactions"] = deleted_transactions
+
+        # 오래된 자산 히스토리 삭제
+        asset_cutoff = (datetime.utcnow() - timedelta(days=asset_history_days)).date()
+        deleted_history = db.query(AssetHistory).filter(
+            AssetHistory.record_date < asset_cutoff
+        ).delete(synchronize_session=False)
+        result["asset_history"] = deleted_history
+
+        db.commit()
+
+        if deleted_transactions > 0 or deleted_history > 0:
+            logger.info(
+                f"DB 정리 완료: 거래내역 {deleted_transactions}건, "
+                f"자산히스토리 {deleted_history}건 삭제"
+            )
+
+    except SQLAlchemyError as e:
+        logger.error(f"DB 정리 실패: {e}")
+        db.rollback()
+    finally:
+        db.close()
+
+    return result
