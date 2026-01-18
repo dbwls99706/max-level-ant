@@ -69,7 +69,8 @@ class RateLimiter:
         cutoff = now - self.window_seconds
         expired_users = []
 
-        for user_id, timestamps in self.requests.items():
+        # 딕셔너리 반복 중 수정 방지를 위해 items() 복사
+        for user_id, timestamps in list(self.requests.items()):
             self.requests[user_id] = [ts for ts in timestamps if ts > cutoff]
             if not self.requests[user_id]:
                 expired_users.append(user_id)
@@ -229,23 +230,27 @@ async def kakao_skill(request: Request, db: Session = Depends(get_db)):
 @app.post("/debug/skill")
 async def debug_skill(request: Request, db: Session = Depends(get_db)):
     """
-    디버그용 스킬 테스트 엔드포인트
-    
+    디버그용 스킬 테스트 엔드포인트 (DEV_MODE에서만 활성화)
+
     curl로 테스트:
     curl -X POST http://localhost:8000/debug/skill \
          -H "Content-Type: application/json" \
          -d '{"kakao_id": "test123", "message": "/시작"}'
     """
+    # 프로덕션에서는 디버그 엔드포인트 비활성화
+    if not SecurityConfig.DEV_MODE:
+        raise HTTPException(status_code=404, detail="Not Found")
+
     try:
         body = await request.json()
         kakao_id = body.get("kakao_id", "test_user")
         message = body.get("message", "/도움말")
-        
+
         handler = CommandHandler(db, kakao_id, message)
         response = handler.handle()
-        
+
         return response
-        
+
     except Exception as e:
         return {"error": str(e)}
 
