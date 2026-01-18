@@ -50,7 +50,7 @@ class KISAPIClient:
                 "appsecret": KISConfig.APP_SECRET
             }
 
-            resp = requests.post(url, headers=headers, json=body, timeout=10)
+            resp = requests.post(url, headers=headers, json=body, timeout=KISConfig.API_TIMEOUT)
 
             if resp.status_code == 200:
                 data = resp.json()
@@ -102,7 +102,7 @@ class KISAPIClient:
                 "FID_INPUT_ISCD": stock_code
             }
 
-            resp = requests.get(url, headers=headers, params=params, timeout=10)
+            resp = requests.get(url, headers=headers, params=params, timeout=KISConfig.API_TIMEOUT)
 
             if resp.status_code == 200:
                 data = resp.json()
@@ -157,7 +157,7 @@ class KISAPIClient:
                 "FID_INPUT_DATE_1": "",
             }
 
-            resp = requests.get(url, headers=headers, params=params, timeout=10)
+            resp = requests.get(url, headers=headers, params=params, timeout=KISConfig.API_TIMEOUT)
 
             if resp.status_code == 200:
                 data = resp.json()
@@ -219,7 +219,7 @@ class KISAPIClient:
                 "FID_INPUT_ISCD": index_code
             }
 
-            resp = requests.get(url, headers=headers, params=params, timeout=10)
+            resp = requests.get(url, headers=headers, params=params, timeout=KISConfig.API_TIMEOUT)
 
             if resp.status_code == 200:
                 data = resp.json()
