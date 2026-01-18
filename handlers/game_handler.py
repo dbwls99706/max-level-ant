@@ -27,8 +27,8 @@ class GameHandlerMixin(BaseHandlerMixin):
 💡 추천: 슬롯머신 잭팟 50배!
 ⏰ 슬롯/룰렛/동전/하이로우는 장 마감 후 이용 가능"""
 
-        small_bet = 50_000
-        big_bet = 500_000
+        small_bet = GameConfig.DEFAULT_BET
+        big_bet = GameConfig.BIG_BET
         return KakaoResponse.quick_replies(
             msg,
             [

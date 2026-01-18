@@ -111,6 +111,11 @@ class SecurityConfig:
     # 개발 모드에서는 모든 origin 허용
     DEV_MODE = os.getenv("DEV_MODE", "false").lower() == "true"
 
+    # Rate Limiter 설정
+    RATE_LIMIT_MAX_REQUESTS = 30  # 윈도우당 최대 요청 수
+    RATE_LIMIT_WINDOW_SECONDS = 60  # 윈도우 크기 (초)
+    RATE_LIMIT_CLEANUP_INTERVAL = 300  # 클린업 간격 (초)
+
     @classmethod
     def get_allowed_origins(cls) -> list:
         """허용된 origin 목록 반환"""
@@ -339,6 +344,7 @@ class GameConfig:
     MIN_BET = 10_000  # 최소 배팅금 1만원
     MAX_BET = 10_000_000_000  # 최대 배팅금 100억 (오버플로우 방지)
     DEFAULT_BET = 50_000  # 기본 배팅금 5만원
+    BIG_BET = 500_000  # 큰 배팅금 50만원 (게임 메뉴용)
     DEFAULT_BATTLE_BET = 100_000  # 배틀 기본 배팅금 10만원
     LOTTERY_COST = 10_000  # 복권 가격
     MAX_LOTTERY_PER_DAY = 5  # 복권 1일 최대 횟수

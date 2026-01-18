@@ -43,8 +43,8 @@ class RateLimiter:
         """요청 허용 여부 확인"""
         now = time.time()
 
-        # 5분마다 오래된 데이터 정리
-        if now - self.last_cleanup > 300:
+        # 설정된 간격마다 오래된 데이터 정리
+        if now - self.last_cleanup > SecurityConfig.RATE_LIMIT_CLEANUP_INTERVAL:
             self._cleanup()
             self.last_cleanup = now
 
@@ -79,8 +79,11 @@ class RateLimiter:
             del self.requests[user_id]
 
 
-# 분당 30회 제한 (카카오톡 특성상 넉넉하게)
-rate_limiter = RateLimiter(max_requests=30, window_seconds=60)
+# Rate limiter 인스턴스 (설정값 사용)
+rate_limiter = RateLimiter(
+    max_requests=SecurityConfig.RATE_LIMIT_MAX_REQUESTS,
+    window_seconds=SecurityConfig.RATE_LIMIT_WINDOW_SECONDS
+)
 
 
 # ===========================================
