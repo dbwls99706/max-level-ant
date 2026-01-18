@@ -40,12 +40,16 @@ class MarketHandlerMixin(BaseHandlerMixin):
                 ]
             )
 
-        # 검색 결과에 시세 미리보기 추가
+        # 검색 결과에 시세 미리보기 추가 (배치 조회로 성능 최적화)
+        stock_codes = {r["code"] for r in results[:5] if r.get("code")}
+        stock_info_map = StockService.batch_get_stock_info(stock_codes)
+
         msg = f"🔍 '{query}' 검색 결과\n"
         for i, r in enumerate(results[:5], 1):
-            stock_info = StockService.get_price(r.get("code") or r["name"])
+            code = r.get("code")
+            stock_info = stock_info_map.get(code) if code else None
             if stock_info:
-                change_emoji = "📈" if stock_info["change"] >= 0 else "📉"
+                change_emoji = "📈" if stock_info.get("change", 0) >= 0 else "📉"
                 msg += f"\n{i}. {r['name']}"
                 msg += f"\n   {stock_info['price']:,}원 ({stock_info['change']:+.1f}%) {change_emoji}"
             else:

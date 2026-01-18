@@ -134,7 +134,7 @@ class TradingHandlerMixin(BaseHandlerMixin):
                 return KakaoResponse.quick_replies(
                     result["message"],
                     [
-                        {"label": "📊 시세 조회", "action": "message", "messageText": "/시세"},
+                        {"label": f"📊 {stock_query} 시세", "action": "message", "messageText": f"/시세 {stock_query}"},
                         {"label": "🚀 급등주", "action": "message", "messageText": "/급등"}
                     ]
                 )
@@ -226,7 +226,7 @@ class TradingHandlerMixin(BaseHandlerMixin):
                     result["message"],
                     [
                         {"label": "💼 포트폴리오", "action": "message", "messageText": "/포트폴리오"},
-                        {"label": "📊 시세 조회", "action": "message", "messageText": "/시세"}
+                        {"label": f"📊 {stock_query} 시세", "action": "message", "messageText": f"/시세 {stock_query}"}
                     ]
                 )
 

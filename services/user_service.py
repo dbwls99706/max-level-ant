@@ -10,6 +10,7 @@ from datetime import date, timedelta
 from typing import Optional, Tuple, Dict
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy import exists
 
 from models import User
 from config import GameConfig
@@ -208,15 +209,15 @@ class UserService:
     @classmethod
     def is_nickname_taken(cls, db: Session, nickname: str, exclude_kakao_id: str = None) -> bool:
         """
-        닉네임 중복 확인
+        닉네임 중복 확인 (exists 쿼리로 최적화)
         exclude_kakao_id: 자기 자신은 제외 (닉네임 변경 시)
         """
-        query = db.query(User).filter(User.nickname == nickname)
-
+        conditions = [User.nickname == nickname]
         if exclude_kakao_id:
-            query = query.filter(User.kakao_id != exclude_kakao_id)
+            conditions.append(User.kakao_id != exclude_kakao_id)
 
-        return query.first() is not None
+        stmt = exists().where(*conditions)
+        return db.query(stmt).scalar()
 
     @classmethod
     def update_nickname(cls, db: Session, kakao_id: str, new_nickname: str) -> Tuple[bool, str]:

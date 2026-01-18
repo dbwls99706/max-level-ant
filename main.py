@@ -203,6 +203,13 @@ async def kakao_skill(request: Request, db: Session = Depends(get_db)):
             logger.warning(f"의심스러운 kakao_id 감지: {kakao_id[:20]}...")
             return KakaoResponse.simple_text("유저 정보를 확인할 수 없습니다.")
 
+        # utterance 입력 검증 및 정제
+        utterance = utterance.strip()
+        if len(utterance) > 500:  # 최대 길이 제한
+            utterance = utterance[:500]
+        # Null 바이트 및 제어 문자 제거
+        utterance = "".join(c for c in utterance if c.isprintable() or c in "\n\t")
+
         # Rate limiting 체크
         if not rate_limiter.is_allowed(kakao_id):
             logger.warning(f"Rate limit exceeded: {masked_id}")

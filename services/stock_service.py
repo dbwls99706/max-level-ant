@@ -588,3 +588,21 @@ class StockService:
             if stock_info:
                 prices[code] = stock_info["price"]
         return prices
+
+    @classmethod
+    def batch_get_stock_info(cls, stock_codes: set) -> Dict[str, Dict]:
+        """
+        여러 종목 전체 정보 일괄 조회 (N+1 방지)
+
+        Args:
+            stock_codes: 종목 코드 집합
+
+        Returns:
+            {종목코드: stock_info} 딕셔너리
+        """
+        result = {}
+        for code in stock_codes:
+            stock_info = cls.get_price(code)
+            if stock_info:
+                result[code] = stock_info
+        return result
