@@ -52,15 +52,13 @@ def get_profit_bar(profit_rate: float, width: int = 10) -> str:
 
 
 def get_rank_emoji(rank: int) -> str:
-    """순위별 이모지"""
+    """순위별 이모지 (일관된 형식)"""
     if rank == 1:
         return "🥇"
     elif rank == 2:
         return "🥈"
     elif rank == 3:
         return "🥉"
-    elif rank <= 10:
-        return f"{rank}."
     else:
         return f"{rank}위"
 
@@ -114,16 +112,13 @@ def sanitize_input(text: str, max_length: int = 100) -> str:
     text = text[:max_length]
 
     # 위험한 문자 제거/이스케이프
-    dangerous_chars = {
-        '<': '&lt;',
-        '>': '&gt;',
-        '"': '&quot;',
-        "'": '&#39;',
-        '&': '&amp;',
-    }
-
-    for char, replacement in dangerous_chars.items():
-        text = text.replace(char, replacement)
+    # 중요: & 문자를 먼저 치환해야 다른 문자들이 &lt; 등으로 변환된 후
+    # &가 다시 &amp;lt;로 바뀌는 것을 방지
+    text = text.replace('&', '&amp;')
+    text = text.replace('<', '&lt;')
+    text = text.replace('>', '&gt;')
+    text = text.replace('"', '&quot;')
+    text = text.replace("'", '&#39;')
 
     return text.strip()
 

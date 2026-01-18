@@ -239,12 +239,19 @@ class CommandHandler(
 현재 잔고: {cash:,}원"""
         else:
             motivation = get_streak_motivation(streak, False)
-            # 스트릭 유지 경고
-            if streak >= 3:
-                warning = f"⚠️ 내일 출석 안 하면 {streak}일 스트릭이 리셋됩니다!"
+            # 스트릭 유지 경고 - 잃을 보상 강조 (손실 회피 심리)
+            if streak >= 7:
+                bonus_losing = int(GameConfig.ATTENDANCE_REWARD * 2)  # 2배 보너스
+                warning = f"🚨 내일 출석 안 하면 {streak}일 스트릭 리셋!\n💸 잃게 될 보너스: {bonus_losing:,}원/일 → 기본 30만원"
+            elif streak >= 5:
+                bonus_losing = int(GameConfig.ATTENDANCE_REWARD * 1.5)
+                warning = f"⚠️ 내일 출석 안 하면 {streak}일 스트릭 리셋!\n💸 잃게 될 보너스: {bonus_losing:,}원/일"
+            elif streak >= 3:
+                bonus_losing = int(GameConfig.ATTENDANCE_REWARD * 1.2)
+                warning = f"⚠️ 내일 출석 안 하면 {streak}일 스트릭 리셋!\n💸 잃게 될 보너스: {bonus_losing:,}원/일"
             else:
-                warning = "내일 다시 출석해주세요."
-            msg = f"""⚠️ 오늘은 이미 출석했습니다!
+                warning = "📅 내일 다시 출석해주세요!"
+            msg = f"""✅ 오늘 출석 완료!
 
 {warning}
 {streak_emoji} 현재 연속 출석: {streak}일

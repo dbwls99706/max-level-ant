@@ -50,7 +50,7 @@ class KISAPIClient:
                 "appsecret": KISConfig.APP_SECRET
             }
 
-            resp = requests.post(url, headers=headers, json=body, timeout=10)
+            resp = requests.post(url, headers=headers, json=body, timeout=KISConfig.API_TIMEOUT)
 
             if resp.status_code == 200:
                 data = resp.json()
@@ -102,7 +102,7 @@ class KISAPIClient:
                 "FID_INPUT_ISCD": stock_code
             }
 
-            resp = requests.get(url, headers=headers, params=params, timeout=10)
+            resp = requests.get(url, headers=headers, params=params, timeout=KISConfig.API_TIMEOUT)
 
             if resp.status_code == 200:
                 data = resp.json()
@@ -157,7 +157,7 @@ class KISAPIClient:
                 "FID_INPUT_DATE_1": "",
             }
 
-            resp = requests.get(url, headers=headers, params=params, timeout=10)
+            resp = requests.get(url, headers=headers, params=params, timeout=KISConfig.API_TIMEOUT)
 
             if resp.status_code == 200:
                 data = resp.json()
@@ -219,7 +219,7 @@ class KISAPIClient:
                 "FID_INPUT_ISCD": index_code
             }
 
-            resp = requests.get(url, headers=headers, params=params, timeout=10)
+            resp = requests.get(url, headers=headers, params=params, timeout=KISConfig.API_TIMEOUT)
 
             if resp.status_code == 200:
                 data = resp.json()
@@ -569,4 +569,40 @@ class StockService:
         if kosdaq:
             result["kosdaq"] = kosdaq
 
+        return result
+
+    @classmethod
+    def batch_get_prices(cls, stock_codes: set) -> Dict[str, int]:
+        """
+        여러 종목 시세 일괄 조회 (N+1 쿼리 방지)
+
+        Args:
+            stock_codes: 종목 코드 집합
+
+        Returns:
+            {종목코드: 현재가} 딕셔너리
+        """
+        prices = {}
+        for code in stock_codes:
+            stock_info = cls.get_price(code)
+            if stock_info:
+                prices[code] = stock_info["price"]
+        return prices
+
+    @classmethod
+    def batch_get_stock_info(cls, stock_codes: set) -> Dict[str, Dict]:
+        """
+        여러 종목 전체 정보 일괄 조회 (N+1 방지)
+
+        Args:
+            stock_codes: 종목 코드 집합
+
+        Returns:
+            {종목코드: stock_info} 딕셔너리
+        """
+        result = {}
+        for code in stock_codes:
+            stock_info = cls.get_price(code)
+            if stock_info:
+                result[code] = stock_info
         return result

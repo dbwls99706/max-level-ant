@@ -239,24 +239,32 @@ class BaseHandlerMixin:
             return f"▼{rate:.2f}%"
         return "0.00%"
 
-    def _get_sell_celebration(self, profit_rate: float) -> str:
-        """수익률 기반 축하 메시지 (매도 시 사용)"""
+    def _get_sell_celebration(self, profit_rate: float, profit: int = 0) -> str:
+        """수익률 기반 축하 메시지 (매도 시 사용) - 도파민 극대화"""
         if profit_rate >= 100:
-            return "🚀💰 대박!!! +100% 이상! 천재 트레이더! 👑"
+            return "🎆🎇🚀💰🎆🎇\n\n🏆 전설의 수익! +100%! 👑\n당신은 진정한 주식왕!"
         elif profit_rate >= 50:
-            return "🔥 WOW! +50% 수익! 대성공! 🎉"
+            return "🎉🔥✨\n\n💎 대박! +50% 수익!\n투자의 신이 되셨습니다!"
+        elif profit_rate >= 30:
+            return "🎊🌟\n\n🚀 멋져요! +30% 수익!\n프로 트레이더 인정!"
         elif profit_rate >= 20:
             return "🎊 훌륭해요! +20% 이상 수익! 🌟"
         elif profit_rate >= 10:
             return "📈 좋은 거래! 꾸준히 가세요! 💪"
+        elif profit_rate >= 5:
+            return "✨ 수익 실현 성공! 잘하셨어요!"
         elif profit_rate >= 0:
-            return "✨ 수익 실현! 축하해요!"
+            return "✅ 수익 마감! 본전 이상은 성공!"
+        elif profit_rate >= -5:
+            return "💫 작은 손실, 다음이 기회예요!"
         elif profit_rate >= -10:
-            return "💫 작은 손실, 다음 기회가 있어요!"
+            return "😅 아쉽지만 경험이 됐어요!"
+        elif profit_rate >= -20:
+            return "😤 회복 가능! 다시 도전하세요!"
         elif profit_rate >= -30:
-            return "😤 아쉽네요... 회복할 수 있어요!"
+            return "😢 조금 많이... 분할매매 추천드려요"
         else:
-            return "😢 큰 손실... 다음엔 분할매수 해보세요!"
+            return "💪 큰 손실이지만 포기하지 마세요!\n🎯 급등주에서 재기 가능!"
 
     def _add_celebration(self, msg: str, profit: int) -> str:
         """큰 수익에 축하 이펙트 추가"""
@@ -269,20 +277,10 @@ class BaseHandlerMixin:
     # 공통 에러 응답 (중복 제거)
     # ===========================================
 
-    def _market_closed_response(self) -> Dict:
+    def _market_closed_response(self, message: str = None) -> Dict:
         """장 마감 시 공통 응답 (게임 유도)"""
-        return KakaoResponse.quick_replies(
-            "📢 현재 장이 열려있지 않아요!\n\n"
-            "🎮 장 마감 시간에는 미니게임을 즐겨보세요!",
-            [
-                {"label": "🎫 복권", "action": "message", "messageText": "/복권"},
-                {"label": "🎰 슬롯머신", "action": "message", "messageText": f"/슬롯머신 {GameConfig.DEFAULT_BET}"},
-                {"label": "💼 포트폴리오", "action": "message", "messageText": "/포트폴리오"}
-            ]
-        )
-
-    def _market_closed_with_message(self, message: str) -> Dict:
-        """장 마감 시 커스텀 메시지 응답"""
+        if message is None:
+            message = "📢 현재 장이 열려있지 않아요!\n\n🎮 장 마감 시간에는 미니게임을 즐겨보세요!"
         return KakaoResponse.quick_replies(
             message,
             [
@@ -292,11 +290,42 @@ class BaseHandlerMixin:
             ]
         )
 
+    # _market_closed_with_message는 _market_closed_response(message)로 통합됨
+
     def _check_market_closed_error(self, result: Dict) -> tuple:
         """
         서비스 결과에서 MARKET_CLOSED 에러 확인
         Returns: (is_market_closed, response or None)
         """
         if not result.get("success") and result.get("error_code") == "MARKET_CLOSED":
-            return True, self._market_closed_with_message(result.get("message", "장이 마감되었습니다."))
+            return True, self._market_closed_response(result.get("message", "장이 마감되었습니다."))
         return False, None
+
+    def _game_failure_response(self, message: str) -> Dict:
+        """게임 실패/에러 시 공통 응답 (현금 부족, 시스템 에러 등)"""
+        return KakaoResponse.quick_replies(
+            message,
+            [
+                {"label": "📅 출석체크", "action": "message", "messageText": "/출석"},
+                {"label": "🎫 복권", "action": "message", "messageText": "/복권"},
+                {"label": "💼 포트폴리오", "action": "message", "messageText": "/포트폴리오"}
+            ]
+        )
+
+    def _parse_bet_amount(self, default: int = None) -> Tuple[int, bool]:
+        """
+        배팅 금액 파싱 헬퍼
+        Returns: (amount, is_valid)
+        """
+        if default is None:
+            default = GameConfig.DEFAULT_BET
+
+        parts = self.utterance.split()
+        if len(parts) < 2:
+            return default, True  # 기본값 사용
+
+        try:
+            amount = int(parts[1].replace(",", ""))
+            return amount, True
+        except ValueError:
+            return 0, False

@@ -30,19 +30,6 @@ class RankingService:
         return f"투자자{user.kakao_id[-4:]}"
 
     @classmethod
-    def _prefetch_stock_prices(cls, stock_codes: Set[str]) -> Dict[str, int]:
-        """
-        주식 가격 일괄 조회 (캐시 활용)
-        N+1 문제 해결을 위한 일괄 조회
-        """
-        prices = {}
-        for code in stock_codes:
-            stock_info = StockService.get_price(code)
-            if stock_info:
-                prices[code] = stock_info["price"]
-        return prices
-
-    @classmethod
     def _calculate_total_asset_batch(
         cls,
         user: User,
@@ -92,7 +79,7 @@ class RankingService:
                 all_stock_codes.add(h.stock_code)
 
         # 3. 주식 가격 일괄 조회 (캐시 활용)
-        stock_prices = cls._prefetch_stock_prices(all_stock_codes)
+        stock_prices = StockService.batch_get_prices(all_stock_codes)
 
         # 4. 각 유저의 총 자산 계산
         rankings = []

@@ -276,8 +276,8 @@ def safe_add(a: int, b: int) -> int:
 
 
 def safe_multiply(a: int, b: float) -> int:
-    """안전한 곱셈 (상한 적용)"""
-    result = int(a * b)
+    """안전한 곱셈 (상한 적용, 반올림으로 정밀도 보장)"""
+    result = round(a * b)
     return min(result, MAX_SAFE_AMOUNT)
 
 

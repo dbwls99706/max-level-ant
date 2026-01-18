@@ -32,6 +32,8 @@ class SocialHandlerMixin(BaseHandlerMixin):
             )
 
         ranking_list = ""
+        my_rank_in_top10 = None
+
         for r in rankings:
             medal = ""
             if r["rank"] == 1:
@@ -44,15 +46,27 @@ class SocialHandlerMixin(BaseHandlerMixin):
                 medal = f"{r['rank']}."
 
             emoji = "📈" if r["profit_rate"] >= 0 else "📉"
-            ranking_list += f"\n{medal} {r['nickname']}"
+
+            # 본인 하이라이트
+            is_me = r.get("kakao_id") == self.kakao_id
+            if is_me:
+                my_rank_in_top10 = r["rank"]
+                ranking_list += f"\n{medal} ★{r['nickname']}★ ← 나!"
+            else:
+                ranking_list += f"\n{medal} {r['nickname']}"
             ranking_list += f"\n   {emoji} {r['profit_rate']:+.2f}% ({r['total_asset']:,}원)\n"
 
         msg = Messages.RANKING.format(ranking_list=ranking_list)
 
+        # TOP 10 안에 있으면 축하 메시지
+        if my_rank_in_top10:
+            msg = f"🎉 축하해요! TOP {my_rank_in_top10}위 입니다!\n\n" + msg
+
         return KakaoResponse.quick_replies(
             msg,
             [
-                {"label": "📍 내 순위", "action": "message", "messageText": "/내순위"}
+                {"label": "📍 내 순위", "action": "message", "messageText": "/내순위"},
+                {"label": "🚀 급등주", "action": "message", "messageText": "/급등"}
             ]
         )
 

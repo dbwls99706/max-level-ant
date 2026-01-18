@@ -182,7 +182,7 @@ class GameService:
         if outcome_symbol == "LOSE":
             # 꽝: 모두 다른 심볼
             selected = random.sample(symbols, 3)
-            return tuple(selected)
+            return (selected[0], selected[1], selected[2])
 
         elif outcome_symbol == "MATCH2":
             # 2개 일치 (본전)

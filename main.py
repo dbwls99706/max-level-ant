@@ -43,8 +43,8 @@ class RateLimiter:
         """요청 허용 여부 확인"""
         now = time.time()
 
-        # 5분마다 오래된 데이터 정리
-        if now - self.last_cleanup > 300:
+        # 설정된 간격마다 오래된 데이터 정리
+        if now - self.last_cleanup > SecurityConfig.RATE_LIMIT_CLEANUP_INTERVAL:
             self._cleanup()
             self.last_cleanup = now
 
@@ -69,7 +69,8 @@ class RateLimiter:
         cutoff = now - self.window_seconds
         expired_users = []
 
-        for user_id, timestamps in self.requests.items():
+        # 딕셔너리 반복 중 수정 방지를 위해 items() 복사
+        for user_id, timestamps in list(self.requests.items()):
             self.requests[user_id] = [ts for ts in timestamps if ts > cutoff]
             if not self.requests[user_id]:
                 expired_users.append(user_id)
@@ -78,8 +79,11 @@ class RateLimiter:
             del self.requests[user_id]
 
 
-# 분당 30회 제한 (카카오톡 특성상 넉넉하게)
-rate_limiter = RateLimiter(max_requests=30, window_seconds=60)
+# Rate limiter 인스턴스 (설정값 사용)
+rate_limiter = RateLimiter(
+    max_requests=SecurityConfig.RATE_LIMIT_MAX_REQUESTS,
+    window_seconds=SecurityConfig.RATE_LIMIT_WINDOW_SECONDS
+)
 
 
 # ===========================================
@@ -202,6 +206,13 @@ async def kakao_skill(request: Request, db: Session = Depends(get_db)):
             logger.warning(f"의심스러운 kakao_id 감지: {kakao_id[:20]}...")
             return KakaoResponse.simple_text("유저 정보를 확인할 수 없습니다.")
 
+        # utterance 입력 검증 및 정제
+        utterance = utterance.strip()
+        if len(utterance) > 500:  # 최대 길이 제한
+            utterance = utterance[:500]
+        # Null 바이트 및 제어 문자 제거
+        utterance = "".join(c for c in utterance if c.isprintable() or c in "\n\t")
+
         # Rate limiting 체크
         if not rate_limiter.is_allowed(kakao_id):
             logger.warning(f"Rate limit exceeded: {masked_id}")
@@ -229,23 +240,27 @@ async def kakao_skill(request: Request, db: Session = Depends(get_db)):
 @app.post("/debug/skill")
 async def debug_skill(request: Request, db: Session = Depends(get_db)):
     """
-    디버그용 스킬 테스트 엔드포인트
-    
+    디버그용 스킬 테스트 엔드포인트 (DEV_MODE에서만 활성화)
+
     curl로 테스트:
     curl -X POST http://localhost:8000/debug/skill \
          -H "Content-Type: application/json" \
          -d '{"kakao_id": "test123", "message": "/시작"}'
     """
+    # 프로덕션에서는 디버그 엔드포인트 비활성화
+    if not SecurityConfig.DEV_MODE:
+        raise HTTPException(status_code=404, detail="Not Found")
+
     try:
         body = await request.json()
         kakao_id = body.get("kakao_id", "test_user")
         message = body.get("message", "/도움말")
-        
+
         handler = CommandHandler(db, kakao_id, message)
         response = handler.handle()
-        
+
         return response
-        
+
     except Exception as e:
         return {"error": str(e)}
 

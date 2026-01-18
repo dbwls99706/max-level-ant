@@ -19,22 +19,24 @@ class GameHandlerMixin(BaseHandlerMixin):
         msg = """🎰 미니게임
 
 🎫 /복권 - 1만원 복권 (1일 5회)
-🎰 /슬롯머신 [금액] - 슬롯머신
-🎡 /룰렛 [금액] [색상] - 색상 맞추기
-🪙 /동전 [금액] [앞/뒤] - 동전던지기
-🎲 /하이로우 [금액] [높/낮] - 숫자게임
+🎰 /슬롯머신 [금액] - 대박을 노려라!
+🎡 /룰렛 [금액] [색상] - 초록 9배 대박!
+🪙 /동전 [금액] [앞/뒤] - 2배 수익!
+🎲 /하이로우 [금액] [높/낮] - 1.8배 수익!
 
+💡 추천: 슬롯머신 잭팟 50배!
 ⏰ 슬롯/룰렛/동전/하이로우는 장 마감 후 이용 가능"""
 
-        bet = GameConfig.DEFAULT_BET
+        small_bet = GameConfig.DEFAULT_BET
+        big_bet = GameConfig.BIG_BET
         return KakaoResponse.quick_replies(
             msg,
             [
                 {"label": "🎫 복권", "action": "message", "messageText": "/복권"},
-                {"label": "🎰 슬롯머신", "action": "message", "messageText": f"/슬롯머신 {bet}"},
-                {"label": "🎡 룰렛", "action": "message", "messageText": f"/룰렛 {bet} 빨강"},
-                {"label": "🪙 동전던지기", "action": "message", "messageText": f"/동전 {bet} 앞"},
-                {"label": "🎲 하이로우", "action": "message", "messageText": f"/하이로우 {bet} 높"}
+                {"label": "🎰 5만 슬롯", "action": "message", "messageText": f"/슬롯머신 {small_bet}"},
+                {"label": "🎰 50만 슬롯", "action": "message", "messageText": f"/슬롯머신 {big_bet}"},
+                {"label": "🟢 초록 9배!", "action": "message", "messageText": f"/룰렛 {small_bet} 초록"},
+                {"label": "🪙 동전 50만", "action": "message", "messageText": f"/동전 {big_bet} 앞"}
             ]
         )
 
@@ -70,6 +72,16 @@ class GameHandlerMixin(BaseHandlerMixin):
         profit_emoji = "📈" if profit > 0 else "📉" if profit < 0 else "➖"
         profit_text = f"+{profit:,}" if profit > 0 else f"{profit:,}"
 
+        # 남은 횟수에 따른 FOMO 메시지
+        if remaining == 0:
+            remaining_msg = "🚫 오늘 복권 모두 소진!"
+        elif remaining == 1:
+            remaining_msg = "⚡ 마지막 1회 남음! 대박의 기회!"
+        elif remaining == 2:
+            remaining_msg = "🔥 2회 남음! 놓치지 마세요!"
+        else:
+            remaining_msg = f"📍 오늘 남은 횟수: {remaining}회"
+
         msg = f"""🎫 복권 긁기 {effect}
 
 {tier}! {result['message']}
@@ -78,7 +90,7 @@ class GameHandlerMixin(BaseHandlerMixin):
 💰 당첨금: +{result['reward']:,}원
 {profit_emoji} 순이익: {profit_text}원
 
-📍 오늘 남은 횟수: {remaining}회
+{remaining_msg}
 💵 현재 잔고: {result['cash']:,}원"""
 
         buttons = []
@@ -112,14 +124,7 @@ class GameHandlerMixin(BaseHandlerMixin):
         result = GameService.play_slot(self.db, self.kakao_id, bet)
 
         if not result["success"]:
-            return KakaoResponse.quick_replies(
-                result["message"],
-                [
-                    {"label": "📅 출석체크", "action": "message", "messageText": "/출석"},
-                    {"label": "🎫 복권", "action": "message", "messageText": "/복권"},
-                    {"label": "💼 포트폴리오", "action": "message", "messageText": "/포트폴리오"}
-                ]
-            )
+            return self._game_failure_response(result["message"])
 
         slots = result["slots"]
         slot_display = f"[ {slots[0]} | {slots[1]} | {slots[2]} ]"
@@ -142,10 +147,24 @@ class GameHandlerMixin(BaseHandlerMixin):
             effect = "💫 SMALL WIN 💫"
             encourage = "아깝네요, 한번 더!"
         else:
-            # 근접 실패 감지 (2개 일치)
+            # 근접 실패 감지 (2개 일치) - 도파민 최대화
             if slots[0] == slots[1] or slots[1] == slots[2] or slots[0] == slots[2]:
-                effect = "😱 아깝다!! 2개 일치!"
-                encourage = "거의 다 왔어요! 🔥 다시 한번!"
+                # 어떤 심볼이 2개 일치했는지 확인
+                matched_symbol = None
+                if slots[0] == slots[1]:
+                    matched_symbol = slots[0]
+                elif slots[1] == slots[2]:
+                    matched_symbol = slots[1]
+                else:
+                    matched_symbol = slots[0]
+
+                # 고급 심볼일수록 더 아쉬운 메시지
+                if matched_symbol in ["7️⃣", "💎", "🚀"]:
+                    effect = f"🤯🤯 {matched_symbol} 2개!! 대박 직전!!"
+                    encourage = f"한 개만 더!! {matched_symbol}이 기다려요! 🔥🔥🔥"
+                else:
+                    effect = "😱 아깝다!! 2개 일치!"
+                    encourage = "거의 다 왔어요! 🔥 다시 한번!"
             else:
                 effect = "💨 실패..."
                 encourage = "다음엔 될 거예요! 💪"
@@ -206,14 +225,7 @@ class GameHandlerMixin(BaseHandlerMixin):
         result = GameService.play_coin_flip(self.db, self.kakao_id, bet, choice)
 
         if not result["success"]:
-            return KakaoResponse.quick_replies(
-                result["message"],
-                [
-                    {"label": "📅 출석체크", "action": "message", "messageText": "/출석"},
-                    {"label": "🎫 복권", "action": "message", "messageText": "/복권"},
-                    {"label": "💼 포트폴리오", "action": "message", "messageText": "/포트폴리오"}
-                ]
-            )
+            return self._game_failure_response(result["message"])
 
         if result["won"]:
             effect = "🎉 WIN!"
@@ -233,11 +245,13 @@ class GameHandlerMixin(BaseHandlerMixin):
 {profit_text}
 💵 잔고: {result['cash']:,}원"""
 
+        opposite = "뒤" if result["choice"] == "앞" else "앞"
         return KakaoResponse.quick_replies(
             msg,
             [
-                {"label": "🪙 한번 더!", "action": "message", "messageText": f"/동전 {bet} {choice}"},
-                {"label": "🪙 반대로!", "action": "message", "messageText": f"/동전 {bet} {'뒤' if choice == '앞' else '앞'}"},
+                {"label": "🪙 한번 더!", "action": "message", "messageText": f"/동전 {bet} {result['choice']}"},
+                {"label": "🪙 2배!", "action": "message", "messageText": f"/동전 {bet * 2} {result['choice']}"},
+                {"label": "🪙 반대로!", "action": "message", "messageText": f"/동전 {bet} {opposite}"},
                 {"label": "🚀 급등주", "action": "message", "messageText": "/급등"}
             ]
         )
@@ -271,14 +285,7 @@ class GameHandlerMixin(BaseHandlerMixin):
         result = GameService.play_high_low(self.db, self.kakao_id, bet, choice)
 
         if not result["success"]:
-            return KakaoResponse.quick_replies(
-                result["message"],
-                [
-                    {"label": "📅 출석체크", "action": "message", "messageText": "/출석"},
-                    {"label": "🎫 복권", "action": "message", "messageText": "/복권"},
-                    {"label": "💼 포트폴리오", "action": "message", "messageText": "/포트폴리오"}
-                ]
-            )
+            return self._game_failure_response(result["message"])
 
         if result["won"] is None:
             msg = f"""🎲 하이로우
@@ -335,6 +342,7 @@ class GameHandlerMixin(BaseHandlerMixin):
             [
                 {"label": "🔼 높!", "action": "message", "messageText": f"/하이로우 {bet} 높"},
                 {"label": "🔽 낮!", "action": "message", "messageText": f"/하이로우 {bet} 낮"},
+                {"label": "🎲 2배!", "action": "message", "messageText": f"/하이로우 {bet * 2} {result.get('choice', '높')}"},
                 {"label": "🚀 급등주", "action": "message", "messageText": "/급등"}
             ]
         )
@@ -368,14 +376,7 @@ class GameHandlerMixin(BaseHandlerMixin):
         result = GameService.play_roulette(self.db, self.kakao_id, bet, choice)
 
         if not result["success"]:
-            return KakaoResponse.quick_replies(
-                result["message"],
-                [
-                    {"label": "📅 출석체크", "action": "message", "messageText": "/출석"},
-                    {"label": "🎫 복권", "action": "message", "messageText": "/복권"},
-                    {"label": "💼 포트폴리오", "action": "message", "messageText": "/포트폴리오"}
-                ]
-            )
+            return self._game_failure_response(result["message"])
 
         if result["won"]:
             effect = "🎉 WIN!"
@@ -397,11 +398,13 @@ class GameHandlerMixin(BaseHandlerMixin):
 {profit_text}
 💵 잔고: {result['cash']:,}원"""
 
+        choice_text = result.get("choice", "빨강")
         return KakaoResponse.quick_replies(
             msg,
             [
-                {"label": "🔴 빨강!", "action": "message", "messageText": f"/룰렛 {bet} 빨강"},
-                {"label": "⚫ 검정!", "action": "message", "messageText": f"/룰렛 {bet} 검정"},
-                {"label": "🟢 초록!", "action": "message", "messageText": f"/룰렛 {bet} 초록"}
+                {"label": f"🎡 {choice_text}!", "action": "message", "messageText": f"/룰렛 {bet} {choice_text}"},
+                {"label": "🎡 2배!", "action": "message", "messageText": f"/룰렛 {bet * 2} {choice_text}"},
+                {"label": "🟢 초록 9배!", "action": "message", "messageText": f"/룰렛 {bet} 초록"},
+                {"label": "🚀 급등주", "action": "message", "messageText": "/급등"}
             ]
         )

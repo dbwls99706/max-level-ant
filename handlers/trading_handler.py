@@ -134,7 +134,7 @@ class TradingHandlerMixin(BaseHandlerMixin):
                 return KakaoResponse.quick_replies(
                     result["message"],
                     [
-                        {"label": "📊 시세 조회", "action": "message", "messageText": "/시세"},
+                        {"label": f"📊 {stock_query} 시세", "action": "message", "messageText": f"/시세 {stock_query}"},
                         {"label": "🚀 급등주", "action": "message", "messageText": "/급등"}
                     ]
                 )
@@ -154,9 +154,9 @@ class TradingHandlerMixin(BaseHandlerMixin):
             bonus_text = " (보너스 요일!)" if mr.get("is_bonus_day") else ""
             msg += f"\n\n🎯 일간 미션 완료!{bonus_text}\n💰 +{mr['reward']:,}원 획득!"
 
-        if data.get("new_achievements"):
-            for ach in data["new_achievements"]:
-                msg += f"\n\n🏆 업적 달성: {ach['name']}!\n💰 +{ach['reward']:,}원 획득!"
+        new_achievements = data.get("new_achievements") or []
+        for ach in new_achievements:
+            msg += f"\n\n🏆 업적 달성: {ach['name']}!\n💰 +{ach['reward']:,}원 획득!"
 
         return KakaoResponse.quick_replies(
             msg,
@@ -226,7 +226,7 @@ class TradingHandlerMixin(BaseHandlerMixin):
                     result["message"],
                     [
                         {"label": "💼 포트폴리오", "action": "message", "messageText": "/포트폴리오"},
-                        {"label": "📊 시세 조회", "action": "message", "messageText": "/시세"}
+                        {"label": f"📊 {stock_query} 시세", "action": "message", "messageText": f"/시세 {stock_query}"}
                     ]
                 )
 
@@ -254,9 +254,9 @@ class TradingHandlerMixin(BaseHandlerMixin):
             bonus_text = " (보너스 요일!)" if mr.get("is_bonus_day") else ""
             msg += f"\n\n🎯 일간 미션 완료!{bonus_text}\n💰 +{mr['reward']:,}원 획득!"
 
-        if data.get("new_achievements"):
-            for ach in data["new_achievements"]:
-                msg += f"\n\n🏆 업적 달성: {ach['name']}!\n💰 +{ach['reward']:,}원 획득!"
+        new_achievements = data.get("new_achievements") or []
+        for ach in new_achievements:
+            msg += f"\n\n🏆 업적 달성: {ach['name']}!\n💰 +{ach['reward']:,}원 획득!"
 
         return KakaoResponse.quick_replies(
             msg,
@@ -416,9 +416,21 @@ class TradingHandlerMixin(BaseHandlerMixin):
         buttons = []
         if portfolio["holdings"]:
             holdings_text = ""
+
+            # 최고/최저 수익률 종목 찾기
+            best_stock = max(portfolio["holdings"], key=lambda x: x["profit_rate"])
+            worst_stock = min(portfolio["holdings"], key=lambda x: x["profit_rate"])
+
             for h in portfolio["holdings"]:
                 emoji = "🔺" if h["profit_rate"] >= 0 else "🔻"
-                holdings_text += f"\n{h['name']} {h['quantity']:,}주"
+                # 최고 수익률 종목 하이라이트
+                if h["name"] == best_stock["name"] and h["profit_rate"] > 0:
+                    holdings_text += f"\n🏆 {h['name']} {h['quantity']:,}주 ★베스트"
+                # 최저 수익률 종목 하이라이트 (손실 중일 때만)
+                elif h["name"] == worst_stock["name"] and h["profit_rate"] < -5:
+                    holdings_text += f"\n⚠️ {h['name']} {h['quantity']:,}주 ★주의"
+                else:
+                    holdings_text += f"\n{h['name']} {h['quantity']:,}주"
                 holdings_text += f"\n  {h['current_price']:,}원 ({h['profit_rate']:+.1f}%) {emoji}\n"
                 if len(buttons) < 4:
                     buttons.append({
