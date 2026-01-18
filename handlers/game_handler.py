@@ -124,14 +124,7 @@ class GameHandlerMixin(BaseHandlerMixin):
         result = GameService.play_slot(self.db, self.kakao_id, bet)
 
         if not result["success"]:
-            return KakaoResponse.quick_replies(
-                result["message"],
-                [
-                    {"label": "📅 출석체크", "action": "message", "messageText": "/출석"},
-                    {"label": "🎫 복권", "action": "message", "messageText": "/복권"},
-                    {"label": "💼 포트폴리오", "action": "message", "messageText": "/포트폴리오"}
-                ]
-            )
+            return self._game_failure_response(result["message"])
 
         slots = result["slots"]
         slot_display = f"[ {slots[0]} | {slots[1]} | {slots[2]} ]"
@@ -232,14 +225,7 @@ class GameHandlerMixin(BaseHandlerMixin):
         result = GameService.play_coin_flip(self.db, self.kakao_id, bet, choice)
 
         if not result["success"]:
-            return KakaoResponse.quick_replies(
-                result["message"],
-                [
-                    {"label": "📅 출석체크", "action": "message", "messageText": "/출석"},
-                    {"label": "🎫 복권", "action": "message", "messageText": "/복권"},
-                    {"label": "💼 포트폴리오", "action": "message", "messageText": "/포트폴리오"}
-                ]
-            )
+            return self._game_failure_response(result["message"])
 
         if result["won"]:
             effect = "🎉 WIN!"
@@ -299,14 +285,7 @@ class GameHandlerMixin(BaseHandlerMixin):
         result = GameService.play_high_low(self.db, self.kakao_id, bet, choice)
 
         if not result["success"]:
-            return KakaoResponse.quick_replies(
-                result["message"],
-                [
-                    {"label": "📅 출석체크", "action": "message", "messageText": "/출석"},
-                    {"label": "🎫 복권", "action": "message", "messageText": "/복권"},
-                    {"label": "💼 포트폴리오", "action": "message", "messageText": "/포트폴리오"}
-                ]
-            )
+            return self._game_failure_response(result["message"])
 
         if result["won"] is None:
             msg = f"""🎲 하이로우
@@ -397,14 +376,7 @@ class GameHandlerMixin(BaseHandlerMixin):
         result = GameService.play_roulette(self.db, self.kakao_id, bet, choice)
 
         if not result["success"]:
-            return KakaoResponse.quick_replies(
-                result["message"],
-                [
-                    {"label": "📅 출석체크", "action": "message", "messageText": "/출석"},
-                    {"label": "🎫 복권", "action": "message", "messageText": "/복권"},
-                    {"label": "💼 포트폴리오", "action": "message", "messageText": "/포트폴리오"}
-                ]
-            )
+            return self._game_failure_response(result["message"])
 
         if result["won"]:
             effect = "🎉 WIN!"

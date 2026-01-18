@@ -154,9 +154,9 @@ class TradingHandlerMixin(BaseHandlerMixin):
             bonus_text = " (보너스 요일!)" if mr.get("is_bonus_day") else ""
             msg += f"\n\n🎯 일간 미션 완료!{bonus_text}\n💰 +{mr['reward']:,}원 획득!"
 
-        if data.get("new_achievements"):
-            for ach in data["new_achievements"]:
-                msg += f"\n\n🏆 업적 달성: {ach['name']}!\n💰 +{ach['reward']:,}원 획득!"
+        new_achievements = data.get("new_achievements") or []
+        for ach in new_achievements:
+            msg += f"\n\n🏆 업적 달성: {ach['name']}!\n💰 +{ach['reward']:,}원 획득!"
 
         return KakaoResponse.quick_replies(
             msg,
@@ -254,9 +254,9 @@ class TradingHandlerMixin(BaseHandlerMixin):
             bonus_text = " (보너스 요일!)" if mr.get("is_bonus_day") else ""
             msg += f"\n\n🎯 일간 미션 완료!{bonus_text}\n💰 +{mr['reward']:,}원 획득!"
 
-        if data.get("new_achievements"):
-            for ach in data["new_achievements"]:
-                msg += f"\n\n🏆 업적 달성: {ach['name']}!\n💰 +{ach['reward']:,}원 획득!"
+        new_achievements = data.get("new_achievements") or []
+        for ach in new_achievements:
+            msg += f"\n\n🏆 업적 달성: {ach['name']}!\n💰 +{ach['reward']:,}원 획득!"
 
         return KakaoResponse.quick_replies(
             msg,

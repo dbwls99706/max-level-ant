@@ -168,7 +168,10 @@ class AssetService:
         # 날짜 표시 (간략하게)
         date_line = "   "
         for h in history[-chart_width:]:
-            day = h["date"].split("-")[2]  # DD 부분만
+            try:
+                day = h["date"].split("-")[2]  # DD 부분만
+            except (IndexError, AttributeError):
+                day = "??"
             date_line += f"{day} "
         lines.append(date_line)
 

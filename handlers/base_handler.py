@@ -308,3 +308,32 @@ class BaseHandlerMixin:
         if not result.get("success") and result.get("error_code") == "MARKET_CLOSED":
             return True, self._market_closed_with_message(result.get("message", "장이 마감되었습니다."))
         return False, None
+
+    def _game_failure_response(self, message: str) -> Dict:
+        """게임 실패/에러 시 공통 응답 (현금 부족, 시스템 에러 등)"""
+        return KakaoResponse.quick_replies(
+            message,
+            [
+                {"label": "📅 출석체크", "action": "message", "messageText": "/출석"},
+                {"label": "🎫 복권", "action": "message", "messageText": "/복권"},
+                {"label": "💼 포트폴리오", "action": "message", "messageText": "/포트폴리오"}
+            ]
+        )
+
+    def _parse_bet_amount(self, default: int = None) -> Tuple[int, bool]:
+        """
+        배팅 금액 파싱 헬퍼
+        Returns: (amount, is_valid)
+        """
+        if default is None:
+            default = GameConfig.DEFAULT_BET
+
+        parts = self.utterance.split()
+        if len(parts) < 2:
+            return default, True  # 기본값 사용
+
+        try:
+            amount = int(parts[1].replace(",", ""))
+            return amount, True
+        except ValueError:
+            return 0, False
