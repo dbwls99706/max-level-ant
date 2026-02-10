@@ -11,6 +11,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from models import Milestone, User
 from services.common import (
     get_user_with_error,
+    get_user_with_error_for_update,
     error_response,
     success_response,
     safe_add,
@@ -141,14 +142,14 @@ class MilestoneService:
 
         achieved = []
 
-        for milestone_type, info in cls.MILESTONES.items():
-            # 이미 달성한 마일스톤인지 확인
-            existing = db.query(Milestone).filter(
-                Milestone.kakao_id == kakao_id,
-                Milestone.milestone_type == milestone_type
-            ).first()
+        # 이미 달성한 마일스톤 배치 조회 (N+1 방지: 13개 개별 쿼리 → 1개)
+        existing_milestones = db.query(Milestone.milestone_type).filter(
+            Milestone.kakao_id == kakao_id
+        ).all()
+        achieved_types = {m.milestone_type for m in existing_milestones}
 
-            if existing:
+        for milestone_type, info in cls.MILESTONES.items():
+            if milestone_type in achieved_types:
                 continue
 
             # 카테고리별 체크
@@ -267,8 +268,8 @@ class MilestoneService:
                 "이미 보상을 수령했습니다."
             )
 
-        # 보상 지급
-        user, err = get_user_with_error(db, kakao_id)
+        # 보상 지급 (FOR UPDATE로 동시 수령 방지)
+        user, err = get_user_with_error_for_update(db, kakao_id)
         if err:
             return err
 
@@ -307,7 +308,7 @@ class MilestoneService:
                 "수령할 보상이 없습니다."
             )
 
-        user, err = get_user_with_error(db, kakao_id)
+        user, err = get_user_with_error_for_update(db, kakao_id)
         if err:
             return err
 

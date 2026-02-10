@@ -11,12 +11,12 @@ from sqlalchemy.exc import SQLAlchemyError
 
 from models import WeeklyChallenge, UserChallenge, User
 from services.common import (
-    get_user_with_error,
+    get_user_with_error_for_update,
     error_response,
     success_response,
     safe_add,
 )
-from config import ErrorCode
+from config import ErrorCode, KST
 from utils import get_service_logger
 
 logger = get_service_logger()
@@ -62,7 +62,7 @@ class ChallengeService:
     @classmethod
     def get_current_week_id(cls) -> str:
         """현재 주차 ID 반환 (예: 2024-W01)"""
-        today = date.today()
+        today = datetime.now(KST).date()
         return today.strftime("%Y-W%W")
 
     @classmethod
@@ -79,7 +79,7 @@ class ChallengeService:
             return challenge
 
         # 새 챌린지 생성
-        today = date.today()
+        today = datetime.now(KST).date()
         # 이번 주 월요일
         monday = today - timedelta(days=today.weekday())
         # 이번 주 일요일
@@ -270,8 +270,8 @@ class ChallengeService:
                 "이미 보상을 수령했습니다."
             )
 
-        # 보상 지급
-        user, err = get_user_with_error(db, kakao_id)
+        # 보상 지급 (FOR UPDATE로 동시 수령 방지)
+        user, err = get_user_with_error_for_update(db, kakao_id)
         if err:
             return err
 
