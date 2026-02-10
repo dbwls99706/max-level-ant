@@ -142,8 +142,13 @@ class RankingService:
         if cache_key in cls._ranking_cache:
             return cls._ranking_cache[cache_key]
 
-        # 전체 랭킹 계산
-        rankings = cls._build_rankings(db)
+        # 전체 랭킹 캐시 확인 후 없으면 계산 (get_my_rank와 캐시 공유)
+        full_ranking_key = "ranking_full"
+        if full_ranking_key in cls._ranking_cache:
+            rankings = cls._ranking_cache[full_ranking_key]
+        else:
+            rankings = cls._build_rankings(db)
+            cls._ranking_cache[full_ranking_key] = rankings
 
         # TOP N 추출
         result = rankings[:limit]

@@ -1,6 +1,6 @@
 """
 주식 뉴스 서비스 (리팩토링)
-- 네이버 뉴스 RSS 활용
+- Google News RSS 활용
 - 종목별/시장 뉴스 조회
 - print → logger 변경
 """
@@ -18,7 +18,7 @@ logger = get_service_logger()
 class NewsService:
     """주식 뉴스 서비스"""
 
-    NAVER_NEWS_RSS = "https://news.google.com/rss/search"
+    GOOGLE_NEWS_RSS = "https://news.google.com/rss/search"
     REQUEST_TIMEOUT = 10
 
     @classmethod
@@ -42,7 +42,7 @@ class NewsService:
             }
 
             resp = requests.get(
-                cls.NAVER_NEWS_RSS,
+                cls.GOOGLE_NEWS_RSS,
                 params=params,
                 timeout=cls.REQUEST_TIMEOUT
             )

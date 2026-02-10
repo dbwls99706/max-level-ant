@@ -4,7 +4,7 @@
 - 실시간 주가, 거래량, 등락률 조회
 - 개선된 캐시 전략 (TTL + 무효화)
 """
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional, Dict, List
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from cachetools import TTLCache
@@ -39,7 +39,7 @@ class KISAPIClient:
 
         # 토큰이 아직 유효하면 재사용
         if cls._access_token and cls._token_expires_at:
-            if datetime.now() < cls._token_expires_at:
+            if datetime.now(timezone.utc) < cls._token_expires_at:
                 return cls._access_token
 
         try:
@@ -57,7 +57,7 @@ class KISAPIClient:
                 data = resp.json()
                 cls._access_token = data.get("access_token")
                 # 토큰 만료시간 설정 (23시간 - 여유 1시간)
-                cls._token_expires_at = datetime.now() + timedelta(hours=23)
+                cls._token_expires_at = datetime.now(timezone.utc) + timedelta(hours=23)
                 logger.info("KIS API 토큰 발급 성공")
                 return cls._access_token
             else:

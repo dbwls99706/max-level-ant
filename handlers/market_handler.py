@@ -77,9 +77,12 @@ class MarketHandlerMixin(BaseHandlerMixin):
 
         msg = "📊 거래량 TOP 5\n"
         for i, s in enumerate(stocks, 1):
-            emoji = "📈" if s["change"] >= 0 else "📉"
-            msg += f"\n{i}. {s['name']}"
-            msg += f"\n   {s['price']:,}원 ({s['change']:+.2f}%) {emoji}\n"
+            change = s.get("change", 0)
+            price = s.get("price", 0)
+            name = s.get("name", "???")
+            emoji = "📈" if change >= 0 else "📉"
+            msg += f"\n{i}. {name}"
+            msg += f"\n   {price:,}원 ({change:+.2f}%) {emoji}\n"
 
         buttons = [{"label": f"📊 {s['name']}", "action": "message", "messageText": f"/시세 {s['name']}"} for s in stocks[:4]]
         buttons.append({"label": "🚀 급등주", "action": "message", "messageText": "/급등"})

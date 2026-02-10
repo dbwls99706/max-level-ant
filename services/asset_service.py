@@ -103,7 +103,7 @@ class AssetService:
     @classmethod
     def get_asset_history(cls, db: Session, kakao_id: str, days: int = 7) -> List[Dict]:
         """최근 N일간 자산 히스토리"""
-        start_date = date.today() - timedelta(days=days)
+        start_date = datetime.now(KST).date() - timedelta(days=days)
 
         histories = db.query(AssetHistory).filter(
             AssetHistory.kakao_id == kakao_id,

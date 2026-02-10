@@ -289,7 +289,7 @@ class MissionService:
         오늘이 주간 보너스 요일인지 확인
         Returns: (is_bonus_day, multiplier)
         """
-        today_weekday = datetime.now().weekday()
+        today_weekday = datetime.now(KST).weekday()
         is_bonus = today_weekday == GameConfig.WEEKLY_BONUS_DAY
         multiplier = GameConfig.WEEKLY_BONUS_MULTIPLIER if is_bonus else 1.0
         return is_bonus, multiplier

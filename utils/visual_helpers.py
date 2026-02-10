@@ -4,7 +4,6 @@
 - 수익률 게이지 바
 - 등급별 이모지
 """
-import re
 
 
 def get_streak_display(streak: int) -> str:
