@@ -49,9 +49,11 @@ class MarketHandlerMixin(BaseHandlerMixin):
             code = r.get("code")
             stock_info = stock_info_map.get(code) if code else None
             if stock_info:
-                change_emoji = "📈" if stock_info.get("change", 0) >= 0 else "📉"
+                change = stock_info.get("change", 0)
+                price = stock_info.get("price", 0)
+                change_emoji = "📈" if change >= 0 else "📉"
                 msg += f"\n{i}. {r['name']}"
-                msg += f"\n   {stock_info['price']:,}원 ({stock_info['change']:+.1f}%) {change_emoji}"
+                msg += f"\n   {price:,}원 ({change:+.1f}%) {change_emoji}"
             else:
                 msg += f"\n{i}. {r['name']}"
 
