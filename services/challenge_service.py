@@ -3,7 +3,7 @@
 - 트랜잭션 안전성 강화
 - 0 나누기 방지
 """
-from datetime import date, datetime, timedelta
+from datetime import datetime, timedelta
 from typing import Dict, List, Optional
 import random
 from sqlalchemy.orm import Session

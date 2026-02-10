@@ -4,7 +4,7 @@
 - N+1 쿼리 최적화
 - 트랜잭션 안전성
 """
-from datetime import date, datetime, timedelta
+from datetime import datetime, timedelta
 from typing import Dict, List, Set
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import SQLAlchemyError
@@ -23,13 +23,8 @@ class AssetService:
 
     @classmethod
     def _prefetch_stock_prices(cls, stock_codes: Set[str]) -> Dict[str, int]:
-        """여러 종목 시세 배치 조회 (N+1 방지)"""
-        prices = {}
-        for code in stock_codes:
-            stock_info = StockService.get_price(code)
-            if stock_info:
-                prices[code] = stock_info["price"]
-        return prices
+        """여러 종목 시세 배치 조회 (병렬 처리)"""
+        return StockService.batch_get_prices(stock_codes)
 
     @classmethod
     def record_daily_asset(cls, db: Session, kakao_id: str) -> Dict:

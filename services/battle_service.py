@@ -12,7 +12,6 @@ from sqlalchemy.exc import SQLAlchemyError
 from models import Battle, User
 from services.stock_service import StockService
 from services.common import (
-    get_user_with_error,
     get_user_with_error_for_update,
     validate_bet,
     safe_subtract,
@@ -246,7 +245,8 @@ class BattleService:
     @classmethod
     def check_battle_result(cls, db: Session, battle_id: int) -> Dict:
         """배틀 결과 확인"""
-        battle = db.query(Battle).filter(Battle.id == battle_id).first()
+        # FOR UPDATE로 배틀 상태 변경 시 동시 종료 처리 방지
+        battle = db.query(Battle).filter(Battle.id == battle_id).with_for_update().first()
         if not battle:
             return error_response(ErrorCode.NOT_FOUND, "❌ 해당 배틀을 찾을 수 없습니다.")
 
@@ -293,8 +293,9 @@ class BattleService:
         price_change = current_price - battle.start_price
         actual_direction = "UP" if price_change > 0 else "DOWN" if price_change < 0 else "DRAW"
 
-        challenger = db.query(User).filter(User.kakao_id == battle.challenger_id).first()
-        opponent = db.query(User).filter(User.kakao_id == battle.opponent_id).first()
+        # FOR UPDATE로 동시성 제어 (상금 지급 시 race condition 방지)
+        challenger = db.query(User).filter(User.kakao_id == battle.challenger_id).with_for_update().first()
+        opponent = db.query(User).filter(User.kakao_id == battle.opponent_id).with_for_update().first()
 
         # 유저 확인 (데이터 무결성 체크) - 생존 유저에게 배팅금 환불
         if not challenger or not opponent:
@@ -446,7 +447,8 @@ class BattleService:
         if battle.status != BattleStatus.WAITING:
             return error_response(ErrorCode.INVALID_STATE, "❌ 대기 중인 배틀만 취소할 수 있습니다.")
 
-        user = db.query(User).filter(User.kakao_id == kakao_id).first()
+        # FOR UPDATE로 동시성 제어 (배팅금 환불 시 race condition 방지)
+        user = db.query(User).filter(User.kakao_id == kakao_id).with_for_update().first()
         if not user:
             return error_response(ErrorCode.USER_NOT_FOUND, "❌ 유저 정보를 찾을 수 없습니다.")
 
@@ -483,7 +485,7 @@ class BattleService:
         cleaned = 0
         for battle in stale_battles:
             try:
-                user = db.query(User).filter(User.kakao_id == battle.challenger_id).first()
+                user = db.query(User).filter(User.kakao_id == battle.challenger_id).with_for_update().first()
                 if user:
                     user.cash = safe_add(user.cash, battle.bet_amount)
                 battle.status = BattleStatus.CANCELLED

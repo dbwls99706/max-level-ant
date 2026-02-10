@@ -49,9 +49,11 @@ class MarketHandlerMixin(BaseHandlerMixin):
             code = r.get("code")
             stock_info = stock_info_map.get(code) if code else None
             if stock_info:
-                change_emoji = "📈" if stock_info.get("change", 0) >= 0 else "📉"
+                change = stock_info.get("change", 0)
+                price = stock_info.get("price", 0)
+                change_emoji = "📈" if change >= 0 else "📉"
                 msg += f"\n{i}. {r['name']}"
-                msg += f"\n   {stock_info['price']:,}원 ({stock_info['change']:+.1f}%) {change_emoji}"
+                msg += f"\n   {price:,}원 ({change:+.1f}%) {change_emoji}"
             else:
                 msg += f"\n{i}. {r['name']}"
 
@@ -84,7 +86,7 @@ class MarketHandlerMixin(BaseHandlerMixin):
             msg += f"\n{i}. {name}"
             msg += f"\n   {price:,}원 ({change:+.2f}%) {emoji}\n"
 
-        buttons = [{"label": f"📊 {s['name']}", "action": "message", "messageText": f"/시세 {s['name']}"} for s in stocks[:4]]
+        buttons = [{"label": f"📊 {s.get('name', '???')}", "action": "message", "messageText": f"/시세 {s.get('name', '')}"} for s in stocks[:4]]
         buttons.append({"label": "🚀 급등주", "action": "message", "messageText": "/급등"})
 
         return KakaoResponse.quick_replies(msg, buttons)
@@ -105,9 +107,12 @@ class MarketHandlerMixin(BaseHandlerMixin):
 
         msg = "🚀 오늘의 급등주 TOP 10\n"
         for i, s in enumerate(stocks, 1):
-            msg += f"\n{i}. {s['name']} 📈{s['change']:+.1f}% ({s['price']:,}원)"
+            name = s.get("name", "???")
+            change = s.get("change", 0)
+            price = s.get("price", 0)
+            msg += f"\n{i}. {name} 📈{change:+.1f}% ({price:,}원)"
 
-        buttons = [{"label": f"🔥 {s['name']}", "action": "message", "messageText": f"/시세 {s['name']}"} for s in stocks[:3]]
+        buttons = [{"label": f"🔥 {s.get('name', '???')}", "action": "message", "messageText": f"/시세 {s.get('name', '')}"} for s in stocks[:3]]
         buttons.append({"label": "📉 급락주", "action": "message", "messageText": "/급락"})
 
         return KakaoResponse.quick_replies(msg, buttons)
@@ -128,9 +133,12 @@ class MarketHandlerMixin(BaseHandlerMixin):
 
         msg = "📉 오늘의 급락주 TOP 10 (저점매수 기회?)\n"
         for i, s in enumerate(stocks, 1):
-            msg += f"\n{i}. {s['name']} 🔻{s['change']:+.1f}% ({s['price']:,}원)"
+            name = s.get("name", "???")
+            change = s.get("change", 0)
+            price = s.get("price", 0)
+            msg += f"\n{i}. {name} 🔻{change:+.1f}% ({price:,}원)"
 
-        buttons = [{"label": f"💎 {s['name']}", "action": "message", "messageText": f"/시세 {s['name']}"} for s in stocks[:3]]
+        buttons = [{"label": f"💎 {s.get('name', '???')}", "action": "message", "messageText": f"/시세 {s.get('name', '')}"} for s in stocks[:3]]
         buttons.append({"label": "🚀 급등주", "action": "message", "messageText": "/급등"})
 
         return KakaoResponse.quick_replies(msg, buttons)
@@ -153,15 +161,19 @@ class MarketHandlerMixin(BaseHandlerMixin):
 
         if "kospi" in market:
             k = market["kospi"]
-            emoji = "🔺" if k["change"] >= 0 else "🔻"
+            change = k.get("change", 0)
+            price = k.get("price", 0)
+            emoji = "🔺" if change >= 0 else "🔻"
             msg += f"\n🇰🇷 KOSPI"
-            msg += f"\n   {k['price']:,.2f} ({k['change']:+.2f}%) {emoji}\n"
+            msg += f"\n   {price:,.2f} ({change:+.2f}%) {emoji}\n"
 
         if "kosdaq" in market:
             k = market["kosdaq"]
-            emoji = "🔺" if k["change"] >= 0 else "🔻"
+            change = k.get("change", 0)
+            price = k.get("price", 0)
+            emoji = "🔺" if change >= 0 else "🔻"
             msg += f"\n💹 KOSDAQ"
-            msg += f"\n   {k['price']:,.2f} ({k['change']:+.2f}%) {emoji}\n"
+            msg += f"\n   {price:,.2f} ({change:+.2f}%) {emoji}\n"
 
         return KakaoResponse.quick_replies(
             msg,
@@ -206,7 +218,7 @@ class MarketHandlerMixin(BaseHandlerMixin):
 
         msg = f"{title}\n"
         for i, n in enumerate(news, 1):
-            t = n['title']
+            t = n.get('title', '')
             if len(t) > 35:
                 t = t[:35] + "..."
             msg += f"\n{i}. {t}"

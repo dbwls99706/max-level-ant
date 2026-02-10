@@ -6,14 +6,13 @@
 - 확률 상수화 및 검증
 """
 import random
-from datetime import date, datetime
+from datetime import datetime
 from typing import Dict, Tuple
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import SQLAlchemyError
 
 from config import GameConfig, GameProbability, ErrorCode, KST
 from services.common import (
-    get_user_with_error,
     get_user_with_error_for_update,
     validate_bet,
     check_market_closed_for_game,
