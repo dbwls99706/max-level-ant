@@ -6,7 +6,7 @@
 - safe_add 적용, 예외 처리 개선
 """
 import json
-from datetime import date, datetime
+from datetime import datetime
 from typing import Dict, List, Optional, Tuple
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import SQLAlchemyError

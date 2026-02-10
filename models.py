@@ -1,7 +1,7 @@
 """
 데이터베이스 모델 정의
 """
-from datetime import datetime, date, timezone
+from datetime import datetime, timezone
 from sqlalchemy import (
     Column, String, BigInteger, Integer, Float,
     DateTime, Date, ForeignKey, UniqueConstraint, Index

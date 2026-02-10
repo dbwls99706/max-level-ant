@@ -10,7 +10,6 @@ from sqlalchemy.exc import SQLAlchemyError
 
 from models import Milestone, User
 from services.common import (
-    get_user_with_error,
     get_user_with_error_for_update,
     error_response,
     success_response,

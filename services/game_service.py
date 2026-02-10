@@ -6,7 +6,7 @@
 - 확률 상수화 및 검증
 """
 import random
-from datetime import date, datetime
+from datetime import datetime
 from typing import Dict, Tuple
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import SQLAlchemyError

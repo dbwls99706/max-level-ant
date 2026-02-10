@@ -6,7 +6,7 @@
 - safe_add 적용
 """
 import re
-from datetime import date, datetime, timedelta
+from datetime import datetime, timedelta
 from typing import Optional, Tuple, Dict
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import SQLAlchemyError
