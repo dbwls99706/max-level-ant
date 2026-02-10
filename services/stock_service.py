@@ -6,6 +6,7 @@
 """
 from datetime import datetime, timedelta
 from typing import Optional, Dict, List
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from cachetools import TTLCache
 import requests
 from requests.exceptions import RequestException, Timeout
@@ -357,6 +358,10 @@ class StockService:
                 return  # 이미 좋은 이름이 있음
             return  # 코드를 이름으로 저장하지 않음
 
+        # 이미 메모리 캐시에 동일한 이름으로 존재하면 DB 쓰기 스킵
+        if cls._dynamic_stocks_by_code.get(code) == name:
+            return
+
         # 메모리 캐시
         cls._dynamic_stocks_by_name[name] = code
         cls._dynamic_stocks_by_code[code] = name
@@ -574,7 +579,7 @@ class StockService:
     @classmethod
     def batch_get_prices(cls, stock_codes: set) -> Dict[str, int]:
         """
-        여러 종목 시세 일괄 조회 (N+1 쿼리 방지)
+        여러 종목 시세 일괄 조회 (병렬 처리로 성능 개선)
 
         Args:
             stock_codes: 종목 코드 집합
@@ -582,17 +587,45 @@ class StockService:
         Returns:
             {종목코드: 현재가} 딕셔너리
         """
+        if not stock_codes:
+            return {}
+
         prices = {}
+
+        # 캐시에 있는 종목은 즉시 반환, 없는 것만 API 호출
+        uncached_codes = []
         for code in stock_codes:
+            if code in cls._price_cache:
+                cached = cls._price_cache[code]
+                prices[code] = cached["price"]
+            else:
+                uncached_codes.append(code)
+
+        if not uncached_codes:
+            return prices
+
+        # 병렬로 API 호출 (최대 5개 동시)
+        def fetch_price(code):
             stock_info = cls.get_price(code)
-            if stock_info:
-                prices[code] = stock_info["price"]
+            return code, stock_info
+
+        with ThreadPoolExecutor(max_workers=min(5, len(uncached_codes))) as executor:
+            futures = {executor.submit(fetch_price, code): code for code in uncached_codes}
+            for future in as_completed(futures):
+                try:
+                    code, stock_info = future.result(timeout=15)
+                    if stock_info:
+                        prices[code] = stock_info["price"]
+                except Exception as e:
+                    code = futures[future]
+                    logger.warning(f"배치 시세 조회 실패 ({code}): {e}")
+
         return prices
 
     @classmethod
     def batch_get_stock_info(cls, stock_codes: set) -> Dict[str, Dict]:
         """
-        여러 종목 전체 정보 일괄 조회 (N+1 방지)
+        여러 종목 전체 정보 일괄 조회 (병렬 처리)
 
         Args:
             stock_codes: 종목 코드 집합
@@ -600,9 +633,24 @@ class StockService:
         Returns:
             {종목코드: stock_info} 딕셔너리
         """
+        if not stock_codes:
+            return {}
+
         result = {}
-        for code in stock_codes:
+
+        def fetch_info(code):
             stock_info = cls.get_price(code)
-            if stock_info:
-                result[code] = stock_info
+            return code, stock_info
+
+        with ThreadPoolExecutor(max_workers=min(5, len(stock_codes))) as executor:
+            futures = {executor.submit(fetch_info, code): code for code in stock_codes}
+            for future in as_completed(futures):
+                try:
+                    code, stock_info = future.result(timeout=15)
+                    if stock_info:
+                        result[code] = stock_info
+                except Exception as e:
+                    code = futures[future]
+                    logger.warning(f"배치 종목 정보 조회 실패 ({code}): {e}")
+
         return result

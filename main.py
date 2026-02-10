@@ -4,6 +4,7 @@
 import os
 import secrets
 import time
+import threading
 from collections import defaultdict
 from fastapi import FastAPI, Request, Depends, HTTPException, Header
 from fastapi.middleware.cors import CORSMiddleware
@@ -13,10 +14,11 @@ import uvicorn
 from contextlib import asynccontextmanager
 from typing import Optional
 
-from database import get_db, init_db, reset_db, check_db_health
+from database import get_db, init_db, reset_db, check_db_health, SessionLocal
 from handlers import CommandHandler
 from utils import KakaoResponse, configure_root_logger, get_main_logger
 from services.stock_service import KISAPIClient, StockService
+from services.battle_service import BattleService
 from config import SecurityConfig, validate_config
 
 # 로깅 설정
@@ -29,47 +31,55 @@ logger = get_main_logger()
 # ===========================================
 class RateLimiter:
     """
-    간단한 인메모리 Rate Limiter
+    간단한 인메모리 Rate Limiter (스레드 안전)
     - 유저별 요청 횟수 제한
     - 주기적으로 오래된 데이터 정리
+    - 최대 유저 수 제한으로 메모리 폭증 방지
     """
+    MAX_TRACKED_USERS = 10_000  # 메모리 폭증 방지
+
     def __init__(self, max_requests: int = 30, window_seconds: int = 60):
         self.max_requests = max_requests
         self.window_seconds = window_seconds
         self.requests: dict = defaultdict(list)
         self.last_cleanup = time.time()
+        self._lock = threading.Lock()
 
     def is_allowed(self, user_id: str) -> bool:
         """요청 허용 여부 확인"""
         now = time.time()
 
-        # 설정된 간격마다 오래된 데이터 정리
-        if now - self.last_cleanup > SecurityConfig.RATE_LIMIT_CLEANUP_INTERVAL:
-            self._cleanup()
-            self.last_cleanup = now
+        with self._lock:
+            # 설정된 간격마다 오래된 데이터 정리
+            if now - self.last_cleanup > SecurityConfig.RATE_LIMIT_CLEANUP_INTERVAL:
+                self._cleanup()
+                self.last_cleanup = now
 
-        # 해당 유저의 윈도우 내 요청 기록
-        user_requests = self.requests[user_id]
-        cutoff = now - self.window_seconds
+            # 최대 추적 유저 수 초과 시 강제 정리
+            if len(self.requests) > self.MAX_TRACKED_USERS:
+                self._cleanup()
 
-        # 윈도우 밖의 오래된 요청 제거
-        self.requests[user_id] = [ts for ts in user_requests if ts > cutoff]
+            # 해당 유저의 윈도우 내 요청 기록
+            user_requests = self.requests[user_id]
+            cutoff = now - self.window_seconds
 
-        # 제한 확인
-        if len(self.requests[user_id]) >= self.max_requests:
-            return False
+            # 윈도우 밖의 오래된 요청 제거
+            self.requests[user_id] = [ts for ts in user_requests if ts > cutoff]
 
-        # 현재 요청 기록
-        self.requests[user_id].append(now)
-        return True
+            # 제한 확인
+            if len(self.requests[user_id]) >= self.max_requests:
+                return False
+
+            # 현재 요청 기록
+            self.requests[user_id].append(now)
+            return True
 
     def _cleanup(self):
-        """오래된 데이터 정리"""
+        """오래된 데이터 정리 (lock 보유 상태에서 호출됨)"""
         now = time.time()
         cutoff = now - self.window_seconds
         expired_users = []
 
-        # 딕셔너리 반복 중 수정 방지를 위해 items() 복사
         for user_id, timestamps in list(self.requests.items()):
             self.requests[user_id] = [ts for ts in timestamps if ts > cutoff]
             if not self.requests[user_id]:
@@ -106,6 +116,16 @@ async def lifespan(app: FastAPI):
 
     # 종목 캐시 로드 (DB에서 메모리로)
     StockService.load_stock_cache()
+
+    # 만료된 대기 배틀 정리 (서버 재시작 시)
+    try:
+        cleanup_db = SessionLocal()
+        cleaned = BattleService.cleanup_stale_battles(cleanup_db)
+        if cleaned > 0:
+            logger.info(f"서버 시작 시 만료 배틀 {cleaned}건 정리")
+        cleanup_db.close()
+    except Exception as e:
+        logger.warning(f"만료 배틀 정리 실패: {e}")
 
     # KIS API 토큰 미리 발급 (타임아웃 방지)
     token = KISAPIClient.get_access_token()
@@ -203,7 +223,7 @@ async def kakao_skill(request: Request, db: Session = Depends(get_db)):
 
         # 악의적인 ID 패턴 차단 (SQL-like, 특수문자)
         if not kakao_id.replace("-", "").replace("_", "").isalnum():
-            logger.warning(f"의심스러운 kakao_id 감지: {kakao_id[:20]}...")
+            logger.warning(f"의심스러운 kakao_id 감지: {repr(kakao_id[:20])}")
             return KakaoResponse.simple_text("유저 정보를 확인할 수 없습니다.")
 
         # utterance 입력 검증 및 정제
@@ -262,7 +282,8 @@ async def debug_skill(request: Request, db: Session = Depends(get_db)):
         return response
 
     except Exception as e:
-        return {"error": str(e)}
+        logger.error(f"디버그 엔드포인트 에러: {e}", exc_info=True)
+        return {"error": "내부 오류가 발생했습니다."}
 
 
 # ===========================================

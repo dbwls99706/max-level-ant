@@ -6,12 +6,12 @@
 - 확률 상수화 및 검증
 """
 import random
-from datetime import date
+from datetime import date, datetime
 from typing import Dict, Tuple
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import SQLAlchemyError
 
-from config import GameConfig, GameProbability, ErrorCode
+from config import GameConfig, GameProbability, ErrorCode, KST
 from services.common import (
     get_user_with_error,
     get_user_with_error_for_update,
@@ -40,8 +40,8 @@ class GameService:
         if error:
             return error
 
-        # 날짜가 바뀌었으면 카운트 리셋
-        today = date.today()
+        # 날짜가 바뀌었으면 카운트 리셋 (KST 기준)
+        today = datetime.now(KST).date()
         if user.last_lottery_date != today:
             user.last_lottery_date = today
             user.lottery_count_today = 0

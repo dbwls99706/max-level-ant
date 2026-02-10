@@ -1,13 +1,18 @@
 """
 데이터베이스 모델 정의
 """
-from datetime import datetime, date
+from datetime import datetime, date, timezone
 from sqlalchemy import (
     Column, String, BigInteger, Integer, Float,
     DateTime, Date, ForeignKey, UniqueConstraint, Index
 )
 from sqlalchemy.orm import relationship
 from database import Base
+
+
+def _utcnow():
+    """timezone-aware UTC 현재 시각 (naive로 저장)"""
+    return datetime.now(timezone.utc).replace(tzinfo=None)
 
 
 class User(Base):
@@ -31,7 +36,7 @@ class User(Base):
     initial_cash = Column(BigInteger, default=5_000_000)
     
     # 생성일
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=_utcnow)
     
     # 출석 관련
     last_attendance = Column(Date, nullable=True)
@@ -125,7 +130,7 @@ class Transaction(Base):
     profit_rate = Column(Float, nullable=True)
     
     # 거래 시간
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=_utcnow)
 
     # 인덱스 (최근 거래 조회 최적화)
     __table_args__ = (
@@ -175,7 +180,7 @@ class Battle(Base):
     winner_id = Column(String(100), nullable=True)
 
     # 시간 정보
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=_utcnow)
     started_at = Column(DateTime, nullable=True)
     ended_at = Column(DateTime, nullable=True)
 
@@ -256,7 +261,7 @@ class Milestone(Base):
     asset_at_achievement = Column(BigInteger, nullable=True)
 
     # 달성 시간
-    achieved_at = Column(DateTime, default=datetime.utcnow)
+    achieved_at = Column(DateTime, default=_utcnow)
 
     # 보상 지급 여부
     reward_claimed = Column(Integer, default=0)
@@ -308,7 +313,7 @@ class StockCache(Base):
     stock_name = Column(String(100), nullable=False)
 
     # 마지막 업데이트
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    updated_at = Column(DateTime, default=_utcnow, onupdate=_utcnow)
 
     def __repr__(self):
         return f"<StockCache(code={self.stock_code}, name={self.stock_name})>"

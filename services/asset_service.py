@@ -4,7 +4,7 @@
 - N+1 쿼리 최적화
 - 트랜잭션 안전성
 """
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from typing import Dict, List, Set
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import SQLAlchemyError
@@ -12,6 +12,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from models import AssetHistory, User, Holding
 from services.stock_service import StockService
 from services.common import safe_add
+from config import KST
 from utils import get_service_logger
 
 logger = get_service_logger()
@@ -36,7 +37,7 @@ class AssetService:
         일일 자산 기록 (하루에 한 번)
         출석 체크나 거래 시 자동 호출
         """
-        today = date.today()
+        today = datetime.now(KST).date()
 
         # 이미 오늘 기록이 있는지 확인
         existing = db.query(AssetHistory).filter(

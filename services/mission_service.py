@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy.exc import SQLAlchemyError
 
 from models import User
-from config import GameConfig
+from config import GameConfig, KST
 from services.common import safe_add
 from utils import get_service_logger
 
@@ -121,7 +121,7 @@ class MissionService:
         if not user:
             return {"completed": False, "progress": 0, "target": 0, "reward": 0}
 
-        today = date.today()
+        today = datetime.now(KST).date()
 
         # 날짜가 바뀌었으면 리셋
         if user.last_mission_date != today:
@@ -151,7 +151,7 @@ class MissionService:
         if not user:
             return None
 
-        today = date.today()
+        today = datetime.now(KST).date()
 
         try:
             # 날짜가 바뀌었으면 리셋
@@ -172,7 +172,7 @@ class MissionService:
 
                 # 주간 보너스 체크
                 multiplier = 1.0
-                if datetime.now().weekday() == GameConfig.WEEKLY_BONUS_DAY:
+                if datetime.now(KST).weekday() == GameConfig.WEEKLY_BONUS_DAY:
                     multiplier = GameConfig.WEEKLY_BONUS_MULTIPLIER
 
                 reward = int(GameConfig.DAILY_MISSION_REWARD * multiplier)
