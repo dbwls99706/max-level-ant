@@ -6,14 +6,14 @@
 - safe_add 적용
 """
 import re
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from typing import Optional, Tuple, Dict
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy import exists
 
 from models import User
-from config import GameConfig
+from config import GameConfig, KST
 from services.common import safe_add, safe_subtract, get_user_for_update
 from utils import get_service_logger
 
@@ -136,7 +136,7 @@ class UserService:
         if not user:
             return False, 0, 0, 0
 
-        today = date.today()
+        today = datetime.now(KST).date()
 
         # 이미 출석했는지 확인
         if user.last_attendance == today:
@@ -243,7 +243,7 @@ class UserService:
         # 닉네임 변경 가능 여부 확인
         change_count = getattr(user, 'nickname_change_count', 0) or 0
         last_change = getattr(user, 'last_nickname_change', None)
-        today = date.today()
+        today = datetime.now(KST).date()
 
         can_change = False
         remaining_msg = ""

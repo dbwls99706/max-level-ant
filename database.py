@@ -1,6 +1,8 @@
 """
 데이터베이스 연결 및 세션 관리
 """
+import re
+from datetime import datetime, timezone
 from sqlalchemy import create_engine, text, inspect
 from sqlalchemy.orm import sessionmaker, declarative_base
 from sqlalchemy.exc import SQLAlchemyError
@@ -117,10 +119,17 @@ def _migrate_db():
         'last_nickname_change': 'DATE',
     }
 
+    # 컬럼명 허용 패턴 (SQL 인젝션 방지)
+    _VALID_COL_NAME = re.compile(r'^[a-z_][a-z0-9_]*$')
+
     added_count = 0
     with engine.connect() as conn:
         for col_name, col_type in new_columns.items():
             if col_name not in existing_columns:
+                # 컬럼명 유효성 검증
+                if not _VALID_COL_NAME.match(col_name):
+                    logger.error(f"유효하지 않은 컬럼명 건너뜀: {col_name}")
+                    continue
                 try:
                     sql = f'ALTER TABLE users ADD COLUMN {col_name} {col_type}'
                     conn.execute(text(sql))
@@ -168,23 +177,24 @@ def cleanup_old_records(
     Returns:
         삭제된 레코드 수 정보
     """
-    from datetime import datetime, timedelta
+    from datetime import timedelta
     from models import Transaction, AssetHistory
 
     result = {"transactions": 0, "asset_history": 0}
+    db = None
 
     try:
         db = SessionLocal()
 
         # 오래된 거래 내역 삭제
-        transaction_cutoff = datetime.utcnow() - timedelta(days=transaction_days)
+        transaction_cutoff = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=transaction_days)
         deleted_transactions = db.query(Transaction).filter(
             Transaction.created_at < transaction_cutoff
         ).delete(synchronize_session=False)
         result["transactions"] = deleted_transactions
 
         # 오래된 자산 히스토리 삭제
-        asset_cutoff = (datetime.utcnow() - timedelta(days=asset_history_days)).date()
+        asset_cutoff = (datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=asset_history_days)).date()
         deleted_history = db.query(AssetHistory).filter(
             AssetHistory.record_date < asset_cutoff
         ).delete(synchronize_session=False)
@@ -200,8 +210,10 @@ def cleanup_old_records(
 
     except SQLAlchemyError as e:
         logger.error(f"DB 정리 실패: {e}")
-        db.rollback()
+        if db:
+            db.rollback()
     finally:
-        db.close()
+        if db:
+            db.close()
 
     return result

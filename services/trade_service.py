@@ -389,7 +389,8 @@ class TradeService:
     @staticmethod
     def buy_max(db: Session, kakao_id: str, stock_query: str) -> Dict:
         """전량 매수 (보유 현금으로 최대 수량)"""
-        user, error = get_user_with_error(db, kakao_id)
+        # FOR UPDATE로 동시성 제어 (stale 잔고 기반 계산 방지)
+        user, error = get_user_with_error_for_update(db, kakao_id)
         if error:
             return error
 
@@ -398,6 +399,11 @@ class TradeService:
             return stock_error
 
         price = stock_info["price"]
+        if price <= 0:
+            return error_response(
+                ErrorCode.API_ERROR,
+                f"'{stock_info['name']}' 시세가 비정상입니다. 잠시 후 다시 시도해주세요."
+            )
 
         # 수수료 포함 최대 수량 계산
         max_qty = int(user.cash / (price * (1 + GameConfig.TRADE_FEE_RATE)))
@@ -492,7 +498,7 @@ class TradeService:
 
         portfolio["total_asset"] = portfolio["cash"] + portfolio["total_stock_value"]
         portfolio["total_profit"] = portfolio["total_asset"] - portfolio["initial_cash"]
-        portfolio["profit_rate"] = round((portfolio["total_profit"] / portfolio["initial_cash"]) * 100, 2)
+        portfolio["profit_rate"] = round((portfolio["total_profit"] / portfolio["initial_cash"]) * 100, 2) if portfolio["initial_cash"] > 0 else 0.0
 
         return portfolio
 

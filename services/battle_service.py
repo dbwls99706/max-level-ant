@@ -4,7 +4,7 @@
 - 장 마감 시 마감가 기준으로 결과 처리
 - 트랜잭션 안전성 강화
 """
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Optional
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import SQLAlchemyError
@@ -13,6 +13,7 @@ from models import Battle, User
 from services.stock_service import StockService
 from services.common import (
     get_user_with_error,
+    get_user_with_error_for_update,
     validate_bet,
     safe_subtract,
     safe_add,
@@ -88,8 +89,8 @@ class BattleService:
         if not is_market_open():
             return cls._get_market_closed_error()
 
-        # 유저 확인
-        user, err = get_user_with_error(db, challenger_id)
+        # 유저 확인 (FOR UPDATE로 동시성 제어)
+        user, err = get_user_with_error_for_update(db, challenger_id)
         if err:
             return err
 
@@ -110,7 +111,7 @@ class BattleService:
             )
 
         # 종목 확인
-        stock_info = StockService.get_stock_price(stock_name)
+        stock_info = StockService.get_price(stock_name)
         if not stock_info:
             return error_response(
                 ErrorCode.STOCK_NOT_FOUND,
@@ -170,8 +171,8 @@ class BattleService:
         if not is_market_open():
             return cls._get_market_closed_error()
 
-        # 유저 확인
-        user, err = get_user_with_error(db, opponent_id)
+        # 유저 확인 (FOR UPDATE로 동시성 제어)
+        user, err = get_user_with_error_for_update(db, opponent_id)
         if err:
             return err
 
@@ -198,7 +199,7 @@ class BattleService:
             return error_response(ErrorCode.INSUFFICIENT_CASH, f"❌ {err_msg}")
 
         # 현재 가격 조회
-        stock_info = StockService.get_stock_price(battle.stock_name)
+        stock_info = StockService.get_price(battle.stock_name)
         if not stock_info:
             return error_response(ErrorCode.STOCK_NOT_FOUND, "❌ 종목 정보를 가져올 수 없습니다.")
 
@@ -212,7 +213,7 @@ class BattleService:
             battle.opponent_id = opponent_id
             battle.opponent_prediction = opponent_pred
             battle.start_price = stock_info["price"]
-            battle.started_at = datetime.utcnow()
+            battle.started_at = datetime.now(timezone.utc)
             battle.status = BattleStatus.ACTIVE
 
             db.commit()
@@ -265,8 +266,9 @@ class BattleService:
 
         # 배틀 종료 시간 확인
         end_time = battle.started_at + timedelta(minutes=battle.duration_minutes)
-        if datetime.utcnow() < end_time:
-            remaining = end_time - datetime.utcnow()
+        now_utc = datetime.now(timezone.utc).replace(tzinfo=None)  # naive UTC for comparison
+        if now_utc < end_time:
+            remaining = end_time - now_utc
             mins = remaining.seconds // 60
             secs = remaining.seconds % 60
             return error_response(
@@ -281,7 +283,7 @@ class BattleService:
     def _finish_battle(cls, db: Session, battle: Battle, reason: str = None) -> Dict:
         """배틀 종료 및 결과 처리"""
         # 현재 가격 조회
-        stock_info = StockService.get_stock_price(battle.stock_name)
+        stock_info = StockService.get_price(battle.stock_name)
         if not stock_info:
             return error_response(ErrorCode.STOCK_NOT_FOUND, "❌ 종목 정보를 가져올 수 없습니다.")
 
@@ -294,22 +296,25 @@ class BattleService:
         challenger = db.query(User).filter(User.kakao_id == battle.challenger_id).first()
         opponent = db.query(User).filter(User.kakao_id == battle.opponent_id).first()
 
-        # 유저 확인 (데이터 무결성 체크)
+        # 유저 확인 (데이터 무결성 체크) - 생존 유저에게 배팅금 환불
         if not challenger or not opponent:
             try:
+                surviving_user = challenger or opponent
+                if surviving_user:
+                    surviving_user.cash = safe_add(surviving_user.cash, battle.bet_amount)
                 battle.status = BattleStatus.CANCELLED
                 db.commit()
             except SQLAlchemyError as e:
                 db.rollback()
                 logger.error(f"배틀 만료 취소 DB 실패: {e}")
-            return error_response(ErrorCode.USER_NOT_FOUND, "❌ 배틀 참가자 정보를 찾을 수 없습니다.")
+            return error_response(ErrorCode.USER_NOT_FOUND, "❌ 배틀 참가자 정보를 찾을 수 없습니다. 배팅금이 환불됩니다.")
 
         total_pot = battle.bet_amount * 2
 
         # 트랜잭션: 결과 처리
         try:
             battle.end_price = current_price
-            battle.ended_at = datetime.utcnow()
+            battle.ended_at = datetime.now(timezone.utc)
 
             if actual_direction == "DRAW":
                 # 무승부 - 배팅금 반환
@@ -461,3 +466,33 @@ class BattleService:
             refund=battle.bet_amount,
             cash=user.cash
         )
+
+    @classmethod
+    def cleanup_stale_battles(cls, db: Session, max_waiting_hours: int = 24) -> int:
+        """
+        만료된 대기 배틀 정리 (배팅금 환불)
+        서버 시작 시 또는 주기적으로 호출
+        Returns: 정리된 배틀 수
+        """
+        cutoff = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(hours=max_waiting_hours)
+        stale_battles = db.query(Battle).filter(
+            Battle.status == BattleStatus.WAITING,
+            Battle.created_at < cutoff
+        ).all()
+
+        cleaned = 0
+        for battle in stale_battles:
+            try:
+                user = db.query(User).filter(User.kakao_id == battle.challenger_id).first()
+                if user:
+                    user.cash = safe_add(user.cash, battle.bet_amount)
+                battle.status = BattleStatus.CANCELLED
+                db.commit()
+                cleaned += 1
+            except SQLAlchemyError as e:
+                db.rollback()
+                logger.error(f"만료 배틀 정리 실패 (id={battle.id}): {e}")
+
+        if cleaned > 0:
+            logger.info(f"만료 배틀 {cleaned}건 정리 완료 (배팅금 환불)")
+        return cleaned

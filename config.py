@@ -23,15 +23,20 @@ class ErrorCode:
     USER_NOT_FOUND = "USER_NOT_FOUND"
     MARKET_CLOSED = "MARKET_CLOSED"
     INSUFFICIENT_BALANCE = "INSUFFICIENT_BALANCE"
+    INSUFFICIENT_CASH = "INSUFFICIENT_CASH"
     INSUFFICIENT_STOCK = "INSUFFICIENT_STOCK"
     STOCK_NOT_FOUND = "STOCK_NOT_FOUND"
+    NOT_FOUND = "NOT_FOUND"
     INVALID_INPUT = "INVALID_INPUT"
     INVALID_QUANTITY = "INVALID_QUANTITY"
     INVALID_AMOUNT = "INVALID_AMOUNT"
     INVALID_BET = "INVALID_BET"
     INVALID_CHOICE = "INVALID_CHOICE"
+    INVALID_PARAMETER = "INVALID_PARAMETER"
+    INVALID_STATE = "INVALID_STATE"
     DAILY_LIMIT_REACHED = "DAILY_LIMIT_REACHED"
     DUPLICATE_ACTION = "DUPLICATE_ACTION"
+    PERMISSION_DENIED = "PERMISSION_DENIED"
     UNAUTHORIZED = "UNAUTHORIZED"
     INTERNAL_ERROR = "INTERNAL_ERROR"
     DB_ERROR = "DB_ERROR"
@@ -197,6 +202,17 @@ def is_holiday(check_date: date = None) -> bool:
     if check_date is None:
         check_date = datetime.now(KST).date()
     return check_date in HOLIDAYS
+
+
+# 공휴일 목록 연도 커버리지 확인
+_holiday_years = {d.year for d in HOLIDAYS}
+_current_year = datetime.now(KST).year
+if _current_year not in _holiday_years:
+    _config_logger.warning(
+        f"공휴일 목록에 {_current_year}년 데이터가 없습니다. "
+        f"공휴일 체크가 정상 작동하지 않을 수 있습니다. "
+        f"config.py의 HOLIDAYS를 업데이트해주세요."
+    )
 
 
 def get_market_status() -> str:

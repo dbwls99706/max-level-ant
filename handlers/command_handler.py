@@ -158,12 +158,27 @@ class CommandHandler(
         # 알 수 없는 명령어
         return self.handle_unknown()
 
+    # 명령어를 길이 내림차순으로 정렬 (긴 명령어 우선 매칭하여 prefix 충돌 방지)
+    _SORTED_ROUTES = None
+
+    @classmethod
+    def _get_sorted_routes(cls):
+        """정렬된 명령어 라우트 캐시"""
+        if cls._SORTED_ROUTES is None:
+            cls._SORTED_ROUTES = sorted(
+                cls.COMMAND_ROUTES.items(),
+                key=lambda x: len(x[0]),
+                reverse=True
+            )
+        return cls._SORTED_ROUTES
+
     def _find_handler(self, cmd: str) -> Optional[str]:
         """
         명령어에 맞는 핸들러 이름 찾기
-        startswith를 사용하여 인자가 있는 명령어도 매칭
+        긴 명령어부터 매칭하여 prefix 충돌 방지
+        예: '/배틀생성'이 '/배틀'보다 먼저 매칭됨
         """
-        for command, handler_name in self.COMMAND_ROUTES.items():
+        for command, handler_name in self._get_sorted_routes():
             if cmd.startswith(command):
                 return handler_name
         return None
