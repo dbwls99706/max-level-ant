@@ -216,7 +216,7 @@ class MarketHandlerMixin(BaseHandlerMixin):
 
         msg = f"{title}\n"
         for i, n in enumerate(news, 1):
-            t = n['title']
+            t = n.get('title', '')
             if len(t) > 35:
                 t = t[:35] + "..."
             msg += f"\n{i}. {t}"
