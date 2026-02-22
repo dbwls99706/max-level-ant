@@ -119,8 +119,26 @@ def _migrate_db():
         'last_nickname_change': 'DATE',
     }
 
-    # 컬럼명 허용 패턴 (SQL 인젝션 방지)
+    # 허용된 SQL 타입 화이트리스트 (SQL 인젝션 방지)
     _VALID_COL_NAME = re.compile(r'^[a-z_][a-z0-9_]*$')
+    _ALLOWED_COL_TYPES = {
+        'INTEGER', 'BIGINT', 'VARCHAR', 'TEXT', 'DATE', 'BOOLEAN', 'FLOAT', 'REAL',
+        'INTEGER DEFAULT 0', 'BIGINT DEFAULT 0', 'INTEGER DEFAULT 1',
+        "VARCHAR(1000) DEFAULT '[]'",
+        'DATE', 'BOOLEAN DEFAULT FALSE', 'BOOLEAN DEFAULT TRUE',
+    }
+
+    def _is_safe_col_type(col_type: str) -> bool:
+        """col_type이 안전한 SQL 타입인지 확인 (화이트리스트 + 패턴 검사)"""
+        if col_type in _ALLOWED_COL_TYPES:
+            return True
+        # INTEGER DEFAULT N, BIGINT DEFAULT N 패턴 허용
+        import re as _re
+        return bool(_re.match(
+            r'^(INTEGER|BIGINT|VARCHAR\(\d+\)|TEXT|DATE|BOOLEAN|FLOAT|REAL)'
+            r'(\s+DEFAULT\s+(\d+|\'[^\']*\'|TRUE|FALSE|NULL))?$',
+            col_type, _re.IGNORECASE
+        ))
 
     added_count = 0
     with engine.connect() as conn:
@@ -129,6 +147,10 @@ def _migrate_db():
                 # 컬럼명 유효성 검증
                 if not _VALID_COL_NAME.match(col_name):
                     logger.error(f"유효하지 않은 컬럼명 건너뜀: {col_name}")
+                    continue
+                # 컬럼 타입 유효성 검증 (SQL 인젝션 방지 - 화이트리스트)
+                if not _is_safe_col_type(col_type):
+                    logger.error(f"유효하지 않은 컬럼 타입 건너뜀: {col_name} {col_type}")
                     continue
                 try:
                     sql = f'ALTER TABLE users ADD COLUMN {col_name} {col_type}'

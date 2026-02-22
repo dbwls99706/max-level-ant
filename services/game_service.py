@@ -21,7 +21,7 @@ from services.common import (
     safe_add,
     safe_multiply
 )
-from utils import get_service_logger
+from utils import get_service_logger, log_game
 
 logger = get_service_logger()
 
@@ -101,6 +101,14 @@ class GameService:
 
         profit = reward - GameConfig.LOTTERY_COST
 
+        # 감사 로그
+        log_game(
+            kakao_id=kakao_id, game_type="LOTTERY",
+            bet=GameConfig.LOTTERY_COST, result=tier,
+            winnings=reward, profit=profit, cash_after=user.cash,
+            extra=f"tier={tier_text}"
+        )
+
         return {
             "success": True,
             "cost": GameConfig.LOTTERY_COST,
@@ -160,6 +168,14 @@ class GameService:
             return error_response(ErrorCode.DB_ERROR, "데이터베이스 오류가 발생했습니다.")
 
         profit_info = calculate_profit(bet, winnings)
+
+        # 감사 로그
+        log_game(
+            kakao_id=kakao_id, game_type="SLOT",
+            bet=bet, result=outcome_symbol,
+            winnings=winnings, profit=profit_info["profit"], cash_after=user.cash,
+            extra=f"symbols={slot1}{slot2}{slot3} x{multiplier}"
+        )
 
         return {
             "success": True,
@@ -258,6 +274,14 @@ class GameService:
             db.rollback()
             logger.error(f"룰렛 DB 커밋 실패: {e}")
             return error_response(ErrorCode.DB_ERROR, "데이터베이스 오류가 발생했습니다.")
+
+        # 감사 로그
+        log_game(
+            kakao_id=kakao_id, game_type="ROULETTE",
+            bet=bet, result=f"{result}({'WIN' if won else 'LOSE'})",
+            winnings=winnings, profit=winnings - bet, cash_after=user.cash,
+            extra=f"choice={choice_normalized} result={result}"
+        )
 
         return {
             "success": True,

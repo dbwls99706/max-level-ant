@@ -2,17 +2,18 @@
 주식왕 카카오톡 챗봇 - 메인 서버
 """
 import os
+import uuid
 import secrets
 import time
 import threading
 from collections import defaultdict
-from fastapi import FastAPI, Request, Depends, HTTPException, Header
+from fastapi import FastAPI, Request, Depends, HTTPException, Header, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 import uvicorn
 from contextlib import asynccontextmanager
-from typing import Optional
+from typing import Optional, Callable
 
 from database import get_db, init_db, reset_db, check_db_health, SessionLocal
 from handlers import CommandHandler
@@ -165,6 +166,41 @@ app.add_middleware(
 
 
 # ===========================================
+# 요청 ID 추적 미들웨어
+# ===========================================
+@app.middleware("http")
+async def request_id_middleware(request: Request, call_next: Callable) -> Response:
+    """
+    모든 요청에 고유 ID 부여 (로그 추적용)
+    X-Request-ID 헤더가 있으면 재사용, 없으면 새로 생성
+    """
+    request_id = request.headers.get("X-Request-ID") or str(uuid.uuid4())[:8]
+    request.state.request_id = request_id
+
+    response = await call_next(request)
+    response.headers["X-Request-ID"] = request_id
+    return response
+
+
+# ===========================================
+# 요청 본문 크기 제한 미들웨어
+# ===========================================
+@app.middleware("http")
+async def request_size_limit_middleware(request: Request, call_next: Callable) -> Response:
+    """
+    요청 본문 크기 제한 (DoS 방지)
+    최대 10KB 허용
+    """
+    content_length = request.headers.get("content-length")
+    if content_length and int(content_length) > SecurityConfig.MAX_REQUEST_SIZE:
+        return JSONResponse(
+            status_code=413,
+            content={"error": "요청 크기가 너무 큽니다.", "max_size": SecurityConfig.MAX_REQUEST_SIZE}
+        )
+    return await call_next(request)
+
+
+# ===========================================
 # 헬스체크 엔드포인트
 # ===========================================
 @app.get("/")
@@ -215,7 +251,8 @@ async def kakao_skill(request: Request, db: Session = Depends(get_db)):
 
         # 디버그: 카카오에서 받은 유저 정보 로그 (민감 정보 마스킹)
         masked_id = f"{kakao_id[:4]}****" if len(kakao_id) > 4 else "****"
-        logger.debug(f"카카오 유저: id={masked_id}, has_nickname={bool(nickname)}")
+        request_id = getattr(request.state, "request_id", "unknown")
+        logger.debug(f"[{request_id}] 카카오 유저: id={masked_id}, has_nickname={bool(nickname)}")
 
         # 유저 ID 검증 (빈값, 너무 긴 값 방지)
         if not kakao_id or len(kakao_id) > 100:

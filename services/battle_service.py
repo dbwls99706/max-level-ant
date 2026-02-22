@@ -20,7 +20,7 @@ from services.common import (
     success_response,
 )
 from config import is_market_open, is_market_closed, get_market_status_message, ErrorCode, BattleStatus
-from utils import get_service_logger
+from utils import get_service_logger, log_battle
 
 logger = get_service_logger()
 
@@ -337,6 +337,19 @@ class BattleService:
             db.rollback()
             logger.error(f"배틀 결과 처리 DB 실패: {e}")
             return error_response(ErrorCode.INTERNAL_ERROR, "❌ 배틀 결과 처리 중 오류가 발생했습니다.")
+
+        # 감사 로그
+        log_battle(
+            battle_id=battle.id,
+            challenger_id=battle.challenger_id,
+            opponent_id=battle.opponent_id,
+            stock_name=battle.stock_name,
+            bet_amount=battle.bet_amount,
+            start_price=battle.start_price or 0,
+            end_price=current_price,
+            winner_id=battle.winner_id,
+            prize=total_pot,
+        )
 
         result = cls._get_finished_result(db, battle)
 

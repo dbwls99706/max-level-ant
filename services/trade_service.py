@@ -21,7 +21,7 @@ from services.common import (
     safe_subtract
 )
 from config import GameConfig, Messages, ErrorCode, TradeType, is_trading_available, get_market_status_message
-from utils import get_service_logger
+from utils import get_service_logger, log_trade
 
 logger = get_service_logger()
 
@@ -223,6 +223,26 @@ class TradeService:
         mission_reward = MissionService.increment_trade_count(db, kakao_id)
         new_achievements = MissionService.check_and_award_achievements(db, kakao_id)
 
+        # 감사 로그
+        log_trade(
+            kakao_id=kakao_id,
+            trade_type="BUY",
+            stock_code=code,
+            stock_name=name,
+            quantity=quantity,
+            price=price,
+            total_amount=total_amount,
+            fee=fee,
+            cash_after=user.cash,
+        )
+
+        # 자산 히스토리 기록 (실패해도 거래에는 영향 없음)
+        try:
+            from services.asset_service import AssetService
+            AssetService.record_daily_asset(db, kakao_id)
+        except Exception as e:
+            logger.warning(f"자산 히스토리 기록 실패 (매수 후): {e}")
+
         return {
             "success": True,
             "message": "매수 완료",
@@ -366,6 +386,28 @@ class TradeService:
         new_achievements = MissionService.check_and_award_achievements(
             db, kakao_id, trade_profit=profit if profit > 0 else 0
         )
+
+        # 감사 로그
+        log_trade(
+            kakao_id=kakao_id,
+            trade_type="SELL",
+            stock_code=code,
+            stock_name=name,
+            quantity=quantity,
+            price=price,
+            total_amount=total_amount,
+            fee=fee,
+            cash_after=user.cash,
+            profit=profit,
+            profit_rate=profit_rate,
+        )
+
+        # 자산 히스토리 기록 (실패해도 거래에는 영향 없음)
+        try:
+            from services.asset_service import AssetService
+            AssetService.record_daily_asset(db, kakao_id)
+        except Exception as e:
+            logger.warning(f"자산 히스토리 기록 실패 (매도 후): {e}")
 
         return {
             "success": True,

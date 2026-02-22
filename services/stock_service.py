@@ -3,11 +3,13 @@
 - 한국투자증권 KIS API 사용 (공식 API)
 - 실시간 주가, 거래량, 등락률 조회
 - 개선된 캐시 전략 (TTL + 무효화)
+- 서킷 브레이커 (연속 실패 시 일시적 차단)
 """
 from datetime import datetime, timedelta, timezone
 from typing import Optional, Dict, List
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from cachetools import TTLCache
+import threading
 import requests
 from requests.exceptions import RequestException, Timeout
 from sqlalchemy.exc import SQLAlchemyError
@@ -17,6 +19,66 @@ from database import SessionLocal
 from utils import get_service_logger
 
 logger = get_service_logger()
+
+
+# ===========================================
+# 서킷 브레이커 (KIS API 장애 대응)
+# ===========================================
+class CircuitBreaker:
+    """
+    KIS API 연속 실패 시 일시 차단 (서킷 브레이커 패턴)
+    - CLOSED: 정상 운영
+    - OPEN: 차단 중 (실패 임계값 초과 후)
+    - HALF_OPEN: 복구 시도 중
+    """
+    FAILURE_THRESHOLD = 5    # 연속 실패 N회 시 차단
+    RECOVERY_TIMEOUT = 60    # 차단 후 N초 뒤 복구 시도
+
+    def __init__(self):
+        self._failure_count = 0
+        self._last_failure_time: Optional[datetime] = None
+        self._state = "CLOSED"
+        self._lock = threading.Lock()
+
+    def is_open(self) -> bool:
+        """서킷이 열려있으면(차단) True"""
+        with self._lock:
+            if self._state == "CLOSED":
+                return False
+            if self._state == "OPEN":
+                # 복구 타임아웃 확인
+                if self._last_failure_time and \
+                        (datetime.now(timezone.utc) - self._last_failure_time).seconds >= self.RECOVERY_TIMEOUT:
+                    self._state = "HALF_OPEN"
+                    logger.info("KIS API 서킷 브레이커: HALF_OPEN (복구 시도)")
+                    return False
+                return True
+            return False  # HALF_OPEN: 한 번 시도 허용
+
+    def record_success(self):
+        """성공 기록 - 서킷 닫기"""
+        with self._lock:
+            if self._state != "CLOSED":
+                logger.info("KIS API 서킷 브레이커: CLOSED (복구 완료)")
+            self._failure_count = 0
+            self._state = "CLOSED"
+
+    def record_failure(self):
+        """실패 기록 - 임계값 초과 시 서킷 열기"""
+        with self._lock:
+            self._failure_count += 1
+            self._last_failure_time = datetime.now(timezone.utc)
+            if self._failure_count >= self.FAILURE_THRESHOLD:
+                if self._state != "OPEN":
+                    logger.warning(
+                        f"KIS API 서킷 브레이커: OPEN "
+                        f"(연속 {self._failure_count}회 실패, {self.RECOVERY_TIMEOUT}초 후 복구 시도)"
+                    )
+                self._state = "OPEN"
+
+
+# 전역 서킷 브레이커 인스턴스
+_circuit_breaker = CircuitBreaker()
 
 
 class KISAPIClient:
@@ -35,6 +97,11 @@ class KISAPIClient:
         """OAuth 접근 토큰 발급 (24시간 유효)"""
         if not KISConfig.is_configured():
             logger.warning("KIS API 설정이 없습니다. 환경변수를 확인하세요.")
+            return None
+
+        # 서킷 브레이커 확인
+        if _circuit_breaker.is_open():
+            logger.warning("KIS API 서킷 브레이커 열림 - 토큰 발급 스킵")
             return None
 
         # 토큰이 아직 유효하면 재사용
@@ -59,16 +126,20 @@ class KISAPIClient:
                 # 토큰 만료시간 설정 (23시간 - 여유 1시간)
                 cls._token_expires_at = datetime.now(timezone.utc) + timedelta(hours=23)
                 logger.info("KIS API 토큰 발급 성공")
+                _circuit_breaker.record_success()
                 return cls._access_token
             else:
                 logger.error(f"KIS 토큰 발급 실패: {resp.status_code}")
+                _circuit_breaker.record_failure()
                 return None
 
         except Timeout:
             logger.error("KIS 토큰 발급 타임아웃")
+            _circuit_breaker.record_failure()
             return None
         except RequestException as e:
             logger.error(f"KIS 토큰 발급 네트워크 에러: {e}")
+            _circuit_breaker.record_failure()
             return None
 
     @classmethod
@@ -92,6 +163,11 @@ class KISAPIClient:
         주식 현재가 조회
         tr_id: FHKST01010100
         """
+        # 서킷 브레이커 확인
+        if _circuit_breaker.is_open():
+            logger.debug(f"KIS API 서킷 브레이커 열림 - 시세 조회 스킵 ({stock_code})")
+            return None
+
         headers = cls._get_headers(cls.TR_ID_STOCK_PRICE)
         if not headers:
             return None
@@ -109,23 +185,31 @@ class KISAPIClient:
                 data = resp.json()
                 if data.get("rt_cd") == "0":  # 성공
                     output = data.get("output", {})
-                    return {
+                    # 필드값이 None이거나 빈 문자열인 경우 안전하게 변환
+                    price_str = output.get("stck_prpr") or "0"
+                    change_str = output.get("prdy_ctrt") or "0"
+                    result = {
                         "code": stock_code,
-                        "name": output.get("hts_kor_isnm", stock_code),
-                        "price": int(output.get("stck_prpr", 0)),
-                        "change": float(output.get("prdy_ctrt", 0)),
-                        "open": int(output.get("stck_oprc", 0)),
-                        "high": int(output.get("stck_hgpr", 0)),
-                        "low": int(output.get("stck_lwpr", 0)),
-                        "volume": int(output.get("acml_vol", 0)),
+                        "name": output.get("hts_kor_isnm") or stock_code,
+                        "price": int(price_str) if str(price_str).lstrip('-').isdigit() else 0,
+                        "change": float(change_str) if change_str else 0.0,
+                        "open": int(output.get("stck_oprc") or 0),
+                        "high": int(output.get("stck_hgpr") or 0),
+                        "low": int(output.get("stck_lwpr") or 0),
+                        "volume": int(output.get("acml_vol") or 0),
                     }
+                    _circuit_breaker.record_success()
+                    return result
                 else:
                     logger.warning(f"KIS API 에러: {data.get('msg1')}")
+                    _circuit_breaker.record_failure()
 
         except Timeout:
             logger.warning(f"주식 시세 조회 타임아웃 ({stock_code})")
+            _circuit_breaker.record_failure()
         except RequestException as e:
             logger.error(f"주식 시세 조회 네트워크 에러 ({stock_code}): {e}")
+            _circuit_breaker.record_failure()
         except (ValueError, KeyError) as e:
             logger.error(f"주식 시세 응답 파싱 실패 ({stock_code}): {e}")
 
@@ -322,27 +406,33 @@ class StockService:
     _dynamic_stocks_by_name = {}  # {name: code}
     _dynamic_stocks_by_code = {}  # {code: name}
     _cache_loaded = False  # DB 캐시 로드 여부
+    _cache_load_lock = threading.Lock()  # Race Condition 방지
 
     @classmethod
     def load_stock_cache(cls):
-        """서버 시작 시 DB에서 종목 캐시 로드"""
+        """서버 시작 시 DB에서 종목 캐시 로드 (Thread-safe)"""
+        # 이중 체크 패턴 (lock 없이 빠른 체크 후, lock 안에서 재확인)
         if cls._cache_loaded:
             return
 
-        try:
-            from models import StockCache
-            db = SessionLocal()
+        with cls._cache_load_lock:
+            if cls._cache_loaded:  # lock 획득 후 재확인 (Race Condition 방지)
+                return
+
             try:
-                cached_stocks = db.query(StockCache).all()
-                for stock in cached_stocks:
-                    cls._dynamic_stocks_by_name[stock.stock_name] = stock.stock_code
-                    cls._dynamic_stocks_by_code[stock.stock_code] = stock.stock_name
-                cls._cache_loaded = True
-                logger.info(f"종목 캐시 로드 완료: {len(cached_stocks)}개")
-            finally:
-                db.close()
-        except SQLAlchemyError as e:
-            logger.warning(f"종목 캐시 로드 DB 에러: {e}")
+                from models import StockCache
+                db = SessionLocal()
+                try:
+                    cached_stocks = db.query(StockCache).all()
+                    for stock in cached_stocks:
+                        cls._dynamic_stocks_by_name[stock.stock_name] = stock.stock_code
+                        cls._dynamic_stocks_by_code[stock.stock_code] = stock.stock_name
+                    cls._cache_loaded = True
+                    logger.info(f"종목 캐시 로드 완료: {len(cached_stocks)}개")
+                finally:
+                    db.close()
+            except SQLAlchemyError as e:
+                logger.warning(f"종목 캐시 로드 DB 에러: {e}")
 
     @classmethod
     def _cache_stock(cls, code: str, name: str):
