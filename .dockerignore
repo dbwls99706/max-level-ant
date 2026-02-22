@@ -1,0 +1,47 @@
+# Git
+.git
+.gitignore
+
+# 개발 파일
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.egg-info
+dist/
+build/
+
+# 테스트
+tests/
+.pytest_cache/
+.coverage
+htmlcov/
+
+# 환경
+.env
+.env.*
+!.env.example
+*.local
+
+# 로그
+logs/
+*.log
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# Docker
+Dockerfile
+.dockerignore
+
+# 문서
+docs/
+*.md
+
+# 데이터베이스 (로컬 개발용)
+*.db
+*.sqlite
+*.sqlite3

@@ -15,7 +15,7 @@ from sqlalchemy import exists
 from models import User
 from config import GameConfig, KST
 from services.common import safe_add, safe_subtract, get_user_for_update
-from utils import get_service_logger
+from utils import get_service_logger, log_attendance
 
 logger = get_service_logger()
 
@@ -166,6 +166,21 @@ class UserService:
             db.rollback()
             logger.error(f"출석 체크 DB 실패: {e}")
             return False, 0, 0, user.cash
+
+        # 감사 로그
+        log_attendance(
+            kakao_id=kakao_id,
+            reward=reward,
+            streak=user.attendance_streak,
+            cash_after=user.cash,
+        )
+
+        # 자산 히스토리 기록 (비동기적으로 - 실패해도 출석에는 영향 없음)
+        try:
+            from services.asset_service import AssetService
+            AssetService.record_daily_asset(db, kakao_id)
+        except Exception as e:
+            logger.warning(f"자산 히스토리 기록 실패 (출석 후): {e}")
 
         return True, reward, user.attendance_streak, user.cash
 

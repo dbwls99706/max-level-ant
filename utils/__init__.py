@@ -19,6 +19,14 @@ from .logger import (
     get_service_logger,
     get_api_logger
 )
+from .audit_logger import (
+    log_trade,
+    log_game,
+    log_battle,
+    log_attendance,
+    log_achievement,
+    log_admin_action,
+)
 
 __all__ = [
     "KakaoResponse",
@@ -34,5 +42,11 @@ __all__ = [
     "get_main_logger",
     "get_handler_logger",
     "get_service_logger",
-    "get_api_logger"
+    "get_api_logger",
+    "log_trade",
+    "log_game",
+    "log_battle",
+    "log_attendance",
+    "log_achievement",
+    "log_admin_action",
 ]

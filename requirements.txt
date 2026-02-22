@@ -10,11 +10,7 @@ uvicorn[standard]==0.27.0
 sqlalchemy>=2.0.27,<3.0
 psycopg2-binary==2.9.9
 
-# Stock data
-pykrx>=1.0.44
-pandas>=2.0.0,<3.0
-
-# HTTP (requests만 사용, httpx 제거)
+# HTTP
 requests>=2.31.0,<3.0
 
 # Utils
