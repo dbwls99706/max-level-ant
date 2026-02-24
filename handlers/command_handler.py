@@ -146,6 +146,10 @@ class CommandHandler(
         """
         cmd = self.utterance.lower()
 
+        # 빈 utterance = 웰컴 블록 트리거
+        if not cmd:
+            return self.handle_welcome()
+
         # 라우팅 테이블에서 핸들러 찾기
         handler_name = self._find_handler(cmd)
 
@@ -288,6 +292,16 @@ class CommandHandler(
                 {"label": "📊 시세 조회", "action": "message", "messageText": "/시세"},
                 {"label": "🚀 급등주", "action": "message", "messageText": "/급등"},
                 {"label": "💼 포트폴리오", "action": "message", "messageText": "/포트폴리오"}
+            ]
+        )
+
+    def handle_welcome(self) -> Dict:
+        """웰컴 블록 응답 - 채팅방 진입 시 빈 utterance로 트리거됨"""
+        return KakaoResponse.quick_replies(
+            "🎮 가상 주식 연습 봇에 오신 걸 환영해요!\n실제 주식 시세로 투자 연습을 시작해보세요.",
+            [
+                {"label": "🎮 시작하기", "action": "message", "messageText": "/시작"},
+                {"label": "📖 도움말", "action": "message", "messageText": "/도움말"},
             ]
         )
 
