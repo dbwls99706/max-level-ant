@@ -292,12 +292,14 @@ class CommandHandler(
         )
 
     def handle_unknown(self) -> Dict:
-        """알 수 없는 명령어"""
+        """알 수 없는 명령어 / 폴백 응답"""
         logger.debug(f"알 수 없는 명령어: {self.utterance}")
         return KakaoResponse.quick_replies(
             Messages.UNKNOWN_COMMAND,
             [
+                {"label": "🎮 시작하기", "action": "message", "messageText": "/시작"},
                 {"label": "📖 도움말", "action": "message", "messageText": "/도움말"},
-                {"label": "🎮 시작하기", "action": "message", "messageText": "/시작"}
+                {"label": "🚀 급등주", "action": "message", "messageText": "/급등"},
+                {"label": "📅 출석", "action": "message", "messageText": "/출석"},
             ]
         )
