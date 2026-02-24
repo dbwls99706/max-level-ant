@@ -695,7 +695,7 @@ class Messages:
 💰 총 자산: {total_asset:,}원"""
 
     ERROR = "❌ 오류가 발생했습니다. 다시 시도해주세요."
-    UNKNOWN_COMMAND = """무엇을 도와드릴까요?
+    UNKNOWN_COMMAND = """❓ 알 수 없는 명령어입니다.
 아래 버튼을 눌러보세요 👇"""
 
     # 공통 에러 메시지
