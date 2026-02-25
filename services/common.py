@@ -13,7 +13,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from models import User
 from config import (
     GameConfig, Messages, ErrorCode,
-    is_market_closed, get_market_status_message
+    is_market_closed, is_market_open, get_market_status_message
 )
 from utils import get_service_logger
 
@@ -185,7 +185,7 @@ def check_market_closed_for_game(game_emoji: str = "🎰") -> Tuple[bool, Option
     Returns:
         (can_play: bool, error_response: Optional[Dict])
     """
-    if not is_market_closed():
+    if is_market_open():
         status_msg = get_market_status_message()
         return False, {
             "success": False,
