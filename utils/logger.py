@@ -37,6 +37,7 @@ def setup_logger(name: str, level: int = logging.INFO) -> logging.Logger:
     handler.setFormatter(formatter)
 
     logger.addHandler(handler)
+    logger.propagate = False  # 루트 로거로 전파 방지 (중복 출력 방지)
 
     return logger
 

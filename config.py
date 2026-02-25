@@ -482,9 +482,9 @@ class GameProbability:
             return ev * 100  # % 반환
 
         elif game == "roulette":
-            # 룰렛 기대값
-            ev = sum(color["prob"] * color["multiplier"] for color in cls.ROULETTE.values())
-            return ev * 100  # % 반환
+            # 룰렛 기대값 (유저는 하나의 색에만 배팅하므로 색별 기대값의 평균)
+            ev_per_color = [color["prob"] * color["multiplier"] for color in cls.ROULETTE.values()]
+            return (sum(ev_per_color) / len(ev_per_color)) * 100
 
         elif game == "highlow":
             # 하이로우 기대값 (50은 무승부)
