@@ -99,7 +99,7 @@ class MarketHandlerMixin(BaseHandlerMixin):
             return KakaoResponse.quick_replies(
                 "📊 급등주 데이터를 불러오는 중입니다.",
                 [
-                    {"label": "🔥 삼성전자", "action": "message", "messageText": "/시세 삼성전자"},
+                    self._popular_stock_btn(),
                     {"label": "📉 급락주", "action": "message", "messageText": "/급락"},
                     {"label": "💼 포트폴리오", "action": "message", "messageText": "/포트폴리오"},
                 ]
@@ -125,7 +125,7 @@ class MarketHandlerMixin(BaseHandlerMixin):
             return KakaoResponse.quick_replies(
                 "📊 급락주 데이터를 불러오는 중입니다.",
                 [
-                    {"label": "💎 카카오", "action": "message", "messageText": "/시세 카카오"},
+                    self._popular_stock_btn("💎"),
                     {"label": "🚀 급등주", "action": "message", "messageText": "/급등"},
                     {"label": "💼 포트폴리오", "action": "message", "messageText": "/포트폴리오"},
                 ]
@@ -192,7 +192,7 @@ class MarketHandlerMixin(BaseHandlerMixin):
             news = NewsService.get_market_news(limit=3)
             title = "📰 주식시장 뉴스"
             buttons = [
-                {"label": "📰 삼성전자", "action": "message", "messageText": "/뉴스 삼성전자"},
+                self._popular_stock_btn("📰", "/뉴스"),
                 {"label": "📰 반도체", "action": "message", "messageText": "/뉴스 반도체"},
                 {"label": "🚀 급등주", "action": "message", "messageText": "/급등"},
             ]

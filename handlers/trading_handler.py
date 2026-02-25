@@ -23,7 +23,7 @@ class TradingHandlerMixin(BaseHandlerMixin):
             return KakaoResponse.quick_replies(
                 "📊 어떤 종목을 볼까요?",
                 [
-                    {"label": "🔥 삼성전자", "action": "message", "messageText": "/시세 삼성전자"},
+                    self._popular_stock_btn(),
                     {"label": "🚀 SK하이닉스", "action": "message", "messageText": "/시세 SK하이닉스"},
                     {"label": "⚡ 네이버", "action": "message", "messageText": "/시세 NAVER"},
                     {"label": "🎮 카카오", "action": "message", "messageText": "/시세 카카오"},
@@ -77,10 +77,12 @@ class TradingHandlerMixin(BaseHandlerMixin):
         parts = self.utterance.split()
 
         if len(parts) < 3:
+            top = self._get_top_popular_stock()
+            buy_btn = {"label": f"📈 {top} 1주", "action": "message", "messageText": f"/매수 {top} 1"} if top else {"label": "📊 인기종목", "action": "message", "messageText": "/인기"}
             return KakaoResponse.quick_replies(
                 "사용법: /매수 [종목명] [수량]\n예: /매수 삼성전자 10",
                 [
-                    {"label": "📈 삼성전자 1주", "action": "message", "messageText": "/매수 삼성전자 1"},
+                    buy_btn,
                     {"label": "📊 시세 조회", "action": "message", "messageText": "/시세"},
                     {"label": "🚀 급등주", "action": "message", "messageText": "/급등"}
                 ]
@@ -275,7 +277,7 @@ class TradingHandlerMixin(BaseHandlerMixin):
             return KakaoResponse.quick_replies(
                 "사용법: /전량매수 [종목명]\n예: /전량매수 삼성전자",
                 [
-                    {"label": "💰 삼성전자", "action": "message", "messageText": "/전량매수 삼성전자"},
+                    self._popular_stock_btn("💰", "/전량매수"),
                     {"label": "📊 시세 조회", "action": "message", "messageText": "/시세"},
                     {"label": "🚀 급등주", "action": "message", "messageText": "/급등"}
                 ]
@@ -441,7 +443,7 @@ class TradingHandlerMixin(BaseHandlerMixin):
         else:
             holdings_text = "\n아직 보유 주식이 없어요!"
             buttons = [
-                {"label": "🔥 삼성전자", "action": "message", "messageText": "/시세 삼성전자"},
+                self._popular_stock_btn(),
                 {"label": "🚀 급등주", "action": "message", "messageText": "/급등"},
                 {"label": "📊 인기종목", "action": "message", "messageText": "/인기"}
             ]
@@ -480,7 +482,7 @@ class TradingHandlerMixin(BaseHandlerMixin):
                 "거래 내역이 없습니다.\n주식을 매수해보세요!",
                 [
                     {"label": "🚀 급등주", "action": "message", "messageText": "/급등"},
-                    {"label": "🔥 삼성전자", "action": "message", "messageText": "/시세 삼성전자"},
+                    self._popular_stock_btn(),
                 ]
             )
 
