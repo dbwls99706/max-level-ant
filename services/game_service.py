@@ -32,7 +32,7 @@ class GameService:
     @classmethod
     def play_lottery(cls, db: Session, kakao_id: str) -> Dict:
         """
-        복권 긁기 (1일 5회, 1장 10,000원)
+        복권 긁기 (1일 5회, 무료)
         - 일일 제한이 있으므로 장 시간 무관하게 가능
         """
         user, error = get_user_with_error_for_update(db, kakao_id)
@@ -52,15 +52,6 @@ class GameService:
                 f"🎫 오늘 복권은 모두 긁었어요! ({GameConfig.MAX_LOTTERY_PER_DAY}회)\n내일 다시 도전하세요 🍀"
             )
 
-        # 잔액 확인
-        if user.cash < GameConfig.LOTTERY_COST:
-            return error_response(
-                ErrorCode.INSUFFICIENT_BALANCE,
-                f"❌ 잔액 부족!\n복권 가격: {GameConfig.LOTTERY_COST:,}원\n보유: {user.cash:,}원"
-            )
-
-        # 복권 구매 (비용 차감)
-        user.cash -= GameConfig.LOTTERY_COST
         user.lottery_count_today += 1
         remaining = GameConfig.MAX_LOTTERY_PER_DAY - user.lottery_count_today
 
@@ -99,21 +90,17 @@ class GameService:
             logger.error(f"복권 DB 커밋 실패: {e}")
             return error_response(ErrorCode.DB_ERROR, "데이터베이스 오류가 발생했습니다.")
 
-        profit = reward - GameConfig.LOTTERY_COST
-
         # 감사 로그
         log_game(
             kakao_id=kakao_id, game_type="LOTTERY",
-            bet=GameConfig.LOTTERY_COST, result=tier,
-            winnings=reward, profit=profit, cash_after=user.cash,
+            bet=0, result=tier,
+            winnings=reward, profit=reward, cash_after=user.cash,
             extra=f"tier={tier_text}"
         )
 
         return {
             "success": True,
-            "cost": GameConfig.LOTTERY_COST,
             "reward": reward,
-            "profit": profit,
             "tier": tier_text,
             "message": tier_msg,
             "cash": user.cash,

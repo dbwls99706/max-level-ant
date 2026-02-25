@@ -68,9 +68,7 @@ class GameHandlerMixin(BaseHandlerMixin):
             effect = ""
 
         remaining = result.get("remaining", 0)
-        profit = result.get("profit", 0)
-        profit_emoji = "📈" if profit > 0 else "📉" if profit < 0 else "➖"
-        profit_text = f"+{profit:,}" if profit > 0 else f"{profit:,}"
+        reward = result["reward"]
 
         # 남은 횟수에 따른 FOMO 메시지
         if remaining == 0:
@@ -82,13 +80,13 @@ class GameHandlerMixin(BaseHandlerMixin):
         else:
             remaining_msg = f"📍 오늘 남은 횟수: {remaining}회"
 
+        reward_text = f"+{reward:,}원" if reward > 0 else "0원"
+
         msg = f"""🎫 복권 긁기 {effect}
 
 {tier}! {result['message']}
 
-🎟️ 복권 가격: -{result['cost']:,}원
-💰 당첨금: +{result['reward']:,}원
-{profit_emoji} 순이익: {profit_text}원
+💰 당첨금: {reward_text}
 
 {remaining_msg}
 💵 현재 잔고: {result['cash']:,}원"""
