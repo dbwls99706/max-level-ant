@@ -21,13 +21,13 @@ class TestLottery:
         assert "reward" in result
         assert "cash" in result
 
-    def test_lottery_costs_money(self, db, test_user):
-        """복권 구매 비용 차감"""
+    def test_lottery_is_free(self, db, test_user):
+        """복권은 무료 (비용 차감 없음)"""
         initial_cash = test_user.cash
         with patch("services.game_service.log_game"):
             result = GameService.play_lottery(db, test_user.kakao_id)
-        # 비용 차감 후 보상 지급이므로: cash >= initial - cost (보상에 따라 다름)
-        assert result["cash"] >= 0
+        # 무료이므로 잔고는 항상 초기값 이상 (당첨금만 추가)
+        assert result["cash"] >= initial_cash
 
     def test_lottery_daily_limit(self, db, test_user):
         """복권 일일 제한"""
@@ -41,11 +41,11 @@ class TestLottery:
         assert result["success"] is False
         assert result["error_code"] == ErrorCode.DAILY_LIMIT_REACHED
 
-    def test_lottery_insufficient_balance(self, db, poor_user):
-        """잔고 부족 복권"""
-        result = GameService.play_lottery(db, poor_user.kakao_id)
-        assert result["success"] is False
-        assert result["error_code"] == ErrorCode.INSUFFICIENT_BALANCE
+    def test_lottery_free_for_poor_user(self, db, poor_user):
+        """잔고 없어도 복권 가능 (무료)"""
+        with patch("services.game_service.log_game"):
+            result = GameService.play_lottery(db, poor_user.kakao_id)
+        assert result["success"] is True
 
 
 class TestSlotMachine:

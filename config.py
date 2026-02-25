@@ -374,7 +374,7 @@ class GameConfig:
     DEFAULT_BET = 50_000  # 기본 배팅금 5만원
     BIG_BET = 500_000  # 큰 배팅금 50만원 (게임 메뉴용)
     DEFAULT_BATTLE_BET = 100_000  # 배틀 기본 배팅금 10만원
-    LOTTERY_COST = 10_000  # 복권 가격
+    LOTTERY_COST = 0  # 복권 가격 (무료)
     MAX_LOTTERY_PER_DAY = 5  # 복권 1일 최대 횟수
 
     # 거래 설정
@@ -468,7 +468,9 @@ class GameProbability:
     def calculate_expected_value(cls, game: str) -> float:
         """게임별 기대값 계산"""
         if game == "lottery":
-            # 복권 기대값 (10,000원 기준)
+            # 복권 기대값 (무료이므로 기대값 검증 스킵)
+            if GameConfig.LOTTERY_COST == 0:
+                return 100.0  # 무료 게임은 기대값 검증 불필요
             cost = GameConfig.LOTTERY_COST
             ev = 0
             for tier in cls.LOTTERY.values():
