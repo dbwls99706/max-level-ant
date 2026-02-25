@@ -403,7 +403,7 @@ class GameProbability:
         "2등": {"prob": 0.018, "min_reward": 50_000, "max_reward": 100_000},     # 1.8%
         "3등": {"prob": 0.05, "min_reward": 15_000, "max_reward": 30_000},       # 5%
         "4등": {"prob": 0.10, "min_reward": 8_000, "max_reward": 12_000},        # 10%
-        "5등": {"prob": 0.50, "min_reward": 10_000, "max_reward": 10_000},       # 50% (본전)
+        "5등": {"prob": 0.50, "min_reward": 10_000, "max_reward": 10_000},       # 50%
         "꽝": {"prob": 0.33, "min_reward": 0, "max_reward": 0},                  # 33%
     }
 
