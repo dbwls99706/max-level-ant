@@ -72,14 +72,14 @@ class BaseHandlerMixin:
 
     @classmethod
     def _get_top_popular_stock(cls) -> Optional[str]:
-        """인기 거래량 1등 종목명 반환 (5분 캐시, 실패 시 None)"""
+        """인기 거래대금 1등 종목명 반환 (5분 캐시, 실패 시 None)"""
         cache_key = "top"
         if cache_key in cls._popular_stock_cache:
             return cls._popular_stock_cache[cache_key]
 
         try:
             from services import StockService
-            stocks = StockService.get_top_volume(limit=1)
+            stocks = StockService.get_top_trading_value(limit=1)
             if stocks and stocks[0].get("name"):
                 name = stocks[0]["name"]
                 cls._popular_stock_cache[cache_key] = name

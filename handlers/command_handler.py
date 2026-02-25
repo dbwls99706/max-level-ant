@@ -73,9 +73,9 @@ class CommandHandler(
         # 시장 정보
         "/검색": "handle_search",
         "/ㄱㅅ": "handle_search",
-        "/인기": "handle_top_volume",
+        "/인기": "handle_top_trading_value",
+        "/ㅇㄱ": "handle_top_trading_value",
         "/거래량": "handle_top_volume",
-        "/ㅇㄱ": "handle_top_volume",
         "/급등": "handle_top_gainers",
         "/상승": "handle_top_gainers",
         "/ㄱㄷ": "handle_top_gainers",
