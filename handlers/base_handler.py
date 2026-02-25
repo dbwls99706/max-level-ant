@@ -5,6 +5,7 @@
 """
 from typing import Dict, List, Optional, Tuple
 from sqlalchemy.orm import Session
+from cachetools import TTLCache
 
 from config import is_market_closed, GameConfig
 from utils import get_handler_logger, KakaoResponse
@@ -62,6 +63,37 @@ class BaseHandlerMixin:
         if streak <= len(effects):
             return effects[streak - 1]
         return effects[-1] + f" x{streak}"
+
+    # ===========================================
+    # 인기 종목 동적 버튼 (하드코딩 제거)
+    # ===========================================
+
+    _popular_stock_cache = TTLCache(maxsize=1, ttl=300)  # 5분 캐시
+
+    @classmethod
+    def _get_top_popular_stock(cls) -> Optional[str]:
+        """인기 거래량 1등 종목명 반환 (5분 캐시, 실패 시 None)"""
+        cache_key = "top"
+        if cache_key in cls._popular_stock_cache:
+            return cls._popular_stock_cache[cache_key]
+
+        try:
+            from services import StockService
+            stocks = StockService.get_top_volume(limit=1)
+            if stocks and stocks[0].get("name"):
+                name = stocks[0]["name"]
+                cls._popular_stock_cache[cache_key] = name
+                return name
+        except Exception:
+            pass
+        return None
+
+    def _popular_stock_btn(self, emoji: str = "🔥", command: str = "/시세") -> Dict:
+        """인기 1등 종목 Quick Reply 버튼 (실패 시 인기종목 목록 버튼)"""
+        name = self._get_top_popular_stock()
+        if name:
+            return {"label": f"{emoji} {name}", "action": "message", "messageText": f"{command} {name}"}
+        return {"label": "📊 인기종목", "action": "message", "messageText": "/인기"}
 
     # ===========================================
     # Quick Reply 버튼 헬퍼

@@ -276,11 +276,16 @@ class SocialHandlerMixin(BaseHandlerMixin):
 
         if len(parts) < 3:
             default_bet = GameConfig.DEFAULT_BATTLE_BET
+            top = self._get_top_popular_stock()
+            if top:
+                battle_btn = {"label": f"⚔️ {top} 상승", "action": "message", "messageText": f"/배틀 {top} 상승 {default_bet}"}
+            else:
+                battle_btn = {"label": "📊 인기종목", "action": "message", "messageText": "/인기"}
             return KakaoResponse.quick_replies(
                 f"⚔️ 배틀 생성\n\n사용법: /배틀 [종목] [상승/하락] [금액]\n예: /배틀 삼성전자 상승 {default_bet}\n\n❓ /배틀설명 으로 자세한 설명 확인",
                 [
                     {"label": "❓ 배틀설명", "action": "message", "messageText": "/배틀설명"},
-                    {"label": "⚔️ 삼성전자 상승", "action": "message", "messageText": f"/배틀 삼성전자 상승 {default_bet}"},
+                    battle_btn,
                     {"label": "📋 배틀목록", "action": "message", "messageText": "/배틀목록"}
                 ]
             )
