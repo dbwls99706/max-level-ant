@@ -52,9 +52,9 @@ class TestSlotMachine:
     """슬롯머신 테스트"""
 
     def test_slot_requires_market_closed(self, db, test_user):
-        """슬롯은 장 마감 시간에만 가능"""
-        # check_market_closed_for_game이 services.common.is_market_closed를 사용
-        with patch("services.common.is_market_closed", return_value=False), \
+        """슬롯은 정규장 시간에 불가"""
+        # check_market_closed_for_game이 services.common.is_market_open를 사용
+        with patch("services.common.is_market_open", return_value=True), \
              patch("services.common.get_market_status_message", return_value="장 중"):
             result = GameService.play_slot(db, test_user.kakao_id, 50_000)
         assert result["success"] is False
@@ -62,7 +62,7 @@ class TestSlotMachine:
 
     def test_slot_success(self, db, test_user):
         """슬롯 기본 실행"""
-        with patch("services.common.is_market_closed", return_value=True), \
+        with patch("services.common.is_market_open", return_value=False), \
              patch("services.game_service.log_game"):
             result = GameService.play_slot(db, test_user.kakao_id, 50_000)
         assert result["success"] is True
@@ -71,7 +71,7 @@ class TestSlotMachine:
 
     def test_slot_invalid_bet(self, db, test_user):
         """유효하지 않은 배팅금"""
-        with patch("services.common.is_market_closed", return_value=True):
+        with patch("services.common.is_market_open", return_value=False):
             result = GameService.play_slot(db, test_user.kakao_id, -100)
         assert result["success"] is False
 
@@ -82,7 +82,7 @@ class TestRoulette:
     def test_roulette_win_red(self, db, rich_user):
         """빨강 당첨"""
         import random
-        with patch("services.common.is_market_closed", return_value=True), \
+        with patch("services.common.is_market_open", return_value=False), \
              patch("services.game_service.log_game"), \
              patch("random.random", return_value=0.01):  # 빨강 당첨 확률 범위
             result = GameService.play_roulette(db, rich_user.kakao_id, 10_000, "빨강")
@@ -90,14 +90,14 @@ class TestRoulette:
 
     def test_roulette_invalid_choice(self, db, rich_user):
         """잘못된 선택"""
-        with patch("services.common.is_market_closed", return_value=True):
+        with patch("services.common.is_market_open", return_value=False):
             result = GameService.play_roulette(db, rich_user.kakao_id, 10_000, "노랑")
         assert result["success"] is False
         assert result["error_code"] == ErrorCode.INVALID_CHOICE
 
     def test_roulette_normalizes_choice(self, db, rich_user):
         """선택 정규화 (빨 → 빨강)"""
-        with patch("services.common.is_market_closed", return_value=True), \
+        with patch("services.common.is_market_open", return_value=False), \
              patch("services.game_service.log_game"):
             result = GameService.play_roulette(db, rich_user.kakao_id, 10_000, "빨")
         assert result["success"] is True
@@ -108,7 +108,7 @@ class TestHighLow:
 
     def test_highlow_win(self, db, rich_user):
         """하이로우 당첨"""
-        with patch("services.common.is_market_closed", return_value=True), \
+        with patch("services.common.is_market_open", return_value=False), \
              patch("services.game_service.log_game"), \
              patch("random.randint", return_value=75):  # 높음
             result = GameService.play_high_low(db, rich_user.kakao_id, 10_000, "높")
@@ -117,7 +117,7 @@ class TestHighLow:
 
     def test_highlow_draw(self, db, rich_user):
         """하이로우 무승부 (50)"""
-        with patch("services.common.is_market_closed", return_value=True), \
+        with patch("services.common.is_market_open", return_value=False), \
              patch("random.randint", return_value=50):
             result = GameService.play_high_low(db, rich_user.kakao_id, 10_000, "높")
         assert result["success"] is True
@@ -126,7 +126,7 @@ class TestHighLow:
 
     def test_highlow_invalid_choice(self, db, rich_user):
         """잘못된 선택"""
-        with patch("services.common.is_market_closed", return_value=True):
+        with patch("services.common.is_market_open", return_value=False):
             result = GameService.play_high_low(db, rich_user.kakao_id, 10_000, "중간")
         assert result["success"] is False
         assert result["error_code"] == ErrorCode.INVALID_CHOICE
@@ -137,7 +137,7 @@ class TestCoinFlip:
 
     def test_coinflip_win(self, db, rich_user):
         """동전 당첨"""
-        with patch("services.common.is_market_closed", return_value=True), \
+        with patch("services.common.is_market_open", return_value=False), \
              patch("services.game_service.log_game"), \
              patch("random.choice", return_value="앞"):
             result = GameService.play_coin_flip(db, rich_user.kakao_id, 10_000, "앞")
@@ -146,7 +146,7 @@ class TestCoinFlip:
 
     def test_coinflip_loss(self, db, rich_user):
         """동전 패배"""
-        with patch("services.common.is_market_closed", return_value=True), \
+        with patch("services.common.is_market_open", return_value=False), \
              patch("services.game_service.log_game"), \
              patch("random.choice", return_value="뒤"):
             result = GameService.play_coin_flip(db, rich_user.kakao_id, 10_000, "앞")
