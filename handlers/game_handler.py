@@ -138,7 +138,7 @@ class GameHandlerMixin(BaseHandlerMixin):
         elif multiplier >= 5:
             effect = "🎉 BIG WIN! 🎉"
             encourage = "대박! 계속 도전하세요! 🔥"
-        elif multiplier >= 2:
+        elif multiplier > 1:
             effect = "✨ WIN! ✨"
             encourage = "좋아요! 🎯"
         elif multiplier > 0:
