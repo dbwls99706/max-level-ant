@@ -63,6 +63,38 @@ class MarketHandlerMixin(BaseHandlerMixin):
 
         return KakaoResponse.quick_replies(msg, buttons)
 
+    def handle_top_trading_value(self) -> Dict:
+        """인기종목 (거래대금 상위)"""
+        stocks = StockService.get_top_trading_value(limit=5)
+
+        if not stocks:
+            return KakaoResponse.quick_replies(
+                "📊 인기종목 데이터를 불러오는 중입니다.",
+                [
+                    {"label": "🚀 급등주", "action": "message", "messageText": "/급등"},
+                    {"label": "📉 급락주", "action": "message", "messageText": "/급락"},
+                    {"label": "💼 포트폴리오", "action": "message", "messageText": "/포트폴리오"},
+                ]
+            )
+
+        msg = "🔥 인기종목 TOP 5 (거래대금순)\n"
+        for i, s in enumerate(stocks, 1):
+            change = s.get("change", 0)
+            price = s.get("price", 0)
+            name = s.get("name", "???")
+            trading_value = s.get("trading_value", 0)
+            emoji = "📈" if change >= 0 else "📉"
+            msg += f"\n{i}. {name}"
+            if trading_value >= 100_000_000:
+                msg += f"\n   {price:,}원 ({change:+.2f}%) {emoji} 💰{trading_value // 100_000_000:,}억\n"
+            else:
+                msg += f"\n   {price:,}원 ({change:+.2f}%) {emoji}\n"
+
+        buttons = [{"label": f"📊 {s.get('name', '???')}", "action": "message", "messageText": f"/시세 {s.get('name', '')}"} for s in stocks[:4]]
+        buttons.append({"label": "🚀 급등주", "action": "message", "messageText": "/급등"})
+
+        return KakaoResponse.quick_replies(msg, buttons)
+
     def handle_top_volume(self) -> Dict:
         """거래량 상위 종목"""
         stocks = StockService.get_top_volume(limit=5)

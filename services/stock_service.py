@@ -216,14 +216,16 @@ class KISAPIClient:
         return None
 
     @classmethod
-    def get_volume_rank(cls, market: str = "J") -> List[Dict]:
+    def get_volume_rank(cls, market: str = "J", blng_cls_code: str = "0") -> List[Dict]:
         """
-        거래량 순위 조회
+        거래량/거래대금 순위 조회
         tr_id: FHPST01710000
+        blng_cls_code: 0=평균거래량, 1=거래증가율, 2=평균거래회전율, 3=거래금액순, 4=평균거래금액회전율
         """
+        label = "거래대금" if blng_cls_code == "3" else "거래량"
         headers = cls._get_headers(cls.TR_ID_VOLUME_RANK)
         if not headers:
-            logger.warning("거래량 순위: 헤더 생성 실패")
+            logger.warning(f"{label} 순위: 헤더 생성 실패")
             return []
 
         try:
@@ -233,7 +235,7 @@ class KISAPIClient:
                 "FID_COND_SCR_DIV_CODE": "20171",
                 "FID_INPUT_ISCD": "0000",
                 "FID_DIV_CLS_CODE": "0",
-                "FID_BLNG_CLS_CODE": "0",
+                "FID_BLNG_CLS_CODE": blng_cls_code,
                 "FID_TRGT_CLS_CODE": "111111111",
                 "FID_TRGT_EXLS_CLS_CODE": "000000",
                 "FID_INPUT_PRICE_1": "",
@@ -257,15 +259,16 @@ class KISAPIClient:
                                 "price": int(item.get("stck_prpr", 0) or 0),
                                 "change": float(item.get("prdy_ctrt", 0) or 0),
                                 "volume": int(item.get("acml_vol", 0) or 0),
+                                "trading_value": int(item.get("acml_tr_pbmn", 0) or 0),
                             })
                         except (ValueError, TypeError, KeyError):
                             continue
                     return results
 
         except Timeout:
-            logger.warning("거래량 순위 조회 타임아웃")
+            logger.warning(f"{label} 순위 조회 타임아웃")
         except RequestException as e:
-            logger.error(f"거래량 순위 조회 네트워크 에러: {e}")
+            logger.error(f"{label} 순위 조회 네트워크 에러: {e}")
 
         return []
 
@@ -626,6 +629,17 @@ class StockService:
         limit = cls._cap_limit(limit, default=10)
         market_code = "J" if market == "KOSPI" else "Q"
         stocks = KISAPIClient.get_volume_rank(market_code)[:limit]
+        # 캐시에 저장
+        for s in stocks:
+            cls._cache_stock(s.get("code"), s.get("name"))
+        return stocks
+
+    @classmethod
+    def get_top_trading_value(cls, market: str = "KOSPI", limit: int = 10) -> List[Dict]:
+        """거래대금 상위 종목"""
+        limit = cls._cap_limit(limit, default=10)
+        market_code = "J" if market == "KOSPI" else "Q"
+        stocks = KISAPIClient.get_volume_rank(market_code, blng_cls_code="3")[:limit]
         # 캐시에 저장
         for s in stocks:
             cls._cache_stock(s.get("code"), s.get("name"))
