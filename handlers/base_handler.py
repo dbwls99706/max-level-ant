@@ -26,7 +26,7 @@ class BaseHandlerMixin:
     # ===========================================
 
     def _display_name(self) -> str:
-        """카카오톡 닉네임 기반 유저 표시명 (OOO님 형태)"""
+        """카카오톡 @멘션 형태 유저 표시명"""
         name = self.nickname
         if not name:
             from models import User
@@ -34,7 +34,7 @@ class BaseHandlerMixin:
             if user and user.nickname:
                 name = user.nickname
         if name:
-            return f"{name}님"
+            return f"@{name}"
         return ""
 
     # ===========================================
