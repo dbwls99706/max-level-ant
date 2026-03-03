@@ -65,7 +65,7 @@ def get_rank_emoji(rank: int) -> str:
 def get_profit_emoji(profit_rate: float) -> str:
     """수익률별 이모지"""
     if profit_rate >= 100:
-        return "🚀💰"  # 100% 이상 대박
+        return "🚀💰"  # 100% 이상
     elif profit_rate >= 50:
         return "🚀"    # 50% 이상
     elif profit_rate >= 20:

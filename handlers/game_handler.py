@@ -60,7 +60,7 @@ class GameHandlerMixin(BaseHandlerMixin):
         tier = result["tier"]
         reward = result["reward"]
         remaining = result.get("remaining", 0)
-        is_big_win = "1등" in tier or "2등" in tier  # 대박 판정
+        is_big_win = "1등" in tier or "2등" in tier
 
         # 등급별 연출
         if "1등" in tier:
@@ -517,7 +517,7 @@ class GameHandlerMixin(BaseHandlerMixin):
         if profit > 0:
             profit_text = f"📈 +{profit:,}원"
             if result["multiplier"] >= 5:
-                effect = "🎆🎇 대박 정산! 🎆🎇"
+                effect = "🎆🎇 미친 정산! 🎆🎇"
             elif result["multiplier"] >= 3:
                 effect = "🎉 훌륭한 정산! 🎉"
             elif result["multiplier"] >= 2:
@@ -640,7 +640,7 @@ class GameHandlerMixin(BaseHandlerMixin):
         buttons = []
 
         if result.get("max_reached"):
-            msg += "\n\n👑 최고 경지 도달! 당신은 투자의 신입니다!"
+            msg += "\n\n👑 최고 경지 도달! 이 톡방에서 당신을 넘을 사람은 없습니다."
             buttons = [
                 {"label": "📅 출석", "action": "message", "messageText": "/출석"},
                 {"label": "🎫 복권", "action": "message", "messageText": "/복권"},
@@ -699,32 +699,46 @@ class GameHandlerMixin(BaseHandlerMixin):
         rate = result["success_rate"]
 
         if result["enhanced"]:
-            # 성공!
+            # 성공 — 레벨 구간별 극적 연출
             new_emoji = result["new_emoji"]
             new_name = result["new_title"]
 
             if result["title_changed"]:
-                evolution_msg = f"\n\n🆙 새로운 경지에 도달!\n{result['old_emoji']} {result['old_title']} → {new_emoji} {new_name}"
+                evolution_msg = f"\n\n🆙 칭호 승급!\n{result['old_emoji']} {result['old_title']} → {new_emoji} {new_name}"
             else:
                 evolution_msg = ""
 
             att_bonus = int((result["attendance_multiplier"] - 1) * 100)
             lot_bonus = int((result["lottery_multiplier"] - 1) * 100)
 
-            # 성공 이펙트
+            # 성공 연출 — 레벨/확률별 다르게
             if new_lv >= 20:
-                effect = "🎆🎇👑🎆🎇"
-            elif new_lv >= 15:
-                effect = "✨🎉✨"
+                header = "👑 만렙 달성! 전무후무한 경지!"
+                effect = "🎆🎇🎆🎇🎆"
+                flavor = "이 톡방의 전설로 기록됩니다."
+            elif new_lv >= 16:
+                header = f"⚡ Lv.{new_lv} 돌파! 이건 실력이다!"
+                effect = "✨🎉✨🎉✨"
+                flavor = f"성공률 {rate}%를 뚫었어요. 대단합니다."
             elif new_lv >= 10:
+                header = f"🔥 Lv.{new_lv} 각성 성공!"
+                effect = "🎊✨🎊"
+                flavor = "여기서부터 진짜 시작입니다."
+            elif new_lv >= 5:
+                header = f"✨ Lv.{new_lv} 각성 성공!"
                 effect = "🎊✨"
+                flavor = "성장의 속도가 붙고 있어요."
             else:
+                header = f"✨ Lv.{new_lv} 각성 성공!"
                 effect = "✨"
+                flavor = "좋은 출발이에요!"
 
-            msg = f"""{effect} 각성 성공! {effect}
+            msg = f"""{effect}
+{header}
 
 {new_emoji} {new_name} Lv.{old_lv} → Lv.{new_lv}
-🎯 성공률: {rate}%{evolution_msg}
+🎯 성공률 {rate}%에서 성공!
+💬 {flavor}{evolution_msg}
 
 📈 출석 보너스: +{att_bonus}%
 🎫 복권 보너스: +{lot_bonus}%
@@ -733,20 +747,42 @@ class GameHandlerMixin(BaseHandlerMixin):
 💵 잔고: {result['cash']:,}원"""
 
         else:
-            # 실패
+            # 실패 — 공감+자극하는 연출
             drop = result.get("drop", 0)
             new_emoji = result["new_emoji"]
             new_name = result["new_title"]
 
             if drop > 0:
-                drop_msg = f"\n💥 레벨 하락! Lv.{old_lv} → Lv.{new_lv} (-{drop})"
+                drop_msg = f"💥 레벨 하락! Lv.{old_lv} → Lv.{new_lv} (-{drop})"
+                if drop >= 2:
+                    flavor = f"Lv.{old_lv}의 벽이 만만치 않네요... 하지만 올라갔었다는 건, 다시 올라갈 수 있다는 뜻!"
+                else:
+                    flavor = "한 발 물러났지만, 두 발 전진할 차례예요."
             else:
-                drop_msg = f"\n🛡️ 레벨 유지! Lv.{old_lv}"
+                drop_msg = f"🛡️ 레벨 유지! Lv.{old_lv}"
+                flavor = "레벨은 지켰어요. 다시 도전하면 됩니다."
 
-            msg = f"""💨 각성 실패...
+            # 실패 연출 — 성공률에 따라 아까움 차등
+            if rate <= 10:
+                header = f"😤 {rate}%의 벽..."
+                miss_comment = f"확률 {rate}%... 이건 뚫는 사람이 진짜 괴물이에요."
+            elif rate <= 30:
+                header = "💨 아슬아슬하게 빗나갔다!"
+                miss_comment = f"성공률 {rate}%, 분명 가능한 확률이었는데..."
+            elif rate <= 50:
+                header = "💨 이번엔 운이 안 따랐어요"
+                miss_comment = f"성공률 {rate}%면 반반인데, 다음엔 내 차례!"
+            else:
+                header = "💨 에이, 이게 왜 실패야!"
+                miss_comment = f"성공률 {rate}%에서 빠지다니... 다음엔 반드시!"
 
-{new_emoji} {new_name}{drop_msg}
-🎯 성공률: {rate}% → 아쉽게 빗나감
+            msg = f"""{header}
+
+{new_emoji} {new_name}
+{drop_msg}
+💬 {miss_comment}
+
+{flavor}
 
 💰 사용: -{cost:,}원
 💵 잔고: {result['cash']:,}원"""
@@ -761,10 +797,13 @@ class GameHandlerMixin(BaseHandlerMixin):
                 )
             buttons.append({"label": "🧬 각성 정보", "action": "message", "messageText": "/각성"})
 
-        buttons.extend([
-            {"label": "📈 예측게임", "action": "message", "messageText": "/예측"},
-            {"label": "🚀 급등주", "action": "message", "messageText": "/급등"},
-        ])
+        # 칭호 승급이나 고레벨 달성 시 랭킹 버튼
+        if result["enhanced"] and (result.get("title_changed") or new_lv >= 10):
+            buttons.append({"label": "🧬 각성 랭킹", "action": "message", "messageText": "/각성랭킹"})
+        else:
+            buttons.append({"label": "📈 예측게임", "action": "message", "messageText": "/예측"})
+
+        buttons.append({"label": "🚀 급등주", "action": "message", "messageText": "/급등"})
 
         return KakaoResponse.quick_replies(msg, buttons)
 

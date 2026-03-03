@@ -38,8 +38,8 @@ class BaseHandlerMixin:
     }
 
     PROFIT_TIERS = [
-        (1_000_000, "🤑 대박!", EFFECTS["jackpot"]),
-        (500_000, "💎 대박수익!", EFFECTS["big_win"]),
+        (1_000_000, "🤑 레전드 수익!", EFFECTS["jackpot"]),
+        (500_000, "💎 압도적 수익!", EFFECTS["big_win"]),
         (100_000, "🎉 좋아요!", EFFECTS["win"]),
         (10_000, "👍 괜찮네요!", EFFECTS["small_win"]),
         (0, "📈 수익!", ""),
@@ -262,7 +262,7 @@ class BaseHandlerMixin:
         if profit_rate >= 100:
             return "🎆🎇🚀💰🎆🎇\n\n🏆 전설의 수익! +100%! 👑\n당신은 진정한 주식왕!"
         elif profit_rate >= 50:
-            return "🎉🔥✨\n\n💎 대박! +50% 수익!\n투자의 신이 되셨습니다!"
+            return "🎉🔥✨\n\n💎 +50% 수익! 감이 미쳤어요!\n이 톡방에서 전설 찍는 중!"
         elif profit_rate >= 30:
             return "🎊🌟\n\n🚀 멋져요! +30% 수익!\n프로 트레이더 인정!"
         elif profit_rate >= 20:
