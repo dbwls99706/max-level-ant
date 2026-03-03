@@ -58,20 +58,28 @@ class GameHandlerMixin(BaseHandlerMixin):
             )
 
         tier = result["tier"]
-        if "대박" in tier:
+        reward = result["reward"]
+        remaining = result.get("remaining", 0)
+        is_big_win = "1등" in tier or "2등" in tier
+
+        # 등급별 연출
+        if "1등" in tier:
             effect = "🎆🎇🎆🎇🎆"
-        elif "1등" in tier:
-            effect = "✨✨✨"
+            reveal = "스르르... 번쩍!"
         elif "2등" in tier:
-            effect = "🎉🎉"
+            effect = "✨🎉✨"
+            reveal = "스르르... 오!"
         elif "3등" in tier:
             effect = "🎊"
+            reveal = "스르르..."
+        elif "4등" in tier or "5등" in tier:
+            effect = ""
+            reveal = "스르르..."
         else:
             effect = ""
+            reveal = "스르르..."
 
-        remaining = result.get("remaining", 0)
-        reward = result["reward"]
-
+        # 남은 횟수 — 긴급성 연출
         if remaining == 0:
             remaining_msg = "🚫 오늘 복권 모두 소진!"
         elif remaining == 1:
@@ -89,11 +97,19 @@ class GameHandlerMixin(BaseHandlerMixin):
         if enhance_bonus > 0:
             enhance_line = f"\n🧬 각성 보너스: +{enhance_bonus:,}원 (Lv.{result.get('enhance_level', 0)})"
 
-        msg = f"""🎫 복권 긁기 {effect}
+        # Near-miss 아까움 연출 (꽝일 때)
+        near_miss_line = ""
+        near_miss_tier = result.get("near_miss_tier")
+        if near_miss_tier and reward == 0:
+            near_miss_reward = result.get("near_miss_reward", 0)
+            near_miss_line = f"\n\n😱 아깝다! {near_miss_tier} ({near_miss_reward:,}원)까지 한 끗 차이였어요..."
 
+        msg = f"""🎫 복권 긁기... {reveal}
+
+{effect}
 {tier}! {result['message']}
 
-💰 당첨금: {reward_text}{enhance_line}
+💰 당첨금: {reward_text}{enhance_line}{near_miss_line}
 
 {remaining_msg}
 💵 현재 잔고: {result['cash']:,}원"""
@@ -101,6 +117,9 @@ class GameHandlerMixin(BaseHandlerMixin):
         buttons = []
         if remaining > 0:
             buttons.append({"label": "🎫 한번 더!", "action": "message", "messageText": "/복권"})
+        # 대박 시 랭킹 버튼 추가
+        if is_big_win:
+            buttons.append({"label": "🏆 랭킹 확인", "action": "message", "messageText": "/랭킹"})
         buttons.extend([
             {"label": "🔮 시장예측", "action": "message", "messageText": f"/시장예측 {GameConfig.DEFAULT_BET}"},
             {"label": "🧬 각성", "action": "message", "messageText": "/각성"},
@@ -194,13 +213,16 @@ class GameHandlerMixin(BaseHandlerMixin):
         if result["won"]:
             effect = "🎉 정답!"
             profit_text = f"📈 +{result['profit']:,}원"
-            encourage = "실제 역사를 잘 아시네요! 👏"
+            encourage = "실제 역사를 꿰뚫어 보셨네요! 👏"
         else:
             effect = "💨 오답!"
             profit_text = f"📉 {result['profit']:,}원"
-            encourage = "다음엔 맞출 수 있을 거예요! 💪"
+            encourage = "이 사건을 기억해두세요! 다음에 써먹을 수 있어요 💪"
 
         answer_emoji = "📈" if quiz["answer"] == "상승" else "📉"
+
+        # 투자 교훈 생성 — 역사 데이터 기반 맥락 제공
+        lesson = self._generate_quiz_lesson(quiz)
 
         msg = f"""🔮 시장예측 — 역사 퀴즈
 
@@ -213,21 +235,27 @@ class GameHandlerMixin(BaseHandlerMixin):
 {effect}
 {encourage}
 
-💡 해설: {quiz['description']}
+📰 당시 상황
+{quiz['description']}
+
+{lesson}
 
 💰 투자금: {result['bet']:,}원
 {profit_text}
 💵 잔고: {result['cash']:,}원"""
 
-        return KakaoResponse.quick_replies(
-            msg,
-            [
-                {"label": "🔮 한번 더!", "action": "message", "messageText": f"/시장예측 {bet}"},
-                {"label": "🔮 2배!", "action": "message", "messageText": f"/시장예측 {bet * 2}"},
-                {"label": "🔢 업다운", "action": "message", "messageText": f"/업다운 {bet}"},
-                {"label": "🚀 급등주", "action": "message", "messageText": "/급등"}
-            ]
-        )
+        buttons = [
+            {"label": "🔮 한번 더!", "action": "message", "messageText": f"/시장예측 {bet}"},
+            {"label": "🔮 2배!", "action": "message", "messageText": f"/시장예측 {bet * 2}"},
+        ]
+        # 큰 판돈(50만원 이상) 정답 시 랭킹 버튼
+        if result["won"] and result["bet"] >= 500_000:
+            buttons.append({"label": "🏆 랭킹 확인", "action": "message", "messageText": "/랭킹"})
+        else:
+            buttons.append({"label": "🔢 업다운", "action": "message", "messageText": f"/업다운 {bet}"})
+        buttons.append({"label": "🚀 급등주", "action": "message", "messageText": "/급등"})
+
+        return KakaoResponse.quick_replies(msg, buttons)
 
     def _play_quiz_with_specific(self, bet: int, choice: str, quiz: dict) -> Dict:
         """특정 퀴즈로 직접 판정 (버튼에서 퀴즈가 지정된 경우)"""
@@ -413,6 +441,17 @@ class GameHandlerMixin(BaseHandlerMixin):
             else:
                 streak_effect = "✨ 적중! ✨"
 
+            # 수수료 안내
+            fee_notice = ""
+            if current_round >= 4:
+                from config import GameProbability
+                for (start_r, end_r), rate in GameProbability.UPDOWN_ROUND_FEE.items():
+                    if start_r <= current_round <= end_r:
+                        pct = int((1 - rate) * 100)
+                        if pct > 0:
+                            fee_notice = f"\n⚡ 라운드 수수료: 배율 -{pct}%"
+                        break
+
             msg = f"""🔢 업다운 — 라운드 {current_round - 1}
 
 {arrow} {prev} → {next_num}
@@ -422,7 +461,7 @@ class GameHandlerMixin(BaseHandlerMixin):
 📊 누적 배율: x{total_mult}
 
 💰 투자금: {result['bet']:,}원
-💎 현재 가치: {potential:,}원 (+{potential - result['bet']:,}원)
+💎 현재 가치: {potential:,}원 (+{potential - result['bet']:,}원){fee_notice}
 
 다음 숫자가 {next_num}보다 높을까? 낮을까?"""
 
@@ -478,7 +517,7 @@ class GameHandlerMixin(BaseHandlerMixin):
         if profit > 0:
             profit_text = f"📈 +{profit:,}원"
             if result["multiplier"] >= 5:
-                effect = "🎆🎇 대박 정산! 🎆🎇"
+                effect = "🎆🎇 미친 정산! 🎆🎇"
             elif result["multiplier"] >= 3:
                 effect = "🎉 훌륭한 정산! 🎉"
             elif result["multiplier"] >= 2:
@@ -488,6 +527,8 @@ class GameHandlerMixin(BaseHandlerMixin):
         else:
             profit_text = f"📉 {profit:,}원"
             effect = "💰 정산 완료!"
+
+        is_big_cashout = result["multiplier"] >= 3  # 3배 이상 정산 = 대박
 
         msg = f"""🔢 업다운 — 정산!
 
@@ -502,14 +543,18 @@ class GameHandlerMixin(BaseHandlerMixin):
 
 💵 잔고: {result['cash']:,}원"""
 
-        return KakaoResponse.quick_replies(
-            msg,
-            [
-                {"label": "🔢 다시 도전!", "action": "message", "messageText": f"/업다운 {result['bet']}"},
-                {"label": "🔮 시장예측", "action": "message", "messageText": f"/시장예측 {GameConfig.DEFAULT_BET}"},
-                {"label": "🚀 급등주", "action": "message", "messageText": "/급등"}
-            ]
-        )
+        buttons = [
+            {"label": "🔢 다시 도전!", "action": "message", "messageText": f"/업다운 {result['bet']}"},
+        ]
+        # 대박 정산 시 랭킹 버튼 추가
+        if is_big_cashout:
+            buttons.append({"label": "🏆 랭킹 확인", "action": "message", "messageText": "/랭킹"})
+        buttons.extend([
+            {"label": "🔮 시장예측", "action": "message", "messageText": f"/시장예측 {GameConfig.DEFAULT_BET}"},
+            {"label": "🚀 급등주", "action": "message", "messageText": "/급등"}
+        ])
+
+        return KakaoResponse.quick_replies(msg, buttons)
 
     def _updown_status_response(self, status: Dict) -> Dict:
         """업다운 진행 상태 응답"""
@@ -595,7 +640,7 @@ class GameHandlerMixin(BaseHandlerMixin):
         buttons = []
 
         if result.get("max_reached"):
-            msg += "\n\n👑 최고 경지 도달! 당신은 투자의 신입니다!"
+            msg += "\n\n👑 최고 경지 도달! 이 톡방에서 당신을 넘을 사람은 없습니다."
             buttons = [
                 {"label": "📅 출석", "action": "message", "messageText": "/출석"},
                 {"label": "🎫 복권", "action": "message", "messageText": "/복권"},
@@ -603,19 +648,14 @@ class GameHandlerMixin(BaseHandlerMixin):
         else:
             cost = result["next_cost"]
             rate = result["next_success_rate"]
-            fail_prob = result.get("fail_drop_prob", 0)
             next_name = result.get("next_title_name", title_name)
             next_emoji = result.get("next_title_emoji", title_emoji)
 
-            # 위험도 표시
-            if fail_prob == 0:
-                risk = "🟢 안전 (실패해도 레벨 유지)"
-            elif fail_prob <= 30:
-                risk = f"🟡 주의 (실패 시 {fail_prob}% 확률로 하락)"
-            elif fail_prob <= 50:
-                risk = f"🟠 위험 (실패 시 {fail_prob}% 확률로 하락)"
+            # 위험도 표시 — 실패 시 항상 Lv.0 초기화
+            if level == 0:
+                risk = "🟢 실패해도 Lv.0 유지"
             else:
-                risk = "🔴 극한 (실패 시 레벨 하락)"
+                risk = f"🔴 실패 시 Lv.0으로 초기화! (-{level})"
 
             msg += f"""
 
@@ -654,32 +694,44 @@ class GameHandlerMixin(BaseHandlerMixin):
         rate = result["success_rate"]
 
         if result["enhanced"]:
-            # 성공!
+            # 성공 — 레벨별 고유 연출
             new_emoji = result["new_emoji"]
             new_name = result["new_title"]
 
             if result["title_changed"]:
-                evolution_msg = f"\n\n🆙 새로운 경지에 도달!\n{result['old_emoji']} {result['old_title']} → {new_emoji} {new_name}"
+                evolution_msg = f"\n\n🆙 칭호 승급!\n{result['old_emoji']} {result['old_title']} → {new_emoji} {new_name}"
             else:
                 evolution_msg = ""
 
             att_bonus = int((result["attendance_multiplier"] - 1) * 100)
             lot_bonus = int((result["lottery_multiplier"] - 1) * 100)
 
-            # 성공 이펙트
+            # 레벨별 고유 문구
+            flavor = EnhanceConfig.SUCCESS_FLAVORS[new_lv] if new_lv < len(EnhanceConfig.SUCCESS_FLAVORS) else ""
+
+            # 이펙트 — 레벨 구간별
             if new_lv >= 20:
-                effect = "🎆🎇👑🎆🎇"
-            elif new_lv >= 15:
-                effect = "✨🎉✨"
+                effect = "🎆🎇🎆🎇🎆"
+                header = "👑 만렙 달성!"
+            elif new_lv >= 16:
+                effect = "✨🎉✨🎉✨"
+                header = f"⚡ Lv.{new_lv} 돌파!"
             elif new_lv >= 10:
+                effect = "🎊✨🎊"
+                header = f"🔥 Lv.{new_lv} 각성 성공!"
+            elif new_lv >= 5:
                 effect = "🎊✨"
+                header = f"✨ Lv.{new_lv} 각성 성공!"
             else:
                 effect = "✨"
+                header = f"✨ Lv.{new_lv} 각성 성공!"
 
-            msg = f"""{effect} 각성 성공! {effect}
+            msg = f"""{effect}
+{header}
 
 {new_emoji} {new_name} Lv.{old_lv} → Lv.{new_lv}
-🎯 성공률: {rate}%{evolution_msg}
+🎯 성공률 {rate}%에서 성공!
+💬 {flavor}{evolution_msg}
 
 📈 출석 보너스: +{att_bonus}%
 🎫 복권 보너스: +{lot_bonus}%
@@ -688,20 +740,31 @@ class GameHandlerMixin(BaseHandlerMixin):
 💵 잔고: {result['cash']:,}원"""
 
         else:
-            # 실패
-            drop = result.get("drop", 0)
+            # 실패 — 레벨 0으로 초기화 + 레벨별 고유 문구
             new_emoji = result["new_emoji"]
             new_name = result["new_title"]
 
-            if drop > 0:
-                drop_msg = f"\n💥 레벨 하락! Lv.{old_lv} → Lv.{new_lv} (-{drop})"
+            # 레벨별 고유 실패 문구
+            fail_flavor = EnhanceConfig.FAIL_FLAVORS[old_lv] if old_lv < len(EnhanceConfig.FAIL_FLAVORS) else ""
+
+            if old_lv >= 10:
+                header = f"💀 Lv.{old_lv}에서 폭사..."
+                reset_msg = f"💥 Lv.{old_lv} → Lv.0 초기화!"
+            elif old_lv >= 5:
+                header = f"💨 Lv.{old_lv}에서 실패!"
+                reset_msg = f"💥 Lv.{old_lv} → Lv.0 초기화!"
+            elif old_lv >= 1:
+                header = "💨 각성 실패!"
+                reset_msg = f"🔄 Lv.{old_lv} → Lv.0 초기화"
             else:
-                drop_msg = f"\n🛡️ 레벨 유지! Lv.{old_lv}"
+                header = "💨 각성 실패!"
+                reset_msg = "🛡️ Lv.0 유지"
 
-            msg = f"""💨 각성 실패...
+            msg = f"""{header}
 
-{new_emoji} {new_name}{drop_msg}
-🎯 성공률: {rate}% → 아쉽게 빗나감
+{new_emoji} {new_name}
+{reset_msg}
+💬 {fail_flavor}
 
 💰 사용: -{cost:,}원
 💵 잔고: {result['cash']:,}원"""
@@ -716,12 +779,52 @@ class GameHandlerMixin(BaseHandlerMixin):
                 )
             buttons.append({"label": "🧬 각성 정보", "action": "message", "messageText": "/각성"})
 
-        buttons.extend([
-            {"label": "📈 예측게임", "action": "message", "messageText": "/예측"},
-            {"label": "🚀 급등주", "action": "message", "messageText": "/급등"},
-        ])
+        # 칭호 승급이나 고레벨 달성 시 랭킹 버튼
+        if result["enhanced"] and (result.get("title_changed") or new_lv >= 10):
+            buttons.append({"label": "🧬 각성 랭킹", "action": "message", "messageText": "/각성랭킹"})
+        else:
+            buttons.append({"label": "📈 예측게임", "action": "message", "messageText": "/예측"})
+
+        buttons.append({"label": "🚀 급등주", "action": "message", "messageText": "/급등"})
 
         return KakaoResponse.quick_replies(msg, buttons)
+
+    @staticmethod
+    def _generate_quiz_lesson(quiz: dict) -> str:
+        """역사 퀴즈 결과에서 투자 교훈 생성"""
+        desc = quiz.get("description", "")
+        answer = quiz["answer"]
+        stock = quiz["stock_name"]
+
+        # 키워드 기반 투자 교훈 매칭
+        lessons = {
+            "반도체": "📖 반도체는 사이클 산업! 호황→불황이 반복되므로 업황 전환점을 읽는 게 핵심이에요.",
+            "메모리": "📖 메모리 반도체는 DRAM/NAND 가격 흐름이 주가를 좌우해요. 공급 과잉 시그널을 주시하세요.",
+            "AI": "📖 AI는 2023~2024 최대 테마! 실적이 뒷받침되는 AI주와 테마만 탄 주식을 구분하는 게 중요해요.",
+            "HBM": "📖 HBM(고대역폭메모리)은 AI 학습에 필수! AI 투자가 커질수록 HBM 수요도 증가해요.",
+            "코로나": "📖 위기는 곧 기회! 코로나 폭락장에서 매수한 투자자들이 큰 수익을 거뒀어요.",
+            "금리": "📖 금리 인상기에는 성장주(기술주)가 약세, 가치주가 강세인 경향이 있어요.",
+            "전기차": "📖 전기차 시장은 정책(IRA, 보조금)에 민감해요. 정책 방향을 먼저 읽는 게 핵심!",
+            "배터리": "📖 2차전지는 전기차 시장과 함께 움직여요. 원자재(리튬·니켈) 가격도 체크하세요.",
+            "바이오": "📖 바이오주는 임상 결과와 기대감에 크게 요동쳐요. 실적보다 뉴스에 반응하는 섹터!",
+            "IPO": "📖 공모주는 상장 직후 과열되기 쉬워요. 적정 밸류에이션을 냉정하게 따져보세요.",
+            "규제": "📖 정부 규제 이슈는 주가에 직격타! 규제 리스크가 있는 기업은 정책 변화를 주시하세요.",
+            "방산": "📖 방산주는 지정학 이슈에 민감해요. 국제 분쟁이 발생하면 방산 섹터가 주목받아요.",
+            "언택트": "📖 사회 변화가 산업 트렌드를 바꿔요. 코로나 때 언택트, AI 시대엔 반도체가 수혜!",
+            "철강": "📖 철강은 대표적인 경기 민감주! 글로벌 경기와 중국 수요에 크게 좌우돼요.",
+            "커머스": "📖 플랫폼 기업은 이용자 수와 거래액이 핵심 지표! 성장률 둔화 시그널에 주의하세요.",
+        }
+
+        # 키워드 매칭 — 첫 번째 매칭되는 교훈 사용
+        for keyword, lesson in lessons.items():
+            if keyword in desc:
+                return lesson
+
+        # 기본 교훈 — 상승/하락에 따른 일반적 인사이트
+        if answer == "상승":
+            return f"📖 {stock}의 상승에는 분명한 이유가 있었어요. 실적·테마·정책 중 하나가 동력이었답니다."
+        else:
+            return "📖 하락에도 패턴이 있어요. 과열 후 조정, 실적 악화, 외부 악재 — 이 세 가지가 대부분이에요."
 
     @staticmethod
     def _make_gauge(current: int, maximum: int, length: int = 10) -> str:

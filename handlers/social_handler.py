@@ -10,7 +10,7 @@ from services import (
     BattleService, ChallengeService, MilestoneService, AssetService
 )
 from utils import KakaoResponse
-from config import GameConfig, Messages
+from config import GameConfig
 
 from .base_handler import BaseHandlerMixin
 
@@ -33,6 +33,7 @@ class SocialHandlerMixin(BaseHandlerMixin):
 
         ranking_list = ""
         my_rank_in_top10 = None
+        total_users = len(rankings)
 
         for r in rankings:
             medal = ""
@@ -47,25 +48,33 @@ class SocialHandlerMixin(BaseHandlerMixin):
 
             emoji = "📈" if r["profit_rate"] >= 0 else "📉"
 
+            # 각성 칭호 표시
+            enhance_emoji = r.get("enhance_emoji", "")
+            enhance_lv = r.get("enhance_level", 0)
+            enhance_tag = f" {enhance_emoji}Lv.{enhance_lv}" if enhance_lv > 0 else ""
+
             # 본인 하이라이트
             is_me = r.get("kakao_id") == self.kakao_id
             if is_me:
                 my_rank_in_top10 = r["rank"]
-                ranking_list += f"\n{medal} ★{r['nickname']}★ ← 나!"
+                ranking_list += f"\n{medal} ★{r['nickname']}★{enhance_tag} ← 나!"
             else:
-                ranking_list += f"\n{medal} {r['nickname']}"
+                ranking_list += f"\n{medal} {r['nickname']}{enhance_tag}"
             ranking_list += f"\n   {emoji} {r['profit_rate']:+.2f}% ({r['total_asset']:,}원)\n"
 
-        msg = Messages.RANKING.format(ranking_list=ranking_list)
+        # 톡방 전체 유저 수 표기
+        header = f"🏆 이 톡방 수익률 랭킹 (총 {total_users}명)\n"
+        msg = header + ranking_list
 
         # TOP 10 안에 있으면 축하 메시지
         if my_rank_in_top10:
-            msg = f"🎉 축하해요! TOP {my_rank_in_top10}위 입니다!\n\n" + msg
+            msg = f"🎉 축하해요! 이 톡방에서 {my_rank_in_top10}위!\n\n" + msg
 
         return KakaoResponse.quick_replies(
             msg,
             [
                 {"label": "📍 내 순위", "action": "message", "messageText": "/내순위"},
+                {"label": "🧬 각성 랭킹", "action": "message", "messageText": "/각성랭킹"},
                 {"label": "🚀 급등주", "action": "message", "messageText": "/급등"}
             ]
         )
@@ -119,6 +128,55 @@ class SocialHandlerMixin(BaseHandlerMixin):
         ]
 
         return KakaoResponse.quick_replies(msg, buttons)
+
+    def handle_enhance_ranking(self) -> Dict:
+        """각성 랭킹 조회"""
+        rankings = RankingService.get_enhance_ranking(self.db, limit=10)
+
+        if not rankings:
+            return KakaoResponse.quick_replies(
+                "🧬 아직 각성한 투자자가 없습니다.\n각성에 도전해보세요!",
+                [
+                    {"label": "🧬 각성", "action": "message", "messageText": "/각성"},
+                    {"label": "🏆 수익률 랭킹", "action": "message", "messageText": "/랭킹"}
+                ]
+            )
+
+        ranking_list = ""
+        my_rank = None
+
+        for r in rankings:
+            medal = ""
+            if r["rank"] == 1:
+                medal = "🥇"
+            elif r["rank"] == 2:
+                medal = "🥈"
+            elif r["rank"] == 3:
+                medal = "🥉"
+            else:
+                medal = f"{r['rank']}."
+
+            is_me = r.get("kakao_id") == self.kakao_id
+            if is_me:
+                my_rank = r["rank"]
+                ranking_list += f"\n{medal} ★{r['nickname']}★ ← 나!"
+            else:
+                ranking_list += f"\n{medal} {r['nickname']}"
+            ranking_list += f"\n   {r['enhance_emoji']} {r['enhance_title']} Lv.{r['enhance_level']}\n"
+
+        msg = f"🧬 이 톡방 각성 랭킹\n{ranking_list}"
+
+        if my_rank:
+            msg = f"🎉 각성 랭킹 {my_rank}위!\n\n" + msg
+
+        return KakaoResponse.quick_replies(
+            msg,
+            [
+                {"label": "🏆 수익률 랭킹", "action": "message", "messageText": "/랭킹"},
+                {"label": "🧬 각성", "action": "message", "messageText": "/각성"},
+                {"label": "📍 내 순위", "action": "message", "messageText": "/내순위"}
+            ]
+        )
 
     def handle_mission(self) -> Dict:
         """일간 미션 현황"""

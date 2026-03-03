@@ -61,11 +61,11 @@ class GameService:
         reward = 0
 
         tier_display = {
-            "1등": ("🥇 1등", "대박! 축하합니다!"),
-            "2등": ("🥈 2등", "좋아요!"),
-            "3등": ("🥉 3등", "괜찮네요!"),
-            "4등": ("🎁 4등", "조금이나마..."),
-            "5등": ("💫 5등", "소소하게!"),
+            "1등": ("🥇 1등", "대박! 이게 실화?!"),
+            "2등": ("🥈 2등", "오늘 운이 폭발했어요!"),
+            "3등": ("🥉 3등", "센스 있는 손! 좋아요!"),
+            "4등": ("🎁 4등", "쏠쏠하네요!"),
+            "5등": ("💫 5등", "소소한 행운!"),
             "꽝": ("😅 꽝", "다음 기회에..."),
         }
 
@@ -86,6 +86,24 @@ class GameService:
             reward = enhanced_reward
 
         tier_text, tier_msg = tier_display.get(tier, ("😅 꽝", "다음 기회에..."))
+
+        # Near-miss 판정: 꽝일 때, 다른 등수에 얼마나 가까웠는지
+        near_miss_tier = None
+        near_miss_reward = 0
+        if tier == "꽝":
+            # 꽝 확률 구간에서 얼마나 경계에 가까웠는지 계산
+            # 꽝 직전 등수(5등) 경계까지의 거리
+            boundary = 1.0 - GameProbability.LOTTERY["꽝"]["prob"]  # 5등까지의 누적 = 0.67
+            distance = roll - boundary  # 꽝 구간 진입 후 얼마나 들어왔는지
+            miss_ratio = distance / GameProbability.LOTTERY["꽝"]["prob"]  # 0에 가까울수록 아슬아슬
+
+            if miss_ratio < 0.15:  # 꽝 구간의 첫 15% — 5등과 아슬아슬
+                near_miss_tier = "5등"
+                near_miss_reward = 10_000
+            elif miss_ratio < 0.05:  # 꽝 구간의 첫 5% — 극도로 아까움
+                near_miss_tier = "5등"
+                near_miss_reward = 10_000
+
         user.cash = safe_add(user.cash, reward)
 
         try:
@@ -111,6 +129,8 @@ class GameService:
             "remaining": remaining,
             "enhance_bonus": enhance_bonus,
             "enhance_level": enhance_level,
+            "near_miss_tier": near_miss_tier,
+            "near_miss_reward": near_miss_reward,
         }
 
     # ==========================================
@@ -327,7 +347,16 @@ class GameService:
             prob = up_count / total
         else:
             prob = down_count / total
-        round_multiplier = round(1 / prob, 2)
+        raw_multiplier = 1 / prob
+
+        # 라운드 수수료 적용 (정보 우위 상쇄)
+        current_round = user.updown_round
+        fee_rate = 1.0
+        for (start_r, end_r), rate in GameProbability.UPDOWN_ROUND_FEE.items():
+            if start_r <= current_round <= end_r:
+                fee_rate = rate
+                break
+        round_multiplier = round(raw_multiplier * fee_rate, 2)
 
         if won:
             # 누적 배율 업데이트

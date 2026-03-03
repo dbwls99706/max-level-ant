@@ -10,7 +10,7 @@ from cachetools import TTLCache
 
 from models import User, Holding
 from services.stock_service import StockService
-from config import CacheConfig
+from config import CacheConfig, EnhanceConfig
 from utils import get_service_logger
 
 logger = get_service_logger()
@@ -89,11 +89,18 @@ class RankingService:
                 user, user_holdings, stock_prices
             )
 
+            # 각성 정보
+            enhance_level = getattr(user, 'enhance_level', 0) or 0
+            title_name, title_emoji = EnhanceConfig.get_title(enhance_level)
+
             rankings.append({
                 "kakao_id": user.kakao_id,
                 "nickname": cls._get_display_name(user),
                 "total_asset": total_asset,
-                "profit_rate": profit_rate
+                "profit_rate": profit_rate,
+                "enhance_level": enhance_level,
+                "enhance_title": title_name,
+                "enhance_emoji": title_emoji,
             })
 
         # 5. 수익률 기준 정렬 및 순위 부여
@@ -221,6 +228,33 @@ class RankingService:
 
         cls._ranking_cache[cache_key] = gainers
         return gainers
+
+    @classmethod
+    def get_enhance_ranking(cls, db: Session, limit: int = 10) -> List[Dict]:
+        """각성 레벨 랭킹"""
+        cache_key = f"enhance_ranking_{limit}"
+        if cache_key in cls._ranking_cache:
+            return cls._ranking_cache[cache_key]
+
+        users = db.query(User).filter(
+            User.enhance_level > 0
+        ).order_by(User.enhance_level.desc()).limit(limit).all()
+
+        result = []
+        for i, user in enumerate(users):
+            level = user.enhance_level or 0
+            title_name, title_emoji = EnhanceConfig.get_title(level)
+            result.append({
+                "rank": i + 1,
+                "kakao_id": user.kakao_id,
+                "nickname": cls._get_display_name(user),
+                "enhance_level": level,
+                "enhance_title": title_name,
+                "enhance_emoji": title_emoji,
+            })
+
+        cls._ranking_cache[cache_key] = result
+        return result
 
     @classmethod
     def get_top_losers(cls, db: Session, limit: int = 5) -> List[Dict]:
