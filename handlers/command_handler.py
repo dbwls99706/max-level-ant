@@ -35,7 +35,7 @@ class CommandHandler(
 
     각 기능별 핸들러 믹스인을 상속받아 사용합니다.
     - TradingHandlerMixin: 거래 관련 (매수, 매도, 포트폴리오)
-    - GameHandlerMixin: 미니게임 (복권, 슬롯, 동전 등)
+    - GameHandlerMixin: 예측게임 (복권, 종목추첨, 등락예측 등)
     - MarketHandlerMixin: 시장 정보 (급등주, 뉴스, 검색)
     - SocialHandlerMixin: 소셜/경쟁 (랭킹, 배틀, 챌린지)
     """
@@ -86,20 +86,20 @@ class CommandHandler(
         "/뉴스": "handle_news",
         "/ㄴㅅ": "handle_news",
 
-        # 미니게임
-        "/게임": "handle_game_menu",
-        "/미니게임": "handle_game_menu",
+        # 예측게임
+        "/예측": "handle_game_menu",
+        "/예측게임": "handle_game_menu",
         "/복권": "handle_lottery",
         "/ㅂㄱ": "handle_lottery",
-        "/슬롯머신": "handle_slot",
-        "/ㅅㄹㅁ": "handle_slot",
-        "/동전": "handle_coin",
-        "/코인": "handle_coin",
-        "/ㄷㅈ": "handle_coin",
-        "/하이로우": "handle_highlow",
-        "/ㅎㅇㄹㅇ": "handle_highlow",
-        "/룰렛": "handle_roulette",
-        "/ㄹㄹ": "handle_roulette",
+        "/종목추첨": "handle_slot",
+        "/ㅈㅊ": "handle_slot",
+        "/등락예측": "handle_coin",
+        "/등락": "handle_coin",
+        "/ㄷㄹ": "handle_coin",
+        "/업다운": "handle_highlow",
+        "/ㅇㄷ": "handle_highlow",
+        "/시장예측": "handle_roulette",
+        "/ㅅㅈ": "handle_roulette",
 
         # 소셜/경쟁
         "/랭킹": "handle_ranking",
@@ -201,7 +201,7 @@ class CommandHandler(
             welcome_msg = Messages.WELCOME.format(initial_cash=GameConfig.INITIAL_CASH)
             buttons = [
                 {"label": "📅 출석 +30만", "action": "message", "messageText": "/출석"},
-                {"label": "🎫 무료복권", "action": "message", "messageText": "/복권"},
+                {"label": "🎫 복권", "action": "message", "messageText": "/복권"},
                 {"label": "🚀 급등주", "action": "message", "messageText": "/급등"},
             ]
             return KakaoResponse.quick_replies(welcome_msg, buttons)

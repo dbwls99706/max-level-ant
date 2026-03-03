@@ -28,7 +28,7 @@ logger = get_service_logger()
 class BattleService:
     """배틀 시스템 서비스"""
 
-    # 기본 배팅금
+    # 기본 투자금
     DEFAULT_BET = 100_000
     MIN_BET = 10_000
     MAX_BET = 100_000_000  # 1억
@@ -60,7 +60,7 @@ class BattleService:
             ErrorCode.MARKET_CLOSED,
             f"⚔️ 배틀은 정규장 시간에만 가능해요!\n\n{status_msg}\n\n"
             f"⏰ 배틀 가능 시간:\n• 평일 09:00~15:30\n\n"
-            f"🎮 장 마감 후에는 미니게임을 즐겨보세요!"
+            f"📈 장 마감 후에는 예측게임을 즐겨보세요!"
         )
 
     @classmethod
@@ -93,11 +93,11 @@ class BattleService:
         if err:
             return err
 
-        # 배팅금 및 시간 설정
+        # 투자금 및 시간 설정
         bet = bet_amount or cls.DEFAULT_BET
         dur = duration or cls.DEFAULT_DURATION
 
-        # 배팅금 검증
+        # 투자금 검증
         is_valid, err_msg = validate_bet(bet, user.cash, cls.MIN_BET, cls.MAX_BET)
         if not is_valid:
             return error_response(ErrorCode.INSUFFICIENT_CASH, f"❌ {err_msg}")
@@ -125,7 +125,7 @@ class BattleService:
                 "❌ 예측은 '상승' 또는 '하락'으로 입력해주세요."
             )
 
-        # 트랜잭션: 배팅금 차감 및 배틀 생성
+        # 트랜잭션: 투자금 차감 및 배틀 생성
         try:
             user.cash = safe_subtract(user.cash, bet)
 
@@ -192,7 +192,7 @@ class BattleService:
                 "❌ 자신의 배틀에는 참가할 수 없습니다."
             )
 
-        # 배팅금 검증
+        # 투자금 검증
         is_valid, err_msg = validate_bet(battle.bet_amount, user.cash)
         if not is_valid:
             return error_response(ErrorCode.INSUFFICIENT_CASH, f"❌ {err_msg}")
@@ -205,7 +205,7 @@ class BattleService:
         # 상대방은 반대 예측
         opponent_pred = "DOWN" if battle.challenger_prediction == "UP" else "UP"
 
-        # 트랜잭션: 배팅금 차감 및 배틀 시작
+        # 트랜잭션: 투자금 차감 및 배틀 시작
         try:
             user.cash = safe_subtract(user.cash, battle.bet_amount)
 
@@ -297,7 +297,7 @@ class BattleService:
         challenger = db.query(User).filter(User.kakao_id == battle.challenger_id).with_for_update().first()
         opponent = db.query(User).filter(User.kakao_id == battle.opponent_id).with_for_update().first()
 
-        # 유저 확인 (데이터 무결성 체크) - 생존 유저에게 배팅금 환불
+        # 유저 확인 (데이터 무결성 체크) - 생존 유저에게 투자금 환불
         if not challenger or not opponent:
             try:
                 surviving_user = challenger or opponent
@@ -308,7 +308,7 @@ class BattleService:
             except SQLAlchemyError as e:
                 db.rollback()
                 logger.error(f"배틀 만료 취소 DB 실패: {e}")
-            return error_response(ErrorCode.USER_NOT_FOUND, "❌ 배틀 참가자 정보를 찾을 수 없습니다. 배팅금이 환불됩니다.")
+            return error_response(ErrorCode.USER_NOT_FOUND, "❌ 배틀 참가자 정보를 찾을 수 없습니다. 투자금이 환불됩니다.")
 
         total_pot = battle.bet_amount * 2
 
@@ -318,7 +318,7 @@ class BattleService:
             battle.ended_at = datetime.now(timezone.utc)
 
             if actual_direction == "DRAW":
-                # 무승부 - 배팅금 반환
+                # 무승부 - 투자금 반환
                 challenger.cash = safe_add(challenger.cash, battle.bet_amount)
                 opponent.cash = safe_add(opponent.cash, battle.bet_amount)
                 battle.winner_id = None
@@ -460,13 +460,13 @@ class BattleService:
         if battle.status != BattleStatus.WAITING:
             return error_response(ErrorCode.INVALID_STATE, "❌ 대기 중인 배틀만 취소할 수 있습니다.")
 
-        # FOR UPDATE로 동시성 제어 (배팅금 환불 시 race condition 방지)
+        # FOR UPDATE로 동시성 제어 (투자금 환불 시 race condition 방지)
         user = db.query(User).filter(User.kakao_id == kakao_id).with_for_update().first()
         if not user:
             return error_response(ErrorCode.USER_NOT_FOUND, "❌ 유저 정보를 찾을 수 없습니다.")
 
         try:
-            # 배팅금 환불
+            # 투자금 환불
             user.cash = safe_add(user.cash, battle.bet_amount)
             battle.status = BattleStatus.CANCELLED
             db.commit()
@@ -485,7 +485,7 @@ class BattleService:
     @classmethod
     def cleanup_stale_battles(cls, db: Session, max_waiting_hours: int = 24) -> int:
         """
-        만료된 대기 배틀 정리 (배팅금 환불)
+        만료된 대기 배틀 정리 (투자금 환불)
         서버 시작 시 또는 주기적으로 호출
         Returns: 정리된 배틀 수
         """
@@ -509,5 +509,5 @@ class BattleService:
                 logger.error(f"만료 배틀 정리 실패 (id={battle.id}): {e}")
 
         if cleaned > 0:
-            logger.info(f"만료 배틀 {cleaned}건 정리 완료 (배팅금 환불)")
+            logger.info(f"만료 배틀 {cleaned}건 정리 완료 (투자금 환불)")
         return cleaned

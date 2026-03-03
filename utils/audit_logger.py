@@ -98,8 +98,8 @@ def log_game(
     extra: str = "",
 ):
     """
-    미니게임 감사 로그
-    복권, 슬롯, 룰렛, 하이로우, 동전 결과 기록
+    예측게임 감사 로그
+    복권, 종목추첨, 시장예측, 업다운, 등락예측 결과 기록
     """
     masked_id = f"{kakao_id[:4]}****" if len(kakao_id) > 4 else "****"
     msg = (

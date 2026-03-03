@@ -368,12 +368,12 @@ class GameConfig:
     WEEKLY_BONUS_DAY = 0  # 월요일 (0=월, 6=일)
     WEEKLY_BONUS_MULTIPLIER = 2.0  # 2배 보너스
 
-    # 미니게임/배팅 설정
-    MIN_BET = 10_000  # 최소 배팅금 1만원
-    MAX_BET = 999_999_999_999  # 최대 배팅금 9999억 9999만 9999원
-    DEFAULT_BET = 50_000  # 기본 배팅금 5만원
-    BIG_BET = 500_000  # 큰 배팅금 50만원 (게임 메뉴용)
-    DEFAULT_BATTLE_BET = 100_000  # 배틀 기본 배팅금 10만원
+    # 예측게임/투자 설정
+    MIN_BET = 10_000  # 최소 투자금 1만원
+    MAX_BET = 999_999_999_999  # 최대 투자금 9999억 9999만 9999원
+    DEFAULT_BET = 50_000  # 기본 투자금 5만원
+    BIG_BET = 500_000  # 큰 투자금 50만원 (게임 메뉴용)
+    DEFAULT_BATTLE_BET = 100_000  # 배틀 기본 투자금 10만원
     LOTTERY_COST = 0  # 복권 가격 (무료)
     MAX_LOTTERY_PER_DAY = 5  # 복권 1일 최대 횟수
 
@@ -407,12 +407,12 @@ class GameProbability:
         "꽝": {"prob": 0.33, "min_reward": 0, "max_reward": 0},                  # 33%
     }
 
-    # 슬롯머신 확률
+    # 종목추첨 확률
     SLOT_SYMBOLS = ["🍒", "🍋", "🍊", "🍇", "💎", "7️⃣", "🚀"]
 
     # (심볼, 배수, 확률) — 기대값 100%
     SLOT_PAYOUTS = [
-        ("7️⃣", 50, 0.0005),   # 0.05% - 잭팟 (희귀)
+        ("7️⃣", 50, 0.0005),   # 0.05% - 대박수익 (희귀)
         ("💎", 20, 0.0015),    # 0.15% (희귀)
         ("🚀", 10, 0.003),     # 0.3% (희귀)
         ("🍇", 5, 0.012),      # 1.2%
@@ -420,20 +420,20 @@ class GameProbability:
         ("🍋", 2, 0.0575),     # 5.75%
         ("🍒", 1.5, 0.10),     # 10%
         ("MATCH2", 1, 0.515),  # 51.5% - 2개 일치 (본전)
-        ("LOSE", 0, 0.2855),   # 28.55% - 꽝
+        ("LOSE", 0, 0.2855),   # 28.55% - 손실
     ]
 
-    # 룰렛 확률 (기대값 100%)
+    # 시장예측 확률 (기대값 100%)
     ROULETTE = {
-        "빨강": {"prob": 0.50, "multiplier": 2},    # 안정형: 높은 확률, 2배
-        "검정": {"prob": 0.40, "multiplier": 2.5},  # 균형형: 중간 확률, 2.5배
-        "초록": {"prob": 0.10, "multiplier": 10},   # 도전형: 낮은 확률, 10배
+        "상승": {"prob": 0.50, "multiplier": 2},    # 안정형: 높은 확률, 2배
+        "하락": {"prob": 0.40, "multiplier": 2.5},  # 균형형: 중간 확률, 2.5배
+        "급등": {"prob": 0.10, "multiplier": 10},   # 도전형: 낮은 확률, 10배
     }
 
-    # 하이로우 (기대값 ~100%)
+    # 업다운 (기대값 ~100%)
     HIGHLOW_MULTIPLIER = 2.05  # 맞추면 2.05배
 
-    # 동전던지기 (기대값 100%)
+    # 등락예측 (기대값 100%)
     COINFLIP_MULTIPLIER = 2.0  # 맞추면 2배
 
     @classmethod
@@ -446,15 +446,15 @@ class GameProbability:
         if not (0.999 <= lottery_sum <= 1.001):
             errors.append(f"복권 확률 합계 오류: {lottery_sum}")
 
-        # 슬롯 확률 합계 검증
+        # 종목추첨 확률 합계 검증
         slot_sum = sum(prob for _, _, prob in cls.SLOT_PAYOUTS)
         if not (0.999 <= slot_sum <= 1.001):
-            errors.append(f"슬롯 확률 합계 오류: {slot_sum}")
+            errors.append(f"종목추첨 확률 합계 오류: {slot_sum}")
 
-        # 룰렛 확률 합계 검증
+        # 시장예측 확률 합계 검증
         roulette_sum = sum(color["prob"] for color in cls.ROULETTE.values())
         if not (0.999 <= roulette_sum <= 1.001):
-            errors.append(f"룰렛 확률 합계 오류: {roulette_sum}")
+            errors.append(f"시장예측 확률 합계 오류: {roulette_sum}")
 
         if errors:
             for error in errors:
@@ -479,23 +479,23 @@ class GameProbability:
             return (ev / cost) * 100  # % 반환
 
         elif game == "slot":
-            # 슬롯 기대값
+            # 종목추첨 기대값
             ev = sum(mult * prob for _, mult, prob in cls.SLOT_PAYOUTS)
             return ev * 100  # % 반환
 
         elif game == "roulette":
-            # 룰렛 기대값 (유저는 하나의 색에만 배팅하므로 색별 기대값의 평균)
+            # 시장예측 기대값 (유저는 하나의 방향에만 투자하므로 방향별 기대값의 평균)
             ev_per_color = [color["prob"] * color["multiplier"] for color in cls.ROULETTE.values()]
             return (sum(ev_per_color) / len(ev_per_color)) * 100
 
         elif game == "highlow":
-            # 하이로우 기대값 (50은 무승부)
+            # 업다운 기대값 (50은 무승부)
             # P(win) = 49/99 (1-49 또는 51-100), P(draw) = 1/100
             p_win = 49 / 100
             return p_win * cls.HIGHLOW_MULTIPLIER * 100
 
         elif game == "coinflip":
-            # 동전던지기 기대값
+            # 등락예측 기대값
             return 0.5 * cls.COINFLIP_MULTIPLIER * 100
 
         return 0
@@ -605,14 +605,14 @@ class Messages:
 
 💵 무료 보상
 /출석 - 매일 +30만원 (/ㅊㅅ)
-/복권 - 1만원 복권 1일5회 (/ㅂㄱ)
+/복권 - 무료 복권 1일5회 (/ㅂㄱ)
 
-🎰 미니게임 (장 마감 후)
-/게임 - 전체 게임 목록
-/슬롯머신 [금액] (/ㅅㄹㅁ)
-/동전 [금액] [앞/뒤] (/ㄷㅈ)
-/룰렛 [금액] [빨강/검정] (/ㄹㄹ)
-/하이로우 [금액] [높/낮] (/ㅎㅇㄹㅇ)
+📈 예측게임 (장 마감 후)
+/예측 - 전체 예측게임 목록
+/종목추첨 [금액] (/ㅈㅊ)
+/등락 [금액] [오름/내림] (/ㄷㄹ)
+/시장예측 [금액] [상승/하락] (/ㅅㅈ)
+/업다운 [금액] [상승/하락] (/ㅇㄷ)
 
 🏆 경쟁
 /랭킹 - 수익률 TOP 10 (/ㄹㅋ)
@@ -712,16 +712,16 @@ class Messages:
 • 정규장: 09:00~15:30
 • 시간외: 15:40~18:00"""
 
-    MARKET_CLOSED_GAME = """미니게임은 장 마감 후에만 가능해요!
+    MARKET_CLOSED_GAME = """예측게임은 장 마감 후에만 가능해요!
 
 {status_msg}
 
-🎮 게임 가능 시간:
+📈 예측게임 가능 시간:
 • 평일 18:00 이후
 • 평일 08:30 이전
 • 주말/공휴일 종일"""
 
-    INSUFFICIENT_BALANCE_GAME = "잔액 부족! (보유: {cash:,}원, 필요: {bet:,}원)"
+    INSUFFICIENT_BALANCE_GAME = "잔액 부족! (보유: {cash:,}원, 필요 투자금: {bet:,}원)"
 
     MIN_TRADE_AMOUNT_ERROR = "최소 {min_amount}주 이상 거래해야 합니다."
 

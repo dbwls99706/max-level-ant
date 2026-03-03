@@ -163,7 +163,7 @@ class Battle(Base):
     # 배틀 시작 시점 가격
     start_price = Column(Integer, nullable=True)
 
-    # 배팅 금액
+    # 투자 금액
     bet_amount = Column(BigInteger, default=100_000)
 
     # 예측 (UP / DOWN)

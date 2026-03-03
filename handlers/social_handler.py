@@ -233,17 +233,17 @@ class SocialHandlerMixin(BaseHandlerMixin):
 
     def handle_battle_help(self) -> Dict:
         """배틀 설명"""
-        msg = """⚔️ 배틀 시스템 설명
+        msg = """⚔️ 주가 예측 배틀
 
 🎯 배틀이란?
 다른 유저와 주가 예측 대결!
 종목의 주가가 오를지 내릴지 예측하세요.
 
 📝 진행 방식
-1. 도전자가 종목/예측/배팅금으로 배틀 생성
+1. 도전자가 종목/예측/투자금으로 배틀 생성
 2. 상대방이 배틀에 참가 (반대 방향 예측)
 3. 60분 후 주가 변동으로 승패 결정
-4. 승자가 배팅금 x2 획득!
+4. 승자가 투자금 x2 획득!
 
 💡 예시
 • 도전자: 삼성전자 "상승" 예측 (10만원)
@@ -254,7 +254,7 @@ class SocialHandlerMixin(BaseHandlerMixin):
 ⚠️ 주의사항
 • 한 번 생성/참가하면 취소 불가
 • 여러 배틀 동시 참여 가능
-• 무승부시 배팅금 반환
+• 무승부시 투자금 반환
 
 📋 명령어
 /배틀 [종목] [상승/하락] [금액] - 생성
@@ -311,7 +311,7 @@ class SocialHandlerMixin(BaseHandlerMixin):
 📊 종목: {result['stock_name']}
 💰 현재가: {result['current_price']:,}원
 {result['pred_emoji']} 내 예측: {result['prediction']}
-💵 배팅금: {result['bet_amount']:,}원
+💵 투자금: {result['bet_amount']:,}원
 ⏱️ 진행시간: {result['duration']}분
 
 🆔 배틀 ID: {result['battle_id']}
@@ -353,7 +353,7 @@ class SocialHandlerMixin(BaseHandlerMixin):
 
 📊 종목: {result['stock_name']}
 💰 시작가: {result['start_price']:,}원
-💵 배팅금: {result['bet_amount']:,}원
+💵 투자금: {result['bet_amount']:,}원
 
 🔵 {result['challenger_name']}: {result['challenger_prediction']}
 🔴 {result['opponent_name']}: {result['opponent_prediction']}
@@ -392,7 +392,7 @@ class SocialHandlerMixin(BaseHandlerMixin):
 
             if result['winner'] == "무승부":
                 result_header = "🤝 무승부!"
-                result_detail = "주가 변동 없음 - 배팅금 반환"
+                result_detail = "주가 변동 없음 - 투자금 반환"
             else:
                 result_header = f"🎊🎊🎊 배틀 종료!{market_note} 🎊🎊🎊"
                 result_detail = f"🏆 승자: {result['winner']}"
