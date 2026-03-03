@@ -34,7 +34,7 @@ class BaseHandlerMixin:
             if user and user.nickname:
                 name = user.nickname
         if name:
-            return f"@{name}"
+            return f"@{name} 님"
         return ""
 
     # ===========================================
