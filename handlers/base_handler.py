@@ -26,14 +26,16 @@ class BaseHandlerMixin:
     # ===========================================
 
     def _display_name(self) -> str:
-        """유저 표시명 반환 (닉네임 → 폴백)"""
-        if self.nickname:
-            return self.nickname
-        from models import User
-        user = self.db.query(User).filter(User.kakao_id == self.kakao_id).first()
-        if user and user.nickname:
-            return user.nickname
-        return f"투자자{self.kakao_id[-4:]}"
+        """카카오톡 닉네임 기반 유저 표시명 (OOO님 형태)"""
+        name = self.nickname
+        if not name:
+            from models import User
+            user = self.db.query(User).filter(User.kakao_id == self.kakao_id).first()
+            if user and user.nickname:
+                name = user.nickname
+        if name:
+            return f"{name}님"
+        return ""
 
     # ===========================================
     # 도파민 요소: 효과음/이펙트

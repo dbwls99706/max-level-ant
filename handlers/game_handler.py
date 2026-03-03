@@ -105,7 +105,7 @@ class GameHandlerMixin(BaseHandlerMixin):
             near_miss_line = f"\n\n😱 아깝다! {near_miss_tier} ({near_miss_reward:,}원)까지 한 끗 차이였어요..."
 
         name = self._display_name()
-        msg = f"""🎫 {name}님의 복권 긁기... {reveal}
+        msg = f"""🎫 {name}의 복권 긁기... {reveal}
 
 {effect}
 {tier}! {result['message']}
@@ -226,7 +226,7 @@ class GameHandlerMixin(BaseHandlerMixin):
         lesson = self._generate_quiz_lesson(quiz)
 
         name = self._display_name()
-        msg = f"""🔮 {name}님의 시장예측
+        msg = f"""🔮 {name}의 시장예측
 
 📊 {quiz['stock_name']}
 📅 {quiz['period']}
@@ -396,7 +396,7 @@ class GameHandlerMixin(BaseHandlerMixin):
         down_mult = result["down_multiplier"]
 
         name = self._display_name()
-        msg = f"""🔢 {name}님의 업다운 시작!
+        msg = f"""🔢 {name}의 업다운 시작!
 
 🎲 첫 번째 숫자: {number}
 
@@ -489,7 +489,7 @@ class GameHandlerMixin(BaseHandlerMixin):
                 fail_msg = "💨 빗나갔어요"
 
             name = self._display_name()
-            msg = f"""🔢 {name}님의 업다운 — 게임 오버!
+            msg = f"""🔢 {name}의 업다운 — 게임 오버!
 
 {arrow} {prev} → {next_num}
 🎯 예측: {result['choice']} / 정답: {result['actual']}
@@ -535,7 +535,7 @@ class GameHandlerMixin(BaseHandlerMixin):
         is_big_cashout = result["multiplier"] >= 3  # 3배 이상 정산 = 대박
 
         name = self._display_name()
-        msg = f"""🔢 {name}님의 업다운 — 정산!
+        msg = f"""🔢 {name}의 업다운 — 정산!
 
 {effect}
 
@@ -635,7 +635,7 @@ class GameHandlerMixin(BaseHandlerMixin):
         gauge = self._make_gauge(level, EnhanceConfig.MAX_LEVEL)
 
         name = self._display_name()
-        msg = f"""{title_emoji} {name}님 — {title_name}
+        msg = f"""{title_emoji} {name} — {title_name}
 
 🧬 각성 레벨: Lv.{level} / {EnhanceConfig.MAX_LEVEL}
 {gauge}
@@ -734,7 +734,7 @@ class GameHandlerMixin(BaseHandlerMixin):
 
             name = self._display_name()
             msg = f"""{effect}
-{header} {name}님!
+{header} {name}!
 
 {new_emoji} {new_name} Lv.{old_lv} → Lv.{new_lv}
 🎯 성공률 {rate}%에서 성공!
@@ -768,7 +768,7 @@ class GameHandlerMixin(BaseHandlerMixin):
                 reset_msg = "🛡️ Lv.0 유지"
 
             name = self._display_name()
-            msg = f"""{header} {name}님...
+            msg = f"""{header} {name}...
 
 {new_emoji} {new_name}
 {reset_msg}
