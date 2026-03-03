@@ -407,34 +407,121 @@ class GameProbability:
         "꽝": {"prob": 0.33, "min_reward": 0, "max_reward": 0},                  # 33%
     }
 
-    # 종목추첨 확률
-    SLOT_SYMBOLS = ["🍒", "🍋", "🍊", "🍇", "💎", "7️⃣", "🚀"]
+    # 시장예측 (역사 퀴즈) — 상승/하락 맞추면 x2 (기대값: 지식 의존)
+    STOCK_QUIZ_MULTIPLIER = 2.0
 
-    # (심볼, 배수, 확률) — 기대값 100%
-    SLOT_PAYOUTS = [
-        ("7️⃣", 50, 0.0005),   # 0.05% - 대박수익 (희귀)
-        ("💎", 20, 0.0015),    # 0.15% (희귀)
-        ("🚀", 10, 0.003),     # 0.3% (희귀)
-        ("🍇", 5, 0.012),      # 1.2%
-        ("🍊", 3, 0.025),      # 2.5%
-        ("🍋", 2, 0.0575),     # 5.75%
-        ("🍒", 1.5, 0.10),     # 10%
-        ("MATCH2", 1, 0.515),  # 51.5% - 2개 일치 (본전)
-        ("LOSE", 0, 0.2855),   # 28.55% - 손실
+    # 역사 퀴즈 데이터 — 실제 한국 주식 역사 기반
+    # answer: "상승" 또는 "하락"
+    HISTORICAL_STOCK_DATA = [
+        # === 삼성전자 (005930) ===
+        {"stock_name": "삼성전자", "period": "2017년 1월 ~ 2018년 1월", "answer": "상승",
+         "description": "반도체 슈퍼사이클로 메모리 수요 폭발"},
+        {"stock_name": "삼성전자", "period": "2018년 1월 ~ 2019년 1월", "answer": "하락",
+         "description": "메모리 반도체 가격 하락 사이클 진입"},
+        {"stock_name": "삼성전자", "period": "2020년 3월 ~ 2021년 1월", "answer": "상승",
+         "description": "코로나 이후 반도체 수요 급증, 언택트 호황"},
+        {"stock_name": "삼성전자", "period": "2021년 1월 ~ 2022년 1월", "answer": "하락",
+         "description": "글로벌 공급망 혼란과 금리 인상 우려"},
+        {"stock_name": "삼성전자", "period": "2022년 1월 ~ 2023년 1월", "answer": "하락",
+         "description": "메모리 다운사이클, 글로벌 IT 투자 위축"},
+        {"stock_name": "삼성전자", "period": "2023년 1월 ~ 2024년 1월", "answer": "상승",
+         "description": "AI 반도체 기대감, HBM 수요 증가"},
+
+        # === SK하이닉스 (000660) ===
+        {"stock_name": "SK하이닉스", "period": "2017년 1월 ~ 2018년 1월", "answer": "상승",
+         "description": "메모리 호황, DRAM 가격 급등"},
+        {"stock_name": "SK하이닉스", "period": "2018년 6월 ~ 2019년 6월", "answer": "하락",
+         "description": "반도체 다운사이클, 재고 증가"},
+        {"stock_name": "SK하이닉스", "period": "2020년 3월 ~ 2021년 3월", "answer": "상승",
+         "description": "코로나 저점 반등, 서버 메모리 수요 증가"},
+        {"stock_name": "SK하이닉스", "period": "2021년 6월 ~ 2022년 6월", "answer": "하락",
+         "description": "메모리 업황 둔화, 금리 인상 공포"},
+        {"stock_name": "SK하이닉스", "period": "2023년 1월 ~ 2024년 1월", "answer": "상승",
+         "description": "AI 열풍, HBM3 독점 공급 기대"},
+
+        # === 네이버 (035420) ===
+        {"stock_name": "네이버", "period": "2020년 3월 ~ 2021년 3월", "answer": "상승",
+         "description": "코로나로 온라인 커머스/광고 폭발 성장"},
+        {"stock_name": "네이버", "period": "2021년 7월 ~ 2022년 7월", "answer": "하락",
+         "description": "기술주 밸류에이션 조정, 금리 인상"},
+        {"stock_name": "네이버", "period": "2019년 1월 ~ 2020년 1월", "answer": "상승",
+         "description": "커머스 사업 확대, 라인 실적 개선"},
+
+        # === 카카오 (035720) ===
+        {"stock_name": "카카오", "period": "2020년 3월 ~ 2021년 6월", "answer": "상승",
+         "description": "언택트 수혜, 카카오뱅크/카카오페이 상장 기대"},
+        {"stock_name": "카카오", "period": "2021년 6월 ~ 2022년 6월", "answer": "하락",
+         "description": "문어발 확장 규제 우려, 기술주 약세"},
+        {"stock_name": "카카오", "period": "2022년 10월 ~ 2023년 3월", "answer": "하락",
+         "description": "카카오 데이터센터 화재, SM엔터 인수전 혼란"},
+
+        # === 현대자동차 (005380) ===
+        {"stock_name": "현대자동차", "period": "2018년 1월 ~ 2019년 1월", "answer": "하락",
+         "description": "중국 시장 부진, SUV 트렌드 늦은 대응"},
+        {"stock_name": "현대자동차", "period": "2020년 3월 ~ 2021년 1월", "answer": "상승",
+         "description": "전기차 전환 기대, 애플카 협력 루머"},
+        {"stock_name": "현대자동차", "period": "2022년 1월 ~ 2023년 1월", "answer": "상승",
+         "description": "미국 IRA법 수혜, 전기차 판매 호조"},
+
+        # === 셀트리온 (068270) ===
+        {"stock_name": "셀트리온", "period": "2017년 1월 ~ 2018년 1월", "answer": "상승",
+         "description": "바이오시밀러 유럽 진출 성공, 개인 투자자 열풍"},
+        {"stock_name": "셀트리온", "period": "2021년 1월 ~ 2022년 1월", "answer": "하락",
+         "description": "바이오 거품 논란, 합병 불확실성"},
+
+        # === LG에너지솔루션 (373220) ===
+        {"stock_name": "LG에너지솔루션", "period": "2022년 1월 ~ 2022년 12월", "answer": "하락",
+         "description": "IPO 후 밸류에이션 부담, 원자재 가격 상승"},
+        {"stock_name": "LG에너지솔루션", "period": "2023년 1월 ~ 2023년 7월", "answer": "상승",
+         "description": "IRA 보조금 수혜, 북미 배터리 공장 수주"},
+
+        # === LG화학 (051910) ===
+        {"stock_name": "LG화학", "period": "2020년 1월 ~ 2021년 1월", "answer": "상승",
+         "description": "전기차 배터리 분사 기대, 테슬라 공급"},
+        {"stock_name": "LG화학", "period": "2021년 1월 ~ 2022년 6월", "answer": "하락",
+         "description": "배터리 부문 분사 후 밸류에이션 재평가"},
+
+        # === POSCO홀딩스 (005490) ===
+        {"stock_name": "POSCO홀딩스", "period": "2020년 3월 ~ 2021년 5월", "answer": "상승",
+         "description": "철강 가격 급등, 2차전지 소재 사업 부각"},
+        {"stock_name": "POSCO홀딩스", "period": "2021년 5월 ~ 2022년 7월", "answer": "하락",
+         "description": "철강 가격 하락, 글로벌 경기 둔화 우려"},
+        {"stock_name": "POSCO홀딩스", "period": "2023년 1월 ~ 2023년 7월", "answer": "상승",
+         "description": "리튬·니켈 등 2차전지 소재 밸류체인 기대"},
+
+        # === 삼성SDI (006400) ===
+        {"stock_name": "삼성SDI", "period": "2020년 3월 ~ 2021년 1월", "answer": "상승",
+         "description": "전기차 배터리 수주 확대, ESS 시장 성장"},
+        {"stock_name": "삼성SDI", "period": "2021년 11월 ~ 2022년 11월", "answer": "하락",
+         "description": "2차전지주 밸류에이션 조정"},
+
+        # === 기아 (000270) ===
+        {"stock_name": "기아", "period": "2020년 6월 ~ 2021년 6월", "answer": "상승",
+         "description": "EV6 출시 기대, 디자인 혁신 호평"},
+        {"stock_name": "기아", "period": "2022년 1월 ~ 2023년 1월", "answer": "상승",
+         "description": "미국 시장 판매 호조, 수익성 개선"},
+
+        # === 삼성바이오로직스 (207940) ===
+        {"stock_name": "삼성바이오로직스", "period": "2020년 1월 ~ 2020년 12월", "answer": "상승",
+         "description": "코로나 백신·치료제 위탁생산(CMO) 수주"},
+        {"stock_name": "삼성바이오로직스", "period": "2022년 1월 ~ 2022년 10월", "answer": "하락",
+         "description": "바이오주 전반 약세, 금리 인상 부담"},
+
+        # === 한화에어로스페이스 (012450) ===
+        {"stock_name": "한화에어로스페이스", "period": "2022년 2월 ~ 2023년 2월", "answer": "상승",
+         "description": "우크라이나 전쟁 이후 방산 수출 급증"},
+        {"stock_name": "한화에어로스페이스", "period": "2020년 1월 ~ 2020년 12월", "answer": "하락",
+         "description": "코로나 영향으로 항공 엔진 수요 급감"},
+
+        # === 크래프톤 (259960) ===
+        {"stock_name": "크래프톤", "period": "2021년 8월 ~ 2022년 8월", "answer": "하락",
+         "description": "IPO 후 게임주 약세, 신작 부진 우려"},
+        {"stock_name": "크래프톤", "period": "2023년 1월 ~ 2024년 1월", "answer": "상승",
+         "description": "배틀그라운드 인도 재출시, 실적 개선"},
     ]
 
-    # 시장예측 확률 (기대값 100%)
-    ROULETTE = {
-        "상승": {"prob": 0.50, "multiplier": 2},    # 안정형: 높은 확률, 2배
-        "하락": {"prob": 0.40, "multiplier": 2.5},  # 균형형: 중간 확률, 2.5배
-        "급등": {"prob": 0.10, "multiplier": 10},   # 도전형: 낮은 확률, 10배
-    }
-
-    # 업다운 (기대값 ~100%)
-    HIGHLOW_MULTIPLIER = 2.05  # 맞추면 2.05배
-
-    # 등락예측 (기대값 100%)
-    COINFLIP_MULTIPLIER = 2.0  # 맞추면 2배
+    # 업다운 멀티라운드 — 배율은 확률 기반으로 동적 계산
+    # (EV 100%: 매 라운드 배율 = 1/확률)
 
     @classmethod
     def validate_probabilities(cls) -> bool:
@@ -446,15 +533,14 @@ class GameProbability:
         if not (0.999 <= lottery_sum <= 1.001):
             errors.append(f"복권 확률 합계 오류: {lottery_sum}")
 
-        # 종목추첨 확률 합계 검증
-        slot_sum = sum(prob for _, _, prob in cls.SLOT_PAYOUTS)
-        if not (0.999 <= slot_sum <= 1.001):
-            errors.append(f"종목추첨 확률 합계 오류: {slot_sum}")
+        # 역사 퀴즈 데이터 검증
+        if len(cls.HISTORICAL_STOCK_DATA) < 10:
+            errors.append(f"역사 퀴즈 데이터 부족: {len(cls.HISTORICAL_STOCK_DATA)}개")
 
-        # 시장예측 확률 합계 검증
-        roulette_sum = sum(color["prob"] for color in cls.ROULETTE.values())
-        if not (0.999 <= roulette_sum <= 1.001):
-            errors.append(f"시장예측 확률 합계 오류: {roulette_sum}")
+        up_count = sum(1 for q in cls.HISTORICAL_STOCK_DATA if q["answer"] == "상승")
+        down_count = len(cls.HISTORICAL_STOCK_DATA) - up_count
+        if up_count == 0 or down_count == 0:
+            errors.append("역사 퀴즈 데이터에 상승/하락이 균형적이지 않음")
 
         if errors:
             for error in errors:
@@ -468,35 +554,22 @@ class GameProbability:
     def calculate_expected_value(cls, game: str) -> float:
         """게임별 기대값 계산"""
         if game == "lottery":
-            # 복권 기대값 (무료이므로 기대값 검증 스킵)
             if GameConfig.LOTTERY_COST == 0:
-                return 100.0  # 무료 게임은 기대값 검증 불필요
+                return 100.0
             cost = GameConfig.LOTTERY_COST
             ev = 0
             for tier in cls.LOTTERY.values():
                 avg_reward = (tier["min_reward"] + tier["max_reward"]) / 2
                 ev += tier["prob"] * avg_reward
-            return (ev / cost) * 100  # % 반환
+            return (ev / cost) * 100
 
-        elif game == "slot":
-            # 종목추첨 기대값
-            ev = sum(mult * prob for _, mult, prob in cls.SLOT_PAYOUTS)
-            return ev * 100  # % 반환
+        elif game == "stock_quiz":
+            # 역사 퀴즈 기대값 (지식 의존, 50% 기준)
+            return 0.5 * cls.STOCK_QUIZ_MULTIPLIER * 100
 
-        elif game == "roulette":
-            # 시장예측 기대값 (유저는 하나의 방향에만 투자하므로 방향별 기대값의 평균)
-            ev_per_color = [color["prob"] * color["multiplier"] for color in cls.ROULETTE.values()]
-            return (sum(ev_per_color) / len(ev_per_color)) * 100
-
-        elif game == "highlow":
-            # 업다운 기대값 (50은 무승부)
-            # P(win) = 49/99 (1-49 또는 51-100), P(draw) = 1/100
-            p_win = 49 / 100
-            return p_win * cls.HIGHLOW_MULTIPLIER * 100
-
-        elif game == "coinflip":
-            # 등락예측 기대값
-            return 0.5 * cls.COINFLIP_MULTIPLIER * 100
+        elif game == "updown":
+            # 업다운 멀티라운드 - 매 라운드 EV = 100% (배율 = 1/확률)
+            return 100.0
 
         return 0
 
@@ -550,7 +623,7 @@ def validate_config() -> Tuple[bool, List[str]]:
         errors.append("게임 확률 설정 오류 - 확률 합계가 1이 아닙니다")
 
     # 5. 기대값 검증 (과도하게 높거나 낮은 경우 경고)
-    for game in ["lottery", "slot", "roulette", "highlow", "coinflip"]:
+    for game in ["lottery", "stock_quiz", "updown"]:
         ev = GameProbability.calculate_expected_value(game)
         if ev > 150:
             warnings.append(f"{game} 기대값이 너무 높음: {ev:.1f}%")
@@ -609,10 +682,8 @@ class Messages:
 
 📈 예측게임 (장 마감 후)
 /예측 - 전체 예측게임 목록
-/종목추첨 [금액] (/ㅈㅊ)
-/등락 [금액] [오름/내림] (/ㄷㄹ)
-/시장예측 [금액] [상승/하락] (/ㅅㅈ)
-/업다운 [금액] [상승/하락] (/ㅇㄷ)
+/시장예측 [금액] - 역사 퀴즈! (/ㅅㅈ)
+/업다운 [금액] - 숫자 맞추기! (/ㅇㄷ)
 
 🏆 경쟁
 /랭킹 - 수익률 TOP 10 (/ㄹㅋ)

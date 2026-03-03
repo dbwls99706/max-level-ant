@@ -13,7 +13,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from models import User
 from config import (
     GameConfig, Messages, ErrorCode,
-    is_market_closed, is_market_open, get_market_status_message
+    is_market_open, get_market_status_message
 )
 from utils import get_service_logger
 

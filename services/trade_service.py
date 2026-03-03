@@ -9,7 +9,7 @@ from typing import Optional, Dict, List, Set
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import SQLAlchemyError
 
-from models import User, Holding, Transaction
+from models import Holding, Transaction
 from services.stock_service import StockService
 from services.user_service import UserService
 from services.mission_service import MissionService

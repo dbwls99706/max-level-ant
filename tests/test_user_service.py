@@ -2,8 +2,7 @@
 UserService 단위 테스트
 - 유저 생성, 출석 체크, 닉네임 변경, 잔고 관리
 """
-import pytest
-from datetime import date, timedelta
+from datetime import timedelta
 from unittest.mock import patch
 
 from services.user_service import UserService
@@ -118,7 +117,6 @@ class TestAttendance:
 
     def test_attendance_streak_continues(self, db, test_user):
         """연속 출석 스트릭 계산"""
-        from models import User
         from config import KST
         from datetime import datetime
 

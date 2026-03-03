@@ -2,11 +2,9 @@
 TradeService 단위 테스트
 - 매수/매도 로직, 포트폴리오 조회
 """
-import pytest
 from unittest.mock import patch, MagicMock
 
 from services.trade_service import TradeService
-from services.common import error_response
 from models import Holding
 from config import GameConfig, ErrorCode
 

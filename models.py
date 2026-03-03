@@ -55,6 +55,13 @@ class User(Base):
     daily_trade_count = Column(Integer, default=0)
     mission_completed = Column(Integer, default=0)  # 0: 미완료, 1: 완료
 
+    # 업다운 게임 상태 (멀티라운드)
+    updown_active = Column(Integer, default=0)  # 0: 비활성, 1: 진행중
+    updown_bet = Column(BigInteger, default=0)  # 투자금
+    updown_current_number = Column(Integer, default=0)  # 현재 표시 숫자
+    updown_round = Column(Integer, default=0)  # 현재 라운드
+    updown_multiplier = Column(Float, default=1.0)  # 누적 배율
+
     # 업적 관련 (JSON 문자열로 저장)
     achievements = Column(String(1000), default="[]")
     total_profit_realized = Column(BigInteger, default=0)  # 실현 수익 누적

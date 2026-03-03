@@ -35,7 +35,7 @@ class CommandHandler(
 
     각 기능별 핸들러 믹스인을 상속받아 사용합니다.
     - TradingHandlerMixin: 거래 관련 (매수, 매도, 포트폴리오)
-    - GameHandlerMixin: 예측게임 (복권, 종목추첨, 등락예측 등)
+    - GameHandlerMixin: 예측게임 (복권, 시장예측, 업다운)
     - MarketHandlerMixin: 시장 정보 (급등주, 뉴스, 검색)
     - SocialHandlerMixin: 소셜/경쟁 (랭킹, 배틀, 챌린지)
     """
@@ -91,15 +91,11 @@ class CommandHandler(
         "/예측게임": "handle_game_menu",
         "/복권": "handle_lottery",
         "/ㅂㄱ": "handle_lottery",
-        "/종목추첨": "handle_slot",
-        "/ㅈㅊ": "handle_slot",
-        "/등락예측": "handle_coin",
-        "/등락": "handle_coin",
-        "/ㄷㄹ": "handle_coin",
-        "/업다운": "handle_highlow",
-        "/ㅇㄷ": "handle_highlow",
-        "/시장예측": "handle_roulette",
-        "/ㅅㅈ": "handle_roulette",
+        "/시장예측": "handle_stock_quiz",
+        "/ㅅㅈ": "handle_stock_quiz",
+        "/업다운정산": "handle_updown_cashout",
+        "/업다운": "handle_updown",
+        "/ㅇㄷ": "handle_updown",
 
         # 소셜/경쟁
         "/랭킹": "handle_ranking",

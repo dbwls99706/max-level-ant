@@ -127,28 +127,14 @@ class BaseHandlerMixin:
 
         if game_type == "lottery":
             buttons.append({"label": "🎫 한번 더!", "action": "message", "messageText": "/복권"})
-        elif game_type == "slot":
+        elif game_type == "stock_quiz":
             buttons.extend([
-                {"label": "📊 한번 더!", "action": "message", "messageText": f"/종목추첨 {bet}"},
-                {"label": "📊 2배 투자!", "action": "message", "messageText": f"/종목추첨 {bet * 2}"},
+                {"label": "🔮 한번 더!", "action": "message", "messageText": f"/시장예측 {bet}"},
+                {"label": "🔮 2배!", "action": "message", "messageText": f"/시장예측 {bet * 2}"},
             ])
-        elif game_type == "coin":
-            opposite = "내림" if choice == "오름" else "오름"
+        elif game_type == "updown":
             buttons.extend([
-                {"label": "📊 한번 더!", "action": "message", "messageText": f"/등락 {bet} {choice}"},
-                {"label": f"📊 {opposite}으로!", "action": "message", "messageText": f"/등락 {bet} {opposite}"},
-            ])
-        elif game_type == "highlow":
-            opposite = "하락" if choice == "상승" else "상승"
-            buttons.extend([
-                {"label": "🔢 한번 더!", "action": "message", "messageText": f"/업다운 {bet} {choice}"},
-                {"label": f"🔢 {opposite}으로!", "action": "message", "messageText": f"/업다운 {bet} {opposite}"},
-            ])
-        elif game_type == "roulette":
-            buttons.extend([
-                {"label": "📈 상승!", "action": "message", "messageText": f"/시장예측 {bet} 상승"},
-                {"label": "📉 하락!", "action": "message", "messageText": f"/시장예측 {bet} 하락"},
-                {"label": "🚀 급등!", "action": "message", "messageText": f"/시장예측 {bet} 급등"},
+                {"label": "🔢 새 게임!", "action": "message", "messageText": f"/업다운 {bet}"},
             ])
 
         # 다른 예측게임 추천
@@ -211,7 +197,7 @@ class BaseHandlerMixin:
     def _parse_with_amount(self) -> Tuple[str, Optional[int], bool]:
         """
         금액이 포함된 명령어 파싱
-        예: /종목추첨 50000
+        예: /시장예측 50000
         Returns: (command, amount, is_valid)
         """
         parts = self.utterance.split()
@@ -317,7 +303,7 @@ class BaseHandlerMixin:
             message,
             [
                 {"label": "🎫 복권", "action": "message", "messageText": "/복권"},
-                {"label": "📊 종목추첨", "action": "message", "messageText": f"/종목추첨 {GameConfig.DEFAULT_BET}"},
+                {"label": "🔮 시장예측", "action": "message", "messageText": f"/시장예측 {GameConfig.DEFAULT_BET}"},
                 {"label": "💼 포트폴리오", "action": "message", "messageText": "/포트폴리오"}
             ]
         )

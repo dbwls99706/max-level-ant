@@ -363,7 +363,7 @@ class SocialHandlerMixin(BaseHandlerMixin):
 
         return KakaoResponse.quick_replies(
             msg,
-            [{"label": f"📊 결과확인", "action": "message", "messageText": f"/배틀결과 {result['battle_id']}"}]
+            [{"label": "📊 결과확인", "action": "message", "messageText": f"/배틀결과 {result['battle_id']}"}]
         )
 
     def handle_battle_result(self) -> Dict:
