@@ -575,18 +575,19 @@ class GameProbability:
 
 
 # ===========================================
-# 강화 시스템 설정 (투자의 검)
+# 각성 시스템 설정 (투자 감각 각성)
 # ===========================================
 class EnhanceConfig:
     """
-    강화 시스템 — '투자의 검' 키우기
+    각성 시스템 — 투자 감각 각성
 
-    강화 레벨에 따라 출석/복권 보상이 증가합니다.
+    레벨이 오를수록 투자 능력이 각성되어
+    출석/복권 보상이 증가합니다.
     실패 시 레벨이 하락할 수 있어 전략적 판단이 필요합니다.
     """
     MAX_LEVEL = 20
 
-    # 강화 비용: (현재 레벨 + 1) * BASE_COST
+    # 각성 비용: (현재 레벨 + 1) * BASE_COST
     BASE_COST = 100_000  # 10만원
 
     # 레벨별 성공 확률 (%) — 레벨 0→1 부터 19→20
@@ -610,27 +611,27 @@ class EnhanceConfig:
     ATTENDANCE_BONUS_PER_LEVEL = 0.05   # 출석: 레벨당 +5% (레벨 20 = +100%)
     LOTTERY_BONUS_PER_LEVEL = 0.08      # 복권: 레벨당 +8% (레벨 20 = +160%)
 
-    # 검 이름 (레벨 구간별)
-    SWORD_NAMES = {
-        0: ("초보 투자자", "🔰"),
-        1: ("나무 검", "🪵"),
-        4: ("돌 검", "🪨"),
-        7: ("철 검", "⚔️"),
-        10: ("강철 검", "🗡️"),
-        13: ("미스릴 검", "💎"),
-        16: ("다이아 검", "💠"),
-        19: ("전설의 검", "⚡"),
-        20: ("주식왕의 검", "👑"),
+    # 각성 단계 칭호 (레벨 구간별) — 투자 능력 성장 테마
+    TITLE_NAMES = {
+        0: ("주린이", "🔰"),
+        1: ("수습 트레이더", "📊"),
+        4: ("주식 분석가", "📈"),
+        7: ("펀드 매니저", "💼"),
+        10: ("월가의 늑대", "🐺"),
+        13: ("투자 귀재", "🧠"),
+        16: ("전설의 트레이더", "⭐"),
+        19: ("오마하의 현인", "🔮"),
+        20: ("투자의 신", "👑"),
     }
 
     @classmethod
     def get_cost(cls, current_level: int) -> int:
-        """강화 비용 계산"""
+        """각성 비용 계산"""
         return (current_level + 1) * cls.BASE_COST
 
     @classmethod
     def get_success_rate(cls, current_level: int) -> int:
-        """현재 레벨에서 강화 성공률 (%)"""
+        """현재 레벨에서 각성 성공률 (%)"""
         if current_level >= cls.MAX_LEVEL:
             return 0
         if current_level < 0:
@@ -646,12 +647,12 @@ class EnhanceConfig:
         return 0, 0
 
     @classmethod
-    def get_sword_name(cls, level: int) -> tuple:
-        """레벨에 해당하는 검 이름과 이모지"""
-        result = ("초보 투자자", "🔰")
-        for threshold in sorted(cls.SWORD_NAMES.keys()):
+    def get_title(cls, level: int) -> tuple:
+        """레벨에 해당하는 칭호와 이모지"""
+        result = ("주린이", "🔰")
+        for threshold in sorted(cls.TITLE_NAMES.keys()):
             if level >= threshold:
-                result = cls.SWORD_NAMES[threshold]
+                result = cls.TITLE_NAMES[threshold]
         return result
 
     @classmethod
@@ -771,9 +772,9 @@ class Messages:
 /출석 - 매일 +30만원 (/ㅊㅅ)
 /복권 - 무료 복권 1일5회 (/ㅂㄱ)
 
-⚔️ 강화 시스템
-/강화 - 투자의 검 키우기! (/ㄱㅎ)
-/내검 - 내 검 정보 보기
+🧬 각성 시스템
+/각성 - 투자 감각 각성! (/ㄱㅎ)
+/능력 - 내 투자 능력 보기
 
 📈 예측게임 (장 마감 후)
 /예측 - 전체 예측게임 목록

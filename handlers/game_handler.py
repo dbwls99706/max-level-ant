@@ -22,11 +22,11 @@ class GameHandlerMixin(BaseHandlerMixin):
 🎫 /복권 - 무료 복권 (1일 5회)
 🔮 /시장예측 [금액] - 주식 역사 퀴즈!
 🔢 /업다운 [금액] - 숫자 예측 게임!
-⚔️ /강화 - 투자의 검 키우기!
+🧬 /각성 - 투자 감각 각성!
 
 💡 시장예측: 실제 주식 역사로 상승/하락 맞추기!
 💡 업다운: 연속으로 맞출수록 배율 UP!
-💡 강화: 검 레벨 UP → 출석/복권 보상 UP!
+💡 각성: 투자 능력 UP → 출석/복권 보상 UP!
 ⏰ 시장예측/업다운은 장 마감 후 이용 가능"""
 
         small_bet = GameConfig.DEFAULT_BET
@@ -35,7 +35,7 @@ class GameHandlerMixin(BaseHandlerMixin):
             msg,
             [
                 {"label": "🎫 복권", "action": "message", "messageText": "/복권"},
-                {"label": "⚔️ 강화", "action": "message", "messageText": "/강화"},
+                {"label": "🧬 각성", "action": "message", "messageText": "/각성"},
                 {"label": "🔮 5만 퀴즈", "action": "message", "messageText": f"/시장예측 {small_bet}"},
                 {"label": "🔮 50만 퀴즈", "action": "message", "messageText": f"/시장예측 {big_bet}"},
                 {"label": "🔢 5만 업다운", "action": "message", "messageText": f"/업다운 {small_bet}"},
@@ -103,7 +103,7 @@ class GameHandlerMixin(BaseHandlerMixin):
             buttons.append({"label": "🎫 한번 더!", "action": "message", "messageText": "/복권"})
         buttons.extend([
             {"label": "🔮 시장예측", "action": "message", "messageText": f"/시장예측 {GameConfig.DEFAULT_BET}"},
-            {"label": "⚔️ 강화", "action": "message", "messageText": "/강화"},
+            {"label": "🧬 각성", "action": "message", "messageText": "/각성"},
         ])
 
         return KakaoResponse.quick_replies(msg, buttons)
@@ -550,30 +550,30 @@ class GameHandlerMixin(BaseHandlerMixin):
         )
 
     # ==========================================
-    # 강화 시스템 (투자의 검)
+    # 각성 시스템 (투자 감각 각성)
     # ==========================================
 
     def handle_enhance(self) -> Dict:
-        """강화 — 정보 보기 또는 강화 시도"""
+        """각성 — 정보 보기 또는 각성 시도"""
         parts = self.utterance.split()
 
-        # /강화 시도 → 실제 강화 실행
+        # /각성 시도 → 실제 각성 실행
         if len(parts) >= 2 and parts[1] in ["시도", "도전", "강화하기"]:
             return self._do_enhance()
 
-        # /강화 → 정보 + 강화 버튼
+        # /각성 → 정보 + 각성 버튼
         return self._show_enhance_info()
 
     def _show_enhance_info(self) -> Dict:
-        """강화 정보 표시"""
+        """각성 정보 표시"""
         result = EnhanceService.get_enhance_info(self.db, self.kakao_id)
 
         if not result["success"]:
             return self._game_failure_response(result["message"])
 
         level = result["level"]
-        sword_name = result["sword_name"]
-        sword_emoji = result["sword_emoji"]
+        title_name = result["title_name"]
+        title_emoji = result["title_emoji"]
         att_mult = result["attendance_multiplier"]
         lot_mult = result["lottery_multiplier"]
 
@@ -584,9 +584,9 @@ class GameHandlerMixin(BaseHandlerMixin):
         # 레벨 게이지 바
         gauge = self._make_gauge(level, EnhanceConfig.MAX_LEVEL)
 
-        msg = f"""{sword_emoji} 투자의 검 — {sword_name}
+        msg = f"""{title_emoji} {title_name}
 
-⚔️ 강화 레벨: Lv.{level} / {EnhanceConfig.MAX_LEVEL}
+🧬 각성 레벨: Lv.{level} / {EnhanceConfig.MAX_LEVEL}
 {gauge}
 
 📈 출석 보상 보너스: +{att_bonus}%
@@ -595,7 +595,7 @@ class GameHandlerMixin(BaseHandlerMixin):
         buttons = []
 
         if result.get("max_reached"):
-            msg += "\n\n👑 최고 레벨 달성! 주식왕의 검을 손에 넣었습니다!"
+            msg += "\n\n👑 최고 경지 도달! 당신은 투자의 신입니다!"
             buttons = [
                 {"label": "📅 출석", "action": "message", "messageText": "/출석"},
                 {"label": "🎫 복권", "action": "message", "messageText": "/복권"},
@@ -604,8 +604,8 @@ class GameHandlerMixin(BaseHandlerMixin):
             cost = result["next_cost"]
             rate = result["next_success_rate"]
             fail_prob = result.get("fail_drop_prob", 0)
-            next_name = result.get("next_sword_name", sword_name)
-            next_emoji = result.get("next_sword_emoji", sword_emoji)
+            next_name = result.get("next_title_name", title_name)
+            next_emoji = result.get("next_title_emoji", title_emoji)
 
             # 위험도 표시
             if fail_prob == 0:
@@ -619,7 +619,7 @@ class GameHandlerMixin(BaseHandlerMixin):
 
             msg += f"""
 
-📋 다음 강화 정보:
+📋 다음 각성 정보:
 💰 비용: {cost:,}원
 🎯 성공률: {rate}%
 {risk}
@@ -629,7 +629,7 @@ class GameHandlerMixin(BaseHandlerMixin):
             can_afford = result["cash"] >= cost
             if can_afford:
                 buttons.append(
-                    {"label": f"⚔️ 강화하기 ({cost:,}원)", "action": "message", "messageText": "/강화 시도"}
+                    {"label": f"🧬 각성하기 ({cost:,}원)", "action": "message", "messageText": "/각성 시도"}
                 )
             else:
                 msg += f"\n\n❌ 잔고 부족 (보유: {result['cash']:,}원)"
@@ -642,7 +642,7 @@ class GameHandlerMixin(BaseHandlerMixin):
         return KakaoResponse.quick_replies(msg, buttons)
 
     def _do_enhance(self) -> Dict:
-        """실제 강화 실행"""
+        """실제 각성 실행"""
         result = EnhanceService.attempt_enhance(self.db, self.kakao_id)
 
         if not result["success"]:
@@ -656,10 +656,10 @@ class GameHandlerMixin(BaseHandlerMixin):
         if result["enhanced"]:
             # 성공!
             new_emoji = result["new_emoji"]
-            new_name = result["new_sword"]
+            new_name = result["new_title"]
 
-            if result["name_changed"]:
-                evolution_msg = f"\n\n🆙 검이 진화했습니다!\n{result['old_emoji']} {result['old_sword']} → {new_emoji} {new_name}"
+            if result["title_changed"]:
+                evolution_msg = f"\n\n🆙 새로운 경지에 도달!\n{result['old_emoji']} {result['old_title']} → {new_emoji} {new_name}"
             else:
                 evolution_msg = ""
 
@@ -676,7 +676,7 @@ class GameHandlerMixin(BaseHandlerMixin):
             else:
                 effect = "✨"
 
-            msg = f"""{effect} 강화 성공! {effect}
+            msg = f"""{effect} 각성 성공! {effect}
 
 {new_emoji} {new_name} Lv.{old_lv} → Lv.{new_lv}
 🎯 성공률: {rate}%{evolution_msg}
@@ -691,14 +691,14 @@ class GameHandlerMixin(BaseHandlerMixin):
             # 실패
             drop = result.get("drop", 0)
             new_emoji = result["new_emoji"]
-            new_name = result["new_sword"]
+            new_name = result["new_title"]
 
             if drop > 0:
                 drop_msg = f"\n💥 레벨 하락! Lv.{old_lv} → Lv.{new_lv} (-{drop})"
             else:
                 drop_msg = f"\n🛡️ 레벨 유지! Lv.{old_lv}"
 
-            msg = f"""💨 강화 실패...
+            msg = f"""💨 각성 실패...
 
 {new_emoji} {new_name}{drop_msg}
 🎯 성공률: {rate}% → 아쉽게 빗나감
@@ -706,15 +706,15 @@ class GameHandlerMixin(BaseHandlerMixin):
 💰 사용: -{cost:,}원
 💵 잔고: {result['cash']:,}원"""
 
-        # 다시 강화 가능 여부 체크
+        # 다시 각성 가능 여부 체크
         buttons = []
         if new_lv < EnhanceConfig.MAX_LEVEL:
             next_cost = EnhanceConfig.get_cost(new_lv)
             if result["cash"] >= next_cost:
                 buttons.append(
-                    {"label": f"⚔️ 다시 강화! ({next_cost:,}원)", "action": "message", "messageText": "/강화 시도"}
+                    {"label": f"🧬 다시 각성! ({next_cost:,}원)", "action": "message", "messageText": "/각성 시도"}
                 )
-            buttons.append({"label": "⚔️ 강화 정보", "action": "message", "messageText": "/강화"})
+            buttons.append({"label": "🧬 각성 정보", "action": "message", "messageText": "/각성"})
 
         buttons.extend([
             {"label": "📈 예측게임", "action": "message", "messageText": "/예측"},

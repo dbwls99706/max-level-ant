@@ -1,5 +1,5 @@
 """
-강화 시스템 (투자의 검) 테스트
+각성 시스템 (투자 감각 각성) 테스트
 """
 import pytest
 from unittest.mock import patch
@@ -9,18 +9,18 @@ from config import EnhanceConfig, GameConfig
 
 
 class TestEnhanceInfo:
-    """강화 정보 조회 테스트"""
+    """각성 정보 조회 테스트"""
 
     def test_enhance_info_default_level(self, db, test_user):
-        """초기 강화 레벨은 0"""
+        """초기 각성 레벨은 0"""
         result = EnhanceService.get_enhance_info(db, test_user.kakao_id)
         assert result["success"] is True
         assert result["level"] == 0
-        assert result["sword_name"] == "초보 투자자"
-        assert result["sword_emoji"] == "🔰"
+        assert result["title_name"] == "주린이"
+        assert result["title_emoji"] == "🔰"
 
     def test_enhance_info_shows_next_cost(self, db, test_user):
-        """다음 강화 비용이 표시됨"""
+        """다음 각성 비용이 표시됨"""
         result = EnhanceService.get_enhance_info(db, test_user.kakao_id)
         assert result["next_cost"] == EnhanceConfig.get_cost(0)
         assert result["next_success_rate"] == EnhanceConfig.get_success_rate(0)
@@ -32,7 +32,7 @@ class TestEnhanceInfo:
 
         result = EnhanceService.get_enhance_info(db, test_user.kakao_id)
         assert result["level"] == 10
-        assert result["sword_name"] == "강철 검"
+        assert result["title_name"] == "월가의 늑대"
         assert result["attendance_multiplier"] == EnhanceConfig.get_attendance_multiplier(10)
         assert result["lottery_multiplier"] == EnhanceConfig.get_lottery_multiplier(10)
 
@@ -52,10 +52,10 @@ class TestEnhanceInfo:
 
 
 class TestEnhanceAttempt:
-    """강화 시도 테스트"""
+    """각성 시도 테스트"""
 
     def test_enhance_success(self, db, test_user):
-        """강화 성공 시 레벨 증가"""
+        """각성 성공 시 레벨 증가"""
         with patch("services.enhance_service.random.randint", return_value=1):  # 무조건 성공
             result = EnhanceService.attempt_enhance(db, test_user.kakao_id)
 
@@ -65,7 +65,7 @@ class TestEnhanceAttempt:
         assert result["old_level"] == 0
 
     def test_enhance_deducts_cost(self, db, test_user):
-        """강화 시 비용 차감"""
+        """각성 시 비용 차감"""
         initial_cash = test_user.cash
         cost = EnhanceConfig.get_cost(0)
 
@@ -115,7 +115,7 @@ class TestEnhanceAttempt:
         assert result["new_level"] == 7  # 레벨 -1
 
     def test_enhance_max_level_blocked(self, db, test_user):
-        """만렙에서는 강화 불가"""
+        """만렙에서는 각성 불가"""
         test_user.enhance_level = EnhanceConfig.MAX_LEVEL
         db.commit()
 
@@ -123,16 +123,16 @@ class TestEnhanceAttempt:
         assert result["success"] is False
 
     def test_enhance_insufficient_cash(self, db, test_user):
-        """잔고 부족 시 강화 불가"""
+        """잔고 부족 시 각성 불가"""
         test_user.cash = 0
         db.commit()
 
         result = EnhanceService.attempt_enhance(db, test_user.kakao_id)
         assert result["success"] is False
 
-    def test_enhance_sword_name_changes(self, db, test_user):
-        """레벨업 시 검 이름 변경 감지"""
-        test_user.enhance_level = 3  # 나무 검 → 돌 검 경계
+    def test_enhance_title_changes(self, db, test_user):
+        """레벨업 시 칭호 변경 감지"""
+        test_user.enhance_level = 3  # 수습 트레이더 → 주식 분석가 경계
         test_user.cash = 100_000_000
         db.commit()
 
@@ -141,12 +141,12 @@ class TestEnhanceAttempt:
 
         assert result["enhanced"] is True
         assert result["new_level"] == 4
-        assert result["name_changed"] is True
-        assert result["new_sword"] == "돌 검"
+        assert result["title_changed"] is True
+        assert result["new_title"] == "주식 분석가"
 
 
 class TestEnhanceConfig:
-    """강화 설정 테스트"""
+    """각성 설정 테스트"""
 
     def test_success_rates_length(self):
         """성공률 테이블이 MAX_LEVEL 개"""
@@ -167,15 +167,15 @@ class TestEnhanceConfig:
         for i in range(EnhanceConfig.MAX_LEVEL - 1):
             assert EnhanceConfig.get_cost(i) < EnhanceConfig.get_cost(i + 1)
 
-    def test_get_sword_name_level_0(self):
-        """레벨 0 검 이름"""
-        name, emoji = EnhanceConfig.get_sword_name(0)
-        assert name == "초보 투자자"
+    def test_get_title_level_0(self):
+        """레벨 0 칭호"""
+        name, emoji = EnhanceConfig.get_title(0)
+        assert name == "주린이"
 
-    def test_get_sword_name_max_level(self):
-        """만렙 검 이름"""
-        name, emoji = EnhanceConfig.get_sword_name(EnhanceConfig.MAX_LEVEL)
-        assert name == "주식왕의 검"
+    def test_get_title_max_level(self):
+        """만렙 칭호"""
+        name, emoji = EnhanceConfig.get_title(EnhanceConfig.MAX_LEVEL)
+        assert name == "투자의 신"
         assert emoji == "👑"
 
     def test_attendance_multiplier(self):
@@ -196,10 +196,10 @@ class TestEnhanceConfig:
 
 
 class TestEnhanceWithAttendance:
-    """강화 보너스가 출석에 적용되는지 테스트"""
+    """각성 보너스가 출석에 적용되는지 테스트"""
 
     def test_attendance_with_enhance_bonus(self, db, test_user):
-        """강화 레벨이 있으면 출석 보상 증가"""
+        """각성 레벨이 있으면 출석 보상 증가"""
         from services.user_service import UserService
 
         test_user.enhance_level = 10  # +50% 보너스
@@ -219,10 +219,10 @@ class TestEnhanceWithAttendance:
 
 
 class TestEnhanceWithLottery:
-    """강화 보너스가 복권에 적용되는지 테스트"""
+    """각성 보너스가 복권에 적용되는지 테스트"""
 
     def test_lottery_with_enhance_bonus(self, db, test_user):
-        """강화 레벨이 있으면 복권 보상 증가"""
+        """각성 레벨이 있으면 복권 보상 증가"""
         from services.game_service import GameService
 
         test_user.enhance_level = 5  # +40% 보너스

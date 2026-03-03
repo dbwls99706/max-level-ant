@@ -96,10 +96,10 @@ class CommandHandler(
         "/업다운정산": "handle_updown_cashout",
         "/업다운": "handle_updown",
         "/ㅇㄷ": "handle_updown",
-        "/강화": "handle_enhance",
+        "/각성": "handle_enhance",
         "/ㄱㅎ": "handle_enhance",
-        "/내검": "handle_enhance",
-        "/검": "handle_enhance",
+        "/능력": "handle_enhance",
+        "/강화": "handle_enhance",
 
         # 소셜/경쟁
         "/랭킹": "handle_ranking",
@@ -251,9 +251,9 @@ class CommandHandler(
             enhance_line = ""
             if enhance_level > 0:
                 from config import EnhanceConfig
-                sword_name, sword_emoji = EnhanceConfig.get_sword_name(enhance_level)
+                title_name, title_emoji = EnhanceConfig.get_title(enhance_level)
                 att_bonus = int((EnhanceConfig.get_attendance_multiplier(enhance_level) - 1) * 100)
-                enhance_line = f"\n{sword_emoji} 강화 보너스: +{att_bonus}% (Lv.{enhance_level})"
+                enhance_line = f"\n{title_emoji} {title_name} 보너스: +{att_bonus}% (Lv.{enhance_level})"
 
             msg = f"""✅ 출석 완료!
 
