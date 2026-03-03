@@ -157,8 +157,7 @@ class UserService:
                 reward = int(reward * multiplier)
                 break
 
-        # 강화 보너스 적용
-        enhance_level = getattr(user, 'enhance_level', 0) or 0
+        # 각성 보너스 적용
         if enhance_level > 0:
             enhance_mult = EnhanceConfig.get_attendance_multiplier(enhance_level)
             reward = int(reward * enhance_mult)
@@ -213,10 +212,10 @@ class UserService:
         if amount >= 0:
             new_cash = safe_add(user.cash, amount)
         else:
-            new_cash = safe_subtract(user.cash, abs(amount))
-            # 잔액 부족 시 실패
-            if new_cash == 0 and user.cash + amount < 0:
+            # 잔액 부족 시 실패 (차감 전에 확인)
+            if user.cash < abs(amount):
                 return False
+            new_cash = safe_subtract(user.cash, abs(amount))
 
         try:
             user.cash = new_cash

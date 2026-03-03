@@ -1,6 +1,6 @@
 """
 예측게임 관련 핸들러
-- 복권, 시장예측(역사 퀴즈), 업다운(멀티라운드), 강화(투자의 검)
+- 복권, 시장예측(역사 퀴즈), 업다운(멀티라운드), 각성(투자 감각 각성)
 """
 from typing import Dict
 
@@ -87,7 +87,7 @@ class GameHandlerMixin(BaseHandlerMixin):
         enhance_bonus = result.get("enhance_bonus", 0)
         enhance_line = ""
         if enhance_bonus > 0:
-            enhance_line = f"\n⚔️ 강화 보너스: +{enhance_bonus:,}원 (Lv.{result.get('enhance_level', 0)})"
+            enhance_line = f"\n🧬 각성 보너스: +{enhance_bonus:,}원 (Lv.{result.get('enhance_level', 0)})"
 
         msg = f"""🎫 복권 긁기 {effect}
 
@@ -234,7 +234,7 @@ class GameHandlerMixin(BaseHandlerMixin):
         from services.common import (
             get_user_with_error_for_update, validate_bet,
             check_market_closed_for_game, error_response,
-            safe_add, safe_multiply
+            safe_add, safe_subtract, safe_multiply
         )
         from config import GameProbability, ErrorCode
         from utils import log_game
@@ -260,7 +260,7 @@ class GameHandlerMixin(BaseHandlerMixin):
             else:
                 return error_response(ErrorCode.INVALID_CHOICE, "상승 또는 하락 중 선택해주세요.")
 
-        user.cash -= bet
+        user.cash = safe_subtract(user.cash, bet)
         won = (choice_normalized == quiz["answer"])
 
         if won:

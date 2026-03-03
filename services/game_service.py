@@ -16,6 +16,7 @@ from services.common import (
     check_market_closed_for_game,
     error_response,
     safe_add,
+    safe_subtract,
     safe_multiply
 )
 from utils import get_service_logger, log_game
@@ -143,7 +144,7 @@ class GameService:
         quiz = random.choice(GameProbability.HISTORICAL_STOCK_DATA)
 
         # 투자금 차감
-        user.cash -= bet
+        user.cash = safe_subtract(user.cash, bet)
 
         # 정답 확인
         won = (choice_normalized == quiz["answer"])
@@ -231,7 +232,7 @@ class GameService:
             return error_response(ErrorCode.INVALID_BET, bet_error)
 
         # 투자금 차감
-        user.cash -= bet
+        user.cash = safe_subtract(user.cash, bet)
 
         # 첫 숫자 생성 (극단값 회피: 5~95)
         first_number = random.randint(5, 95)
