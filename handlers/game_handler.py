@@ -1,31 +1,33 @@
 """
-미니게임 관련 핸들러
-- 복권, 슬롯머신, 동전던지기, 하이로우, 룰렛
+예측게임 관련 핸들러
+- 복권, 시장예측(역사 퀴즈), 업다운(멀티라운드), 각성(투자 감각 각성)
 """
 from typing import Dict
 
 from services import GameService
-from config import GameConfig
+from services.enhance_service import EnhanceService
+from config import GameConfig, EnhanceConfig
 from utils import KakaoResponse
 
 from .base_handler import BaseHandlerMixin
 
 
 class GameHandlerMixin(BaseHandlerMixin):
-    """미니게임 관련 핸들러 믹스인"""
+    """예측게임 관련 핸들러 믹스인"""
 
     def handle_game_menu(self) -> Dict:
-        """게임 메뉴"""
-        msg = """🎰 미니게임
+        """예측게임 메뉴"""
+        msg = """📈 예측게임
 
-🎫 /복권 - 1만원 복권 (1일 5회)
-🎰 /슬롯머신 [금액] - 대박을 노려라!
-🎡 /룰렛 [금액] [색상] - 초록 9배 대박!
-🪙 /동전 [금액] [앞/뒤] - 2배 수익!
-🎲 /하이로우 [금액] [높/낮] - 1.8배 수익!
+🎫 /복권 - 무료 복권 (1일 5회)
+🔮 /시장예측 [금액] - 주식 역사 퀴즈!
+🔢 /업다운 [금액] - 숫자 예측 게임!
+🧬 /각성 - 투자 감각 각성!
 
-💡 추천: 슬롯머신 잭팟 50배!
-⏰ 슬롯/룰렛/동전/하이로우는 장 마감 후 이용 가능"""
+💡 시장예측: 실제 주식 역사로 상승/하락 맞추기!
+💡 업다운: 연속으로 맞출수록 배율 UP!
+💡 각성: 투자 능력 UP → 출석/복권 보상 UP!
+⏰ 시장예측/업다운은 장 마감 후 이용 가능"""
 
         small_bet = GameConfig.DEFAULT_BET
         big_bet = GameConfig.BIG_BET
@@ -33,10 +35,10 @@ class GameHandlerMixin(BaseHandlerMixin):
             msg,
             [
                 {"label": "🎫 복권", "action": "message", "messageText": "/복권"},
-                {"label": "🎰 5만 슬롯", "action": "message", "messageText": f"/슬롯머신 {small_bet}"},
-                {"label": "🎰 50만 슬롯", "action": "message", "messageText": f"/슬롯머신 {big_bet}"},
-                {"label": "🟢 초록 9배!", "action": "message", "messageText": f"/룰렛 {small_bet} 초록"},
-                {"label": "🪙 동전 50만", "action": "message", "messageText": f"/동전 {big_bet} 앞"}
+                {"label": "🧬 각성", "action": "message", "messageText": "/각성"},
+                {"label": "🔮 5만 퀴즈", "action": "message", "messageText": f"/시장예측 {small_bet}"},
+                {"label": "🔮 50만 퀴즈", "action": "message", "messageText": f"/시장예측 {big_bet}"},
+                {"label": "🔢 5만 업다운", "action": "message", "messageText": f"/업다운 {small_bet}"},
             ]
         )
 
@@ -49,8 +51,8 @@ class GameHandlerMixin(BaseHandlerMixin):
             return KakaoResponse.quick_replies(
                 result["message"],
                 [
-                    {"label": "🎰 슬롯머신", "action": "message", "messageText": f"/슬롯머신 {bet}"},
-                    {"label": "🪙 동전던지기", "action": "message", "messageText": f"/동전 {bet} 앞"},
+                    {"label": "🔮 시장예측", "action": "message", "messageText": f"/시장예측 {bet}"},
+                    {"label": "🔢 업다운", "action": "message", "messageText": f"/업다운 {bet}"},
                     {"label": "🚀 급등주", "action": "message", "messageText": "/급등"}
                 ]
             )
@@ -70,23 +72,28 @@ class GameHandlerMixin(BaseHandlerMixin):
         remaining = result.get("remaining", 0)
         reward = result["reward"]
 
-        # 남은 횟수에 따른 FOMO 메시지
         if remaining == 0:
             remaining_msg = "🚫 오늘 복권 모두 소진!"
         elif remaining == 1:
-            remaining_msg = "⚡ 마지막 1회 남음! 대박의 기회!"
+            remaining_msg = "⚡ 마지막 1회 남음!"
         elif remaining == 2:
-            remaining_msg = "🔥 2회 남음! 놓치지 마세요!"
+            remaining_msg = "🔥 2회 남음!"
         else:
             remaining_msg = f"📍 오늘 남은 횟수: {remaining}회"
 
         reward_text = f"+{reward:,}원" if reward > 0 else "0원"
 
+        # 각성 보너스 표시
+        enhance_bonus = result.get("enhance_bonus", 0)
+        enhance_line = ""
+        if enhance_bonus > 0:
+            enhance_line = f"\n🧬 각성 보너스: +{enhance_bonus:,}원 (Lv.{result.get('enhance_level', 0)})"
+
         msg = f"""🎫 복권 긁기 {effect}
 
 {tier}! {result['message']}
 
-💰 당첨금: {reward_text}
+💰 당첨금: {reward_text}{enhance_line}
 
 {remaining_msg}
 💵 현재 잔고: {result['cash']:,}원"""
@@ -95,314 +102,631 @@ class GameHandlerMixin(BaseHandlerMixin):
         if remaining > 0:
             buttons.append({"label": "🎫 한번 더!", "action": "message", "messageText": "/복권"})
         buttons.extend([
-            {"label": "🎰 슬롯머신", "action": "message", "messageText": f"/슬롯머신 {GameConfig.DEFAULT_BET}"},
+            {"label": "🔮 시장예측", "action": "message", "messageText": f"/시장예측 {GameConfig.DEFAULT_BET}"},
+            {"label": "🧬 각성", "action": "message", "messageText": "/각성"},
+        ])
+
+        return KakaoResponse.quick_replies(msg, buttons)
+
+    # ==========================================
+    # 시장예측 (역사 퀴즈)
+    # ==========================================
+
+    def handle_stock_quiz(self) -> Dict:
+        """시장예측 — 역사 퀴즈"""
+        parts = self.utterance.split()
+
+        if len(parts) < 2:
+            return KakaoResponse.quick_replies(
+                "🔮 시장예측 — 주식 역사 퀴즈!\n\n"
+                "실제 한국 주식의 역사 데이터로\n"
+                "해당 기간에 주가가 올랐는지 내렸는지 맞춰보세요!\n\n"
+                "맞추면 x2 배율!\n\n"
+                "사용법: /시장예측 [금액]\n"
+                "예: /시장예측 100000",
+                [
+                    {"label": "🔮 5만원", "action": "message", "messageText": "/시장예측 50000"},
+                    {"label": "🔮 10만원", "action": "message", "messageText": "/시장예측 100000"},
+                    {"label": "🔮 50만원", "action": "message", "messageText": "/시장예측 500000"},
+                ]
+            )
+
+        try:
+            bet = int(parts[1].replace(",", ""))
+        except ValueError:
+            return KakaoResponse.quick_replies(
+                "투자금은 숫자로 입력해주세요.\n예: /시장예측 100000",
+                [
+                    {"label": "🔮 5만원", "action": "message", "messageText": "/시장예측 50000"},
+                    {"label": "🔮 10만원", "action": "message", "messageText": "/시장예측 100000"},
+                ]
+            )
+
+        # 선택지가 없으면 퀴즈 출제 (상승/하락 선택 유도)
+        if len(parts) < 3:
+            # 먼저 퀴즈 문제를 보여주고 유저가 선택하게 함
+            import random
+            from config import GameProbability
+            quiz = random.choice(GameProbability.HISTORICAL_STOCK_DATA)
+
+            return KakaoResponse.quick_replies(
+                f"🔮 시장예측 — 역사 퀴즈!\n\n"
+                f"📊 종목: {quiz['stock_name']}\n"
+                f"📅 기간: {quiz['period']}\n\n"
+                f"💰 투자금: {bet:,}원\n"
+                f"🎯 맞추면: {bet * 2:,}원 획득!\n\n"
+                f"이 기간 동안 주가가 올랐을까, 내렸을까?",
+                [
+                    {"label": "📈 상승!", "action": "message",
+                     "messageText": f"/시장예측 {bet} 상승 {quiz['stock_name']}|{quiz['period']}"},
+                    {"label": "📉 하락!", "action": "message",
+                     "messageText": f"/시장예측 {bet} 하락 {quiz['stock_name']}|{quiz['period']}"},
+                ]
+            )
+
+        # 선택지가 있으면 정답 확인
+        choice = parts[2].strip()
+
+        # 특정 퀴즈 지정 여부 확인 (버튼에서 온 경우)
+        specific_quiz = None
+        if len(parts) >= 4:
+            quiz_key = " ".join(parts[3:])
+            if "|" in quiz_key:
+                stock_name, period = quiz_key.split("|", 1)
+                from config import GameProbability
+                for q in GameProbability.HISTORICAL_STOCK_DATA:
+                    if q["stock_name"] == stock_name and q["period"] == period:
+                        specific_quiz = q
+                        break
+
+        if specific_quiz:
+            # 특정 퀴즈로 직접 판정
+            result = self._play_quiz_with_specific(bet, choice, specific_quiz)
+        else:
+            # 랜덤 퀴즈
+            result = GameService.play_stock_quiz(self.db, self.kakao_id, bet, choice)
+
+        if not result["success"]:
+            return self._game_failure_response(result["message"])
+
+        quiz = result["quiz"]
+
+        if result["won"]:
+            effect = "🎉 정답!"
+            profit_text = f"📈 +{result['profit']:,}원"
+            encourage = "실제 역사를 잘 아시네요! 👏"
+        else:
+            effect = "💨 오답!"
+            profit_text = f"📉 {result['profit']:,}원"
+            encourage = "다음엔 맞출 수 있을 거예요! 💪"
+
+        answer_emoji = "📈" if quiz["answer"] == "상승" else "📉"
+
+        msg = f"""🔮 시장예측 — 역사 퀴즈
+
+📊 {quiz['stock_name']}
+📅 {quiz['period']}
+
+{answer_emoji} 정답: {quiz['answer']}!
+🎯 내 선택: {result['choice']}
+
+{effect}
+{encourage}
+
+💡 해설: {quiz['description']}
+
+💰 투자금: {result['bet']:,}원
+{profit_text}
+💵 잔고: {result['cash']:,}원"""
+
+        return KakaoResponse.quick_replies(
+            msg,
+            [
+                {"label": "🔮 한번 더!", "action": "message", "messageText": f"/시장예측 {bet}"},
+                {"label": "🔮 2배!", "action": "message", "messageText": f"/시장예측 {bet * 2}"},
+                {"label": "🔢 업다운", "action": "message", "messageText": f"/업다운 {bet}"},
+                {"label": "🚀 급등주", "action": "message", "messageText": "/급등"}
+            ]
+        )
+
+    def _play_quiz_with_specific(self, bet: int, choice: str, quiz: dict) -> Dict:
+        """특정 퀴즈로 직접 판정 (버튼에서 퀴즈가 지정된 경우)"""
+        from services.common import (
+            get_user_with_error_for_update, validate_bet,
+            check_market_closed_for_game, error_response,
+            safe_add, safe_subtract, safe_multiply
+        )
+        from config import GameProbability, ErrorCode
+        from utils import log_game
+
+        can_play, market_error = check_market_closed_for_game("🔮")
+        if not can_play:
+            return market_error
+
+        user, error = get_user_with_error_for_update(self.db, self.kakao_id)
+        if error:
+            return error
+
+        is_valid, bet_error = validate_bet(bet, user.cash)
+        if not is_valid:
+            return error_response(ErrorCode.INVALID_BET, bet_error)
+
+        choice_normalized = choice.strip()
+        if choice_normalized not in ["상승", "하락"]:
+            if choice_normalized in ["상", "up", "오름"]:
+                choice_normalized = "상승"
+            elif choice_normalized in ["하", "down", "내림"]:
+                choice_normalized = "하락"
+            else:
+                return error_response(ErrorCode.INVALID_CHOICE, "상승 또는 하락 중 선택해주세요.")
+
+        user.cash = safe_subtract(user.cash, bet)
+        won = (choice_normalized == quiz["answer"])
+
+        if won:
+            multiplier = GameProbability.STOCK_QUIZ_MULTIPLIER
+            winnings = safe_multiply(bet, multiplier)
+        else:
+            multiplier = 0
+            winnings = 0
+
+        user.cash = safe_add(user.cash, winnings)
+
+        from sqlalchemy.exc import SQLAlchemyError
+        try:
+            self.db.commit()
+        except SQLAlchemyError:
+            self.db.rollback()
+            return error_response(ErrorCode.DB_ERROR, "데이터베이스 오류가 발생했습니다.")
+
+        log_game(
+            kakao_id=self.kakao_id, game_type="STOCK_QUIZ",
+            bet=bet, result=f"{quiz['answer']}({'WIN' if won else 'LOSE'})",
+            winnings=winnings, profit=winnings - bet, cash_after=user.cash,
+            extra=f"stock={quiz['stock_name']} period={quiz['period']} choice={choice_normalized}"
+        )
+
+        return {
+            "success": True,
+            "quiz": quiz,
+            "choice": choice_normalized,
+            "answer": quiz["answer"],
+            "won": won,
+            "bet": bet,
+            "multiplier": multiplier,
+            "winnings": winnings,
+            "profit": winnings - bet,
+            "cash": user.cash
+        }
+
+    # ==========================================
+    # 업다운 (멀티라운드)
+    # ==========================================
+
+    def handle_updown(self) -> Dict:
+        """업다운 게임 — 시작 또는 라운드 진행"""
+        parts = self.utterance.split()
+
+        # /업다운 만 입력한 경우
+        if len(parts) == 1:
+            # 진행중인 게임이 있는지 확인
+            status = GameService.get_updown_status(self.db, self.kakao_id)
+            if status.get("active"):
+                return self._updown_status_response(status)
+
+            return KakaoResponse.quick_replies(
+                "🔢 업다운 — 숫자 예측 게임!\n\n"
+                "1~100 숫자가 나오면\n"
+                "다음 숫자가 높을지 낮을지 예측!\n\n"
+                "✅ 맞추면: 배율 누적, 계속 도전!\n"
+                "❌ 틀리면: 투자금 전액 손실!\n"
+                "💰 정산: 원할 때 수익 확정!\n\n"
+                "사용법: /업다운 [금액]",
+                [
+                    {"label": "🔢 5만원", "action": "message", "messageText": "/업다운 50000"},
+                    {"label": "🔢 10만원", "action": "message", "messageText": "/업다운 100000"},
+                    {"label": "🔢 50만원", "action": "message", "messageText": "/업다운 500000"},
+                ]
+            )
+
+        # /업다운 [상승/하락] — 진행중인 게임의 라운드 진행
+        if len(parts) == 2 and not parts[1].replace(",", "").isdigit():
+            choice = parts[1]
+            return self._handle_updown_round(choice)
+
+        # /업다운 [금액] — 새 게임 시작
+        try:
+            bet = int(parts[1].replace(",", ""))
+        except ValueError:
+            return KakaoResponse.quick_replies(
+                "투자금은 숫자로 입력해주세요.\n예: /업다운 50000",
+                [
+                    {"label": "🔢 5만원", "action": "message", "messageText": "/업다운 50000"},
+                    {"label": "🔢 10만원", "action": "message", "messageText": "/업다운 100000"},
+                ]
+            )
+
+        # /업다운 [금액] [상승/하락] — 새 게임은 금액만, 라운드는 별도
+        if len(parts) >= 3:
+            # 혹시 진행중인 게임이 있으면 라운드로 처리
+            choice = parts[2]
+            status = GameService.get_updown_status(self.db, self.kakao_id)
+            if status.get("active"):
+                return self._handle_updown_round(choice)
+
+        result = GameService.start_updown(self.db, self.kakao_id, bet)
+
+        if not result["success"]:
+            if result.get("active_game"):
+                return self._updown_active_game_response(result)
+            return self._game_failure_response(result["message"])
+
+        number = result["number"]
+        up_mult = result["up_multiplier"]
+        down_mult = result["down_multiplier"]
+
+        msg = f"""🔢 업다운 시작!
+
+🎲 첫 번째 숫자: {number}
+
+다음 숫자가 {number}보다 높을까? 낮을까?
+
+📈 상승 선택 시 배율: x{up_mult}
+📉 하락 선택 시 배율: x{down_mult}
+
+💰 투자금: {result['bet']:,}원
+💵 잔고: {result['cash']:,}원"""
+
+        buttons = []
+        if result["can_up"]:
+            buttons.append({"label": f"📈 상승 (x{up_mult})", "action": "message", "messageText": "/업다운 상승"})
+        if result["can_down"]:
+            buttons.append({"label": f"📉 하락 (x{down_mult})", "action": "message", "messageText": "/업다운 하락"})
+
+        return KakaoResponse.quick_replies(msg, buttons)
+
+    def _handle_updown_round(self, choice: str) -> Dict:
+        """업다운 라운드 진행"""
+        result = GameService.play_updown_round(self.db, self.kakao_id, choice)
+
+        if not result["success"]:
+            return self._game_failure_response(result["message"])
+
+        prev = result["prev_number"]
+        next_num = result["next_number"]
+        arrow = "📈" if next_num > prev else "📉"
+
+        if result["won"]:
+            round_mult = result["round_multiplier"]
+            total_mult = result["total_multiplier"]
+            current_round = result["round"]
+            potential = result["potential_winnings"]
+
+            # 연승 이펙트
+            rounds_won = current_round - 1
+            if rounds_won >= 5:
+                streak_effect = "🔥🔥🔥 연승의 달인! 🔥🔥🔥"
+            elif rounds_won >= 3:
+                streak_effect = "🔥🔥 연승 중! 🔥🔥"
+            elif rounds_won >= 2:
+                streak_effect = "🔥 연승! 🔥"
+            else:
+                streak_effect = "✨ 적중! ✨"
+
+            msg = f"""🔢 업다운 — 라운드 {current_round - 1}
+
+{arrow} {prev} → {next_num}
+🎯 예측: {result['choice']} — {streak_effect}
+
+이번 배율: x{round_mult}
+📊 누적 배율: x{total_mult}
+
+💰 투자금: {result['bet']:,}원
+💎 현재 가치: {potential:,}원 (+{potential - result['bet']:,}원)
+
+다음 숫자가 {next_num}보다 높을까? 낮을까?"""
+
+            buttons = []
+            up_mult = result["up_multiplier"]
+            down_mult = result["down_multiplier"]
+
+            if result["can_up"]:
+                buttons.append({"label": f"📈 상승 (x{up_mult})", "action": "message", "messageText": "/업다운 상승"})
+            if result["can_down"]:
+                buttons.append({"label": f"📉 하락 (x{down_mult})", "action": "message", "messageText": "/업다운 하락"})
+            buttons.append({"label": f"💰 정산 ({potential:,}원)", "action": "message", "messageText": "/업다운정산"})
+
+            return KakaoResponse.quick_replies(msg, buttons)
+        else:
+            # 실패
+            if abs(next_num - prev) <= 3:
+                fail_msg = "😱 아슬아슬하게 빗나갔어요!"
+            elif abs(next_num - prev) <= 10:
+                fail_msg = "😤 아깝다!"
+            else:
+                fail_msg = "💨 빗나갔어요"
+
+            msg = f"""🔢 업다운 — 게임 오버!
+
+{arrow} {prev} → {next_num}
+🎯 예측: {result['choice']} / 정답: {result['actual']}
+
+{fail_msg}
+
+💸 투자금 손실: -{result['bet']:,}원
+💵 잔고: {result['cash']:,}원"""
+
+            return KakaoResponse.quick_replies(
+                msg,
+                [
+                    {"label": "🔢 다시 도전!", "action": "message", "messageText": f"/업다운 {result['bet']}"},
+                    {"label": "🔮 시장예측", "action": "message", "messageText": f"/시장예측 {GameConfig.DEFAULT_BET}"},
+                    {"label": "🚀 급등주", "action": "message", "messageText": "/급등"}
+                ]
+            )
+
+    def handle_updown_cashout(self) -> Dict:
+        """업다운 중간 정산"""
+        result = GameService.cashout_updown(self.db, self.kakao_id)
+
+        if not result["success"]:
+            return self._game_failure_response(result["message"])
+
+        profit = result["profit"]
+        rounds = result["rounds"]
+
+        if profit > 0:
+            profit_text = f"📈 +{profit:,}원"
+            if result["multiplier"] >= 5:
+                effect = "🎆🎇 대박 정산! 🎆🎇"
+            elif result["multiplier"] >= 3:
+                effect = "🎉 훌륭한 정산! 🎉"
+            elif result["multiplier"] >= 2:
+                effect = "✨ 좋은 정산! ✨"
+            else:
+                effect = "💰 정산 완료!"
+        else:
+            profit_text = f"📉 {profit:,}원"
+            effect = "💰 정산 완료!"
+
+        msg = f"""🔢 업다운 — 정산!
+
+{effect}
+
+🎯 맞춘 횟수: {rounds}라운드
+📊 최종 배율: x{result['multiplier']}
+
+💰 투자금: {result['bet']:,}원
+💎 수령액: {result['winnings']:,}원
+{profit_text}
+
+💵 잔고: {result['cash']:,}원"""
+
+        return KakaoResponse.quick_replies(
+            msg,
+            [
+                {"label": "🔢 다시 도전!", "action": "message", "messageText": f"/업다운 {result['bet']}"},
+                {"label": "🔮 시장예측", "action": "message", "messageText": f"/시장예측 {GameConfig.DEFAULT_BET}"},
+                {"label": "🚀 급등주", "action": "message", "messageText": "/급등"}
+            ]
+        )
+
+    def _updown_status_response(self, status: Dict) -> Dict:
+        """업다운 진행 상태 응답"""
+        number = status["number"]
+        up_mult = status["up_multiplier"]
+        down_mult = status["down_multiplier"]
+        potential = status["potential_winnings"]
+
+        msg = f"""🔢 업다운 — 진행 중!
+
+🎲 현재 숫자: {number}
+📊 라운드: {status['round']}
+💎 누적 배율: x{status['multiplier']}
+💰 투자금: {status['bet']:,}원
+💎 현재 가치: {potential:,}원
+
+다음 숫자가 {number}보다 높을까? 낮을까?"""
+
+        buttons = []
+        if status["can_up"]:
+            buttons.append({"label": f"📈 상승 (x{up_mult})", "action": "message", "messageText": "/업다운 상승"})
+        if status["can_down"]:
+            buttons.append({"label": f"📉 하락 (x{down_mult})", "action": "message", "messageText": "/업다운 하락"})
+        if status["round"] >= 2:
+            buttons.append({"label": f"💰 정산 ({potential:,}원)", "action": "message", "messageText": "/업다운정산"})
+
+        return KakaoResponse.quick_replies(msg, buttons)
+
+    def _updown_active_game_response(self, result: Dict) -> Dict:
+        """이미 진행중인 업다운 게임 알림"""
+        return KakaoResponse.quick_replies(
+            result["message"],
+            [
+                {"label": "📈 상승", "action": "message", "messageText": "/업다운 상승"},
+                {"label": "📉 하락", "action": "message", "messageText": "/업다운 하락"},
+                {"label": "💰 정산", "action": "message", "messageText": "/업다운정산"},
+            ]
+        )
+
+    # ==========================================
+    # 각성 시스템 (투자 감각 각성)
+    # ==========================================
+
+    def handle_enhance(self) -> Dict:
+        """각성 — 정보 보기 또는 각성 시도"""
+        parts = self.utterance.split()
+
+        # /각성 시도 → 실제 각성 실행
+        if len(parts) >= 2 and parts[1] in ["시도", "도전", "각성하기", "강화하기"]:
+            return self._do_enhance()
+
+        # /각성 → 정보 + 각성 버튼
+        return self._show_enhance_info()
+
+    def _show_enhance_info(self) -> Dict:
+        """각성 정보 표시"""
+        result = EnhanceService.get_enhance_info(self.db, self.kakao_id)
+
+        if not result["success"]:
+            return self._game_failure_response(result["message"])
+
+        level = result["level"]
+        title_name = result["title_name"]
+        title_emoji = result["title_emoji"]
+        att_mult = result["attendance_multiplier"]
+        lot_mult = result["lottery_multiplier"]
+
+        # 보너스 계산
+        att_bonus = int((att_mult - 1) * 100)
+        lot_bonus = int((lot_mult - 1) * 100)
+
+        # 레벨 게이지 바
+        gauge = self._make_gauge(level, EnhanceConfig.MAX_LEVEL)
+
+        msg = f"""{title_emoji} {title_name}
+
+🧬 각성 레벨: Lv.{level} / {EnhanceConfig.MAX_LEVEL}
+{gauge}
+
+📈 출석 보상 보너스: +{att_bonus}%
+🎫 복권 보상 보너스: +{lot_bonus}%"""
+
+        buttons = []
+
+        if result.get("max_reached"):
+            msg += "\n\n👑 최고 경지 도달! 당신은 투자의 신입니다!"
+            buttons = [
+                {"label": "📅 출석", "action": "message", "messageText": "/출석"},
+                {"label": "🎫 복권", "action": "message", "messageText": "/복권"},
+            ]
+        else:
+            cost = result["next_cost"]
+            rate = result["next_success_rate"]
+            fail_prob = result.get("fail_drop_prob", 0)
+            next_name = result.get("next_title_name", title_name)
+            next_emoji = result.get("next_title_emoji", title_emoji)
+
+            # 위험도 표시
+            if fail_prob == 0:
+                risk = "🟢 안전 (실패해도 레벨 유지)"
+            elif fail_prob <= 30:
+                risk = f"🟡 주의 (실패 시 {fail_prob}% 확률로 하락)"
+            elif fail_prob <= 50:
+                risk = f"🟠 위험 (실패 시 {fail_prob}% 확률로 하락)"
+            else:
+                risk = "🔴 극한 (실패 시 레벨 하락)"
+
+            msg += f"""
+
+📋 다음 각성 정보:
+💰 비용: {cost:,}원
+🎯 성공률: {rate}%
+{risk}
+
+{next_emoji} 성공 시 → {next_name} Lv.{level + 1}"""
+
+            can_afford = result["cash"] >= cost
+            if can_afford:
+                buttons.append(
+                    {"label": f"🧬 각성하기 ({cost:,}원)", "action": "message", "messageText": "/각성 시도"}
+                )
+            else:
+                msg += f"\n\n❌ 잔고 부족 (보유: {result['cash']:,}원)"
+
+        buttons.extend([
+            {"label": "📅 출석", "action": "message", "messageText": "/출석"},
+            {"label": "📈 예측게임", "action": "message", "messageText": "/예측"},
+        ])
+
+        return KakaoResponse.quick_replies(msg, buttons)
+
+    def _do_enhance(self) -> Dict:
+        """실제 각성 실행"""
+        result = EnhanceService.attempt_enhance(self.db, self.kakao_id)
+
+        if not result["success"]:
+            return self._game_failure_response(result["message"])
+
+        old_lv = result["old_level"]
+        new_lv = result["new_level"]
+        cost = result["cost"]
+        rate = result["success_rate"]
+
+        if result["enhanced"]:
+            # 성공!
+            new_emoji = result["new_emoji"]
+            new_name = result["new_title"]
+
+            if result["title_changed"]:
+                evolution_msg = f"\n\n🆙 새로운 경지에 도달!\n{result['old_emoji']} {result['old_title']} → {new_emoji} {new_name}"
+            else:
+                evolution_msg = ""
+
+            att_bonus = int((result["attendance_multiplier"] - 1) * 100)
+            lot_bonus = int((result["lottery_multiplier"] - 1) * 100)
+
+            # 성공 이펙트
+            if new_lv >= 20:
+                effect = "🎆🎇👑🎆🎇"
+            elif new_lv >= 15:
+                effect = "✨🎉✨"
+            elif new_lv >= 10:
+                effect = "🎊✨"
+            else:
+                effect = "✨"
+
+            msg = f"""{effect} 각성 성공! {effect}
+
+{new_emoji} {new_name} Lv.{old_lv} → Lv.{new_lv}
+🎯 성공률: {rate}%{evolution_msg}
+
+📈 출석 보너스: +{att_bonus}%
+🎫 복권 보너스: +{lot_bonus}%
+
+💰 사용: -{cost:,}원
+💵 잔고: {result['cash']:,}원"""
+
+        else:
+            # 실패
+            drop = result.get("drop", 0)
+            new_emoji = result["new_emoji"]
+            new_name = result["new_title"]
+
+            if drop > 0:
+                drop_msg = f"\n💥 레벨 하락! Lv.{old_lv} → Lv.{new_lv} (-{drop})"
+            else:
+                drop_msg = f"\n🛡️ 레벨 유지! Lv.{old_lv}"
+
+            msg = f"""💨 각성 실패...
+
+{new_emoji} {new_name}{drop_msg}
+🎯 성공률: {rate}% → 아쉽게 빗나감
+
+💰 사용: -{cost:,}원
+💵 잔고: {result['cash']:,}원"""
+
+        # 다시 각성 가능 여부 체크
+        buttons = []
+        if new_lv < EnhanceConfig.MAX_LEVEL:
+            next_cost = EnhanceConfig.get_cost(new_lv)
+            if result["cash"] >= next_cost:
+                buttons.append(
+                    {"label": f"🧬 다시 각성! ({next_cost:,}원)", "action": "message", "messageText": "/각성 시도"}
+                )
+            buttons.append({"label": "🧬 각성 정보", "action": "message", "messageText": "/각성"})
+
+        buttons.extend([
+            {"label": "📈 예측게임", "action": "message", "messageText": "/예측"},
             {"label": "🚀 급등주", "action": "message", "messageText": "/급등"},
         ])
 
         return KakaoResponse.quick_replies(msg, buttons)
 
-    def handle_slot(self) -> Dict:
-        """슬롯머신"""
-        parts = self.utterance.split()
-
-        bet = GameConfig.DEFAULT_BET
-        if len(parts) >= 2:
-            try:
-                bet = int(parts[1].replace(",", ""))
-            except ValueError:
-                return KakaoResponse.quick_replies(
-                    "배팅금은 숫자로 입력해주세요.\n예: /슬롯머신 50000",
-                    [
-                        {"label": "🎰 1만원", "action": "message", "messageText": "/슬롯머신 10000"},
-                        {"label": "🎰 5만원", "action": "message", "messageText": "/슬롯머신 50000"},
-                        {"label": "🎰 10만원", "action": "message", "messageText": "/슬롯머신 100000"}
-                    ]
-                )
-
-        result = GameService.play_slot(self.db, self.kakao_id, bet)
-
-        if not result["success"]:
-            return self._game_failure_response(result["message"])
-
-        slots = result["slots"]
-        slot_display = f"[ {slots[0]} | {slots[1]} | {slots[2]} ]"
-
-        # 배율별 흥분도 차등 메시지
-        multiplier = result["multiplier"]
-        if result["jackpot"]:
-            effect = "🎆🎇🎆 LEGENDARY JACKPOT!!! 🎆🎇🎆"
-            encourage = "전설이 되셨습니다! 👑"
-        elif multiplier >= 10:
-            effect = "💎 EPIC WIN! 💎"
-            encourage = "믿기 힘든 행운! 🌟"
-        elif multiplier >= 5:
-            effect = "🎉 BIG WIN! 🎉"
-            encourage = "대박! 계속 도전하세요! 🔥"
-        elif multiplier > 1:
-            effect = "✨ WIN! ✨"
-            encourage = "좋아요! 🎯"
-        elif multiplier > 0:
-            effect = "💫 SMALL WIN 💫"
-            encourage = "아깝네요, 한번 더!"
-        else:
-            # 근접 실패 감지 (2개 일치) - 도파민 최대화
-            if slots[0] == slots[1] or slots[1] == slots[2] or slots[0] == slots[2]:
-                # 어떤 심볼이 2개 일치했는지 확인
-                matched_symbol = None
-                if slots[0] == slots[1]:
-                    matched_symbol = slots[0]
-                elif slots[1] == slots[2]:
-                    matched_symbol = slots[1]
-                else:
-                    matched_symbol = slots[0]
-
-                # 고급 심볼일수록 더 아쉬운 메시지
-                if matched_symbol in ["7️⃣", "💎", "🚀"]:
-                    effect = f"🤯🤯 {matched_symbol} 2개!! 대박 직전!!"
-                    encourage = f"한 개만 더!! {matched_symbol}이 기다려요! 🔥🔥🔥"
-                else:
-                    effect = "😱 아깝다!! 2개 일치!"
-                    encourage = "거의 다 왔어요! 🔥 다시 한번!"
-            else:
-                effect = "💨 실패..."
-                encourage = "다음엔 될 거예요! 💪"
-
-        if result["profit"] >= 0:
-            profit_text = f"📈 +{result['profit']:,}원"
-        else:
-            profit_text = f"📉 {result['profit']:,}원"
-
-        msg = f"""🎰 슬롯머신
-
-{slot_display}
-
-{effect}
-{encourage}
-
-💰 배팅: {result['bet']:,}원
-🎯 배율: x{result['multiplier']}
-{profit_text}
-💵 잔고: {result['cash']:,}원"""
-
-        return KakaoResponse.quick_replies(
-            msg,
-            [
-                {"label": "🎰 한번 더!", "action": "message", "messageText": f"/슬롯머신 {bet}"},
-                {"label": "🎰 2배 배팅", "action": "message", "messageText": f"/슬롯머신 {bet * 2}"},
-                {"label": "🚀 급등주", "action": "message", "messageText": "/급등"}
-            ]
-        )
-
-    def handle_coin(self) -> Dict:
-        """동전 던지기"""
-        parts = self.utterance.split()
-
-        if len(parts) < 3:
-            return KakaoResponse.quick_replies(
-                "🪙 동전 던지기\n\n사용법: /동전 [금액] [앞/뒤]\n예: /동전 100000 앞",
-                [
-                    {"label": "🪙 10만 앞", "action": "message", "messageText": "/동전 100000 앞"},
-                    {"label": "🪙 10만 뒤", "action": "message", "messageText": "/동전 100000 뒤"},
-                    {"label": "🪙 50만 앞", "action": "message", "messageText": "/동전 500000 앞"},
-                    {"label": "🪙 50만 뒤", "action": "message", "messageText": "/동전 500000 뒤"}
-                ]
-            )
-
-        try:
-            bet = int(parts[1].replace(",", ""))
-        except ValueError:
-            return KakaoResponse.quick_replies(
-                "배팅금은 숫자로 입력해주세요.",
-                [
-                    {"label": "🪙 10만 앞", "action": "message", "messageText": "/동전 100000 앞"},
-                    {"label": "🪙 10만 뒤", "action": "message", "messageText": "/동전 100000 뒤"}
-                ]
-            )
-
-        choice = parts[2].strip()
-        result = GameService.play_coin_flip(self.db, self.kakao_id, bet, choice)
-
-        if not result["success"]:
-            return self._game_failure_response(result["message"])
-
-        if result["won"]:
-            effect = "🎉 WIN!"
-            profit_text = f"📈 +{result['profit']:,}원"
-        else:
-            effect = "💨 LOSE"
-            profit_text = f"📉 {result['profit']:,}원"
-
-        msg = f"""🪙 동전 던지기
-
-{result['emoji']} 결과: {result['result']}!
-🎯 선택: {result['choice']}
-
-{effect}
-
-💰 배팅: {result['bet']:,}원
-{profit_text}
-💵 잔고: {result['cash']:,}원"""
-
-        opposite = "뒤" if result["choice"] == "앞" else "앞"
-        return KakaoResponse.quick_replies(
-            msg,
-            [
-                {"label": "🪙 한번 더!", "action": "message", "messageText": f"/동전 {bet} {result['choice']}"},
-                {"label": "🪙 2배!", "action": "message", "messageText": f"/동전 {bet * 2} {result['choice']}"},
-                {"label": "🪙 반대로!", "action": "message", "messageText": f"/동전 {bet} {opposite}"},
-                {"label": "🚀 급등주", "action": "message", "messageText": "/급등"}
-            ]
-        )
-
-    def handle_highlow(self) -> Dict:
-        """하이로우 게임"""
-        parts = self.utterance.split()
-
-        if len(parts) < 3:
-            return KakaoResponse.quick_replies(
-                "🎲 하이로우\n\n1~100 중 숫자가 50보다 높을까 낮을까?\n\n사용법: /하이로우 [금액] [높/낮]",
-                [
-                    {"label": "🔼 10만 높", "action": "message", "messageText": "/하이로우 100000 높"},
-                    {"label": "🔽 10만 낮", "action": "message", "messageText": "/하이로우 100000 낮"},
-                    {"label": "🔼 50만 높", "action": "message", "messageText": "/하이로우 500000 높"}
-                ]
-            )
-
-        try:
-            bet = int(parts[1].replace(",", ""))
-        except ValueError:
-            return KakaoResponse.quick_replies(
-                "배팅금은 숫자로 입력해주세요.",
-                [
-                    {"label": "🔼 10만 높", "action": "message", "messageText": "/하이로우 100000 높"},
-                    {"label": "🔽 10만 낮", "action": "message", "messageText": "/하이로우 100000 낮"}
-                ]
-            )
-
-        choice = parts[2].strip()
-        result = GameService.play_high_low(self.db, self.kakao_id, bet, choice)
-
-        if not result["success"]:
-            return self._game_failure_response(result["message"])
-
-        if result["won"] is None:
-            msg = f"""🎲 하이로우
-
-🔢 숫자: {result['number']}
-
-😮 무승부! (50)
-배팅금 반환!
-
-💵 잔고: {result['cash']:,}원"""
-        else:
-            number = result['number']
-            if result["won"]:
-                # 승리 - 확실한 승리 vs 아슬아슬한 승리
-                if abs(number - 50) <= 5:
-                    effect = "🎉 아슬아슬 WIN! 🎉"
-                    encourage = "간발의 차이! 짜릿해요! ⚡"
-                elif abs(number - 50) >= 40:
-                    effect = "🎊 완벽한 WIN! 🎊"
-                    encourage = "확실한 승리! 👏"
-                else:
-                    effect = "🎉 WIN!"
-                    encourage = "좋아요! 계속 가보세요! 🔥"
-                profit_text = f"📈 +{result['profit']:,}원"
-            else:
-                # 패배 - 근접 실패 감지
-                if abs(number - 50) <= 3:
-                    effect = "😱 앗!! 거의 맞출 뻔!"
-                    encourage = f"50에서 {abs(number-50)}만 차이! 다시 도전! 🔥"
-                elif abs(number - 50) <= 10:
-                    effect = "😤 아깝다!"
-                    encourage = "조금만 더! 💪"
-                else:
-                    effect = "💨 LOSE"
-                    encourage = "다음엔 될 거예요!"
-                profit_text = f"📉 {result['profit']:,}원"
-
-            arrow = "🔼" if result["actual"] == "높" else "🔽"
-
-            msg = f"""🎲 하이로우
-
-🔢 숫자: {result['number']} {arrow}
-🎯 선택: {result['choice']} / 정답: {result['actual']}
-
-{effect}
-{encourage}
-
-💰 배팅: {result['bet']:,}원
-{profit_text}
-💵 잔고: {result['cash']:,}원"""
-
-        return KakaoResponse.quick_replies(
-            msg,
-            [
-                {"label": "🔼 높!", "action": "message", "messageText": f"/하이로우 {bet} 높"},
-                {"label": "🔽 낮!", "action": "message", "messageText": f"/하이로우 {bet} 낮"},
-                {"label": "🎲 2배!", "action": "message", "messageText": f"/하이로우 {bet * 2} {result.get('choice', '높')}"},
-                {"label": "🚀 급등주", "action": "message", "messageText": "/급등"}
-            ]
-        )
-
-    def handle_roulette(self) -> Dict:
-        """룰렛 게임"""
-        parts = self.utterance.split()
-
-        if len(parts) < 3:
-            return KakaoResponse.quick_replies(
-                "🎡 룰렛\n\n빨강/검정/초록 중 하나를 선택!\n\n🔴 빨강: 2배 (45%)\n⚫ 검정: 2배 (45%)\n🟢 초록: 9배 (10%)\n\n사용법: /룰렛 [금액] [색상]",
-                [
-                    {"label": "🔴 10만 빨강", "action": "message", "messageText": "/룰렛 100000 빨강"},
-                    {"label": "⚫ 10만 검정", "action": "message", "messageText": "/룰렛 100000 검정"},
-                    {"label": "🟢 10만 초록", "action": "message", "messageText": "/룰렛 100000 초록"}
-                ]
-            )
-
-        try:
-            bet = int(parts[1].replace(",", ""))
-        except ValueError:
-            return KakaoResponse.quick_replies(
-                "배팅금은 숫자로 입력해주세요.",
-                [
-                    {"label": "🔴 10만 빨강", "action": "message", "messageText": "/룰렛 100000 빨강"},
-                    {"label": "⚫ 10만 검정", "action": "message", "messageText": "/룰렛 100000 검정"}
-                ]
-            )
-
-        choice = parts[2].strip()
-        result = GameService.play_roulette(self.db, self.kakao_id, bet, choice)
-
-        if not result["success"]:
-            return self._game_failure_response(result["message"])
-
-        if result["won"]:
-            effect = "🎉 WIN!"
-            profit_text = f"📈 +{result['profit']:,}원"
-        else:
-            effect = "💨 LOSE"
-            profit_text = f"📉 {result['profit']:,}원"
-
-        choice_emoji = {"빨강": "🔴", "검정": "⚫", "초록": "🟢"}.get(result["choice"], "")
-
-        msg = f"""🎡 룰렛
-
-{result['emoji']} 결과: {result['result']}!
-{choice_emoji} 선택: {result['choice']}
-
-{effect}
-
-💰 배팅: {result['bet']:,}원
-{profit_text}
-💵 잔고: {result['cash']:,}원"""
-
-        choice_text = result.get("choice", "빨강")
-        return KakaoResponse.quick_replies(
-            msg,
-            [
-                {"label": f"🎡 {choice_text}!", "action": "message", "messageText": f"/룰렛 {bet} {choice_text}"},
-                {"label": "🎡 2배!", "action": "message", "messageText": f"/룰렛 {bet * 2} {choice_text}"},
-                {"label": "🟢 초록 9배!", "action": "message", "messageText": f"/룰렛 {bet} 초록"},
-                {"label": "🚀 급등주", "action": "message", "messageText": "/급등"}
-            ]
-        )
+    @staticmethod
+    def _make_gauge(current: int, maximum: int, length: int = 10) -> str:
+        """레벨 게이지 바 생성"""
+        filled = int((current / maximum) * length) if maximum > 0 else 0
+        empty = length - filled
+        bar = "▰" * filled + "▱" * empty
+        return f"[{bar}] {current}/{maximum}"

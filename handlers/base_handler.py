@@ -1,7 +1,7 @@
 """
 기본 핸들러 믹스인 (개선)
 - 공통 기능 제공
-- 도파민 요소 강화 (연속 보상, 스트릭, 레벨업)
+- 투자 동기부여 요소 (연속 보상, 스트릭, 레벨업)
 """
 from typing import Dict, List, Optional, Tuple
 from sqlalchemy.orm import Session
@@ -39,7 +39,7 @@ class BaseHandlerMixin:
 
     PROFIT_TIERS = [
         (1_000_000, "🤑 대박!", EFFECTS["jackpot"]),
-        (500_000, "💎 잭팟!", EFFECTS["big_win"]),
+        (500_000, "💎 대박수익!", EFFECTS["big_win"]),
         (100_000, "🎉 좋아요!", EFFECTS["win"]),
         (10_000, "👍 괜찮네요!", EFFECTS["small_win"]),
         (0, "📈 수익!", ""),
@@ -100,10 +100,10 @@ class BaseHandlerMixin:
     # ===========================================
 
     def _get_game_buttons(self) -> list:
-        """장 마감 시간에만 게임 버튼 반환"""
+        """장 마감 시간에만 예측게임 버튼 반환"""
         if is_market_closed():
             return [
-                {"label": "🎰 게임", "action": "message", "messageText": "/게임"}
+                {"label": "📈 예측게임", "action": "message", "messageText": "/예측"}
             ]
         return []
 
@@ -122,37 +122,23 @@ class BaseHandlerMixin:
         return buttons
 
     def _get_continue_game_buttons(self, game_type: str, bet: int, choice: str = None) -> List[Dict]:
-        """게임 계속하기 버튼 (도파민 유도)"""
+        """예측게임 계속하기 버튼"""
         buttons = []
 
         if game_type == "lottery":
             buttons.append({"label": "🎫 한번 더!", "action": "message", "messageText": "/복권"})
-        elif game_type == "slot":
+        elif game_type == "stock_quiz":
             buttons.extend([
-                {"label": "🎰 한번 더!", "action": "message", "messageText": f"/슬롯머신 {bet}"},
-                {"label": "🎰 2배 배팅!", "action": "message", "messageText": f"/슬롯머신 {bet * 2}"},
+                {"label": "🔮 한번 더!", "action": "message", "messageText": f"/시장예측 {bet}"},
+                {"label": "🔮 2배!", "action": "message", "messageText": f"/시장예측 {bet * 2}"},
             ])
-        elif game_type == "coin":
-            opposite = "뒤" if choice == "앞" else "앞"
+        elif game_type == "updown":
             buttons.extend([
-                {"label": "🪙 한번 더!", "action": "message", "messageText": f"/동전 {bet} {choice}"},
-                {"label": f"🪙 {opposite}으로!", "action": "message", "messageText": f"/동전 {bet} {opposite}"},
-            ])
-        elif game_type == "highlow":
-            opposite = "낮" if choice == "높" else "높"
-            buttons.extend([
-                {"label": "🎲 한번 더!", "action": "message", "messageText": f"/하이로우 {bet} {choice}"},
-                {"label": f"🎲 {opposite}으로!", "action": "message", "messageText": f"/하이로우 {bet} {opposite}"},
-            ])
-        elif game_type == "roulette":
-            buttons.extend([
-                {"label": "🔴 빨강!", "action": "message", "messageText": f"/룰렛 {bet} 빨강"},
-                {"label": "⚫ 검정!", "action": "message", "messageText": f"/룰렛 {bet} 검정"},
-                {"label": "🟢 초록!", "action": "message", "messageText": f"/룰렛 {bet} 초록"},
+                {"label": "🔢 새 게임!", "action": "message", "messageText": f"/업다운 {bet}"},
             ])
 
-        # 다른 게임 추천
-        buttons.append({"label": "🎰 다른 게임", "action": "message", "messageText": "/게임"})
+        # 다른 예측게임 추천
+        buttons.append({"label": "📈 다른 예측", "action": "message", "messageText": "/예측"})
         return buttons
 
     def _get_navigation_buttons(self) -> List[Dict]:
@@ -190,7 +176,7 @@ class BaseHandlerMixin:
         return [
             {"label": "🚀 급등주 투자", "action": "message", "messageText": "/급등"},
             {"label": "📉 저점매수", "action": "message", "messageText": "/급락"},
-            {"label": "🎰 게임으로 도전", "action": "message", "messageText": "/게임"},
+            {"label": "📈 예측게임", "action": "message", "messageText": "/예측"},
             {"label": "💼 포폴", "action": "message", "messageText": "/포트폴리오"},
         ]
 
@@ -211,7 +197,7 @@ class BaseHandlerMixin:
     def _parse_with_amount(self) -> Tuple[str, Optional[int], bool]:
         """
         금액이 포함된 명령어 파싱
-        예: /슬롯머신 50000
+        예: /시장예측 50000
         Returns: (command, amount, is_valid)
         """
         parts = self.utterance.split()
@@ -310,14 +296,14 @@ class BaseHandlerMixin:
     # ===========================================
 
     def _market_closed_response(self, message: str = None) -> Dict:
-        """장 마감 시 공통 응답 (게임 유도)"""
+        """장 마감 시 공통 응답 (예측게임 유도)"""
         if message is None:
-            message = "📢 현재 장이 열려있지 않아요!\n\n🎮 장 마감 시간에는 미니게임을 즐겨보세요!"
+            message = "📢 현재 장이 열려있지 않아요!\n\n📈 장 마감 시간에는 예측게임을 즐겨보세요!"
         return KakaoResponse.quick_replies(
             message,
             [
                 {"label": "🎫 복권", "action": "message", "messageText": "/복권"},
-                {"label": "🎰 슬롯머신", "action": "message", "messageText": f"/슬롯머신 {GameConfig.DEFAULT_BET}"},
+                {"label": "🔮 시장예측", "action": "message", "messageText": f"/시장예측 {GameConfig.DEFAULT_BET}"},
                 {"label": "💼 포트폴리오", "action": "message", "messageText": "/포트폴리오"}
             ]
         )
@@ -346,7 +332,7 @@ class BaseHandlerMixin:
 
     def _parse_bet_amount(self, default: int = None) -> Tuple[int, bool]:
         """
-        배팅 금액 파싱 헬퍼
+        투자 금액 파싱 헬퍼
         Returns: (amount, is_valid)
         """
         if default is None:

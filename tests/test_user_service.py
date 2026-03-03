@@ -2,8 +2,7 @@
 UserService 단위 테스트
 - 유저 생성, 출석 체크, 닉네임 변경, 잔고 관리
 """
-import pytest
-from datetime import date, timedelta
+from datetime import timedelta
 from unittest.mock import patch
 
 from services.user_service import UserService
@@ -89,7 +88,7 @@ class TestAttendance:
         """출석 성공"""
         with patch("services.asset_service.AssetService.record_daily_asset"), \
              patch("services.user_service.log_attendance"):
-            success, reward, streak, cash = UserService.check_attendance(
+            success, reward, streak, cash, _enhance = UserService.check_attendance(
                 db, test_user.kakao_id
             )
         assert success is True
@@ -102,7 +101,7 @@ class TestAttendance:
         with patch("services.asset_service.AssetService.record_daily_asset"), \
              patch("services.user_service.log_attendance"):
             UserService.check_attendance(db, test_user.kakao_id)
-            success, reward, streak, cash = UserService.check_attendance(
+            success, reward, streak, cash, _enhance = UserService.check_attendance(
                 db, test_user.kakao_id
             )
         assert success is False
@@ -110,7 +109,7 @@ class TestAttendance:
 
     def test_attendance_unknown_user(self, db):
         """존재하지 않는 유저 출석"""
-        success, reward, streak, cash = UserService.check_attendance(
+        success, reward, streak, cash, _enhance = UserService.check_attendance(
             db, "nonexistent_user"
         )
         assert success is False
@@ -118,7 +117,6 @@ class TestAttendance:
 
     def test_attendance_streak_continues(self, db, test_user):
         """연속 출석 스트릭 계산"""
-        from models import User
         from config import KST
         from datetime import datetime
 
@@ -130,7 +128,7 @@ class TestAttendance:
 
         with patch("services.asset_service.AssetService.record_daily_asset"), \
              patch("services.user_service.log_attendance"):
-            success, reward, streak, cash = UserService.check_attendance(
+            success, reward, streak, cash, _enhance = UserService.check_attendance(
                 db, test_user.kakao_id
             )
 
@@ -150,7 +148,7 @@ class TestAttendance:
 
         with patch("services.asset_service.AssetService.record_daily_asset"), \
              patch("services.user_service.log_attendance"):
-            success, reward, streak, cash = UserService.check_attendance(
+            success, reward, streak, cash, _enhance = UserService.check_attendance(
                 db, test_user.kakao_id
             )
 

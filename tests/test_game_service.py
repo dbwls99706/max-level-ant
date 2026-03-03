@@ -1,8 +1,7 @@
 """
 GameService 단위 테스트
-- 복권, 슬롯, 룰렛, 하이로우, 동전
+- 복권, 시장예측(역사 퀴즈), 업다운(멀티라운드)
 """
-import pytest
 from unittest.mock import patch
 
 from services.game_service import GameService
@@ -48,109 +47,160 @@ class TestLottery:
         assert result["success"] is True
 
 
-class TestSlotMachine:
-    """슬롯머신 테스트"""
+class TestStockQuiz:
+    """시장예측 (역사 퀴즈) 테스트"""
 
-    def test_slot_requires_market_closed(self, db, test_user):
-        """슬롯은 정규장 시간에 불가"""
-        # check_market_closed_for_game이 services.common.is_market_open를 사용
+    def test_stock_quiz_success(self, db, rich_user):
+        """역사 퀴즈 기본 실행"""
+        with patch("services.common.is_market_open", return_value=False), \
+             patch("services.game_service.log_game"):
+            result = GameService.play_stock_quiz(db, rich_user.kakao_id, 10_000, "상승")
+        assert result["success"] is True
+        assert "quiz" in result
+        assert "won" in result
+        assert result["choice"] == "상승"
+
+    def test_stock_quiz_invalid_choice(self, db, rich_user):
+        """잘못된 선택"""
+        with patch("services.common.is_market_open", return_value=False):
+            result = GameService.play_stock_quiz(db, rich_user.kakao_id, 10_000, "급등")
+        assert result["success"] is False
+        assert result["error_code"] == ErrorCode.INVALID_CHOICE
+
+    def test_stock_quiz_normalizes_choice(self, db, rich_user):
+        """선택 정규화 (상 → 상승)"""
+        with patch("services.common.is_market_open", return_value=False), \
+             patch("services.game_service.log_game"):
+            result = GameService.play_stock_quiz(db, rich_user.kakao_id, 10_000, "상")
+        assert result["success"] is True
+        assert result["choice"] == "상승"
+
+    def test_stock_quiz_requires_market_closed(self, db, rich_user):
+        """정규장 시간에 불가"""
         with patch("services.common.is_market_open", return_value=True), \
              patch("services.common.get_market_status_message", return_value="장 중"):
-            result = GameService.play_slot(db, test_user.kakao_id, 50_000)
+            result = GameService.play_stock_quiz(db, rich_user.kakao_id, 10_000, "상승")
         assert result["success"] is False
         assert result["error_code"] == ErrorCode.MARKET_CLOSED
 
-    def test_slot_success(self, db, test_user):
-        """슬롯 기본 실행"""
+    def test_stock_quiz_returns_quiz_data(self, db, rich_user):
+        """퀴즈 데이터가 올바르게 반환되는지"""
         with patch("services.common.is_market_open", return_value=False), \
              patch("services.game_service.log_game"):
-            result = GameService.play_slot(db, test_user.kakao_id, 50_000)
+            result = GameService.play_stock_quiz(db, rich_user.kakao_id, 10_000, "상승")
         assert result["success"] is True
-        assert "slots" in result
-        assert len(result["slots"]) == 3
-
-    def test_slot_invalid_bet(self, db, test_user):
-        """유효하지 않은 배팅금"""
-        with patch("services.common.is_market_open", return_value=False):
-            result = GameService.play_slot(db, test_user.kakao_id, -100)
-        assert result["success"] is False
+        quiz = result["quiz"]
+        assert "stock_name" in quiz
+        assert "period" in quiz
+        assert "description" in quiz
+        assert quiz["answer"] in ["상승", "하락"]
 
 
-class TestRoulette:
-    """룰렛 테스트"""
+class TestUpdownMultiRound:
+    """업다운 멀티라운드 테스트"""
 
-    def test_roulette_win_red(self, db, rich_user):
-        """빨강 당첨"""
-        import random
-        with patch("services.common.is_market_open", return_value=False), \
-             patch("services.game_service.log_game"), \
-             patch("random.random", return_value=0.01):  # 빨강 당첨 확률 범위
-            result = GameService.play_roulette(db, rich_user.kakao_id, 10_000, "빨강")
-        assert result["success"] is True
-
-    def test_roulette_invalid_choice(self, db, rich_user):
-        """잘못된 선택"""
-        with patch("services.common.is_market_open", return_value=False):
-            result = GameService.play_roulette(db, rich_user.kakao_id, 10_000, "노랑")
-        assert result["success"] is False
-        assert result["error_code"] == ErrorCode.INVALID_CHOICE
-
-    def test_roulette_normalizes_choice(self, db, rich_user):
-        """선택 정규화 (빨 → 빨강)"""
+    def test_start_updown(self, db, rich_user):
+        """업다운 게임 시작"""
         with patch("services.common.is_market_open", return_value=False), \
              patch("services.game_service.log_game"):
-            result = GameService.play_roulette(db, rich_user.kakao_id, 10_000, "빨")
+            result = GameService.start_updown(db, rich_user.kakao_id, 50_000)
         assert result["success"] is True
+        assert result["started"] is True
+        assert 5 <= result["number"] <= 95
+        assert result["round"] == 1
+        assert result["multiplier"] == 1.0
 
-
-class TestHighLow:
-    """하이로우 테스트"""
-
-    def test_highlow_win(self, db, rich_user):
-        """하이로우 당첨"""
+    def test_start_updown_deducts_bet(self, db, rich_user):
+        """게임 시작 시 투자금 차감"""
+        initial_cash = rich_user.cash
         with patch("services.common.is_market_open", return_value=False), \
-             patch("services.game_service.log_game"), \
-             patch("random.randint", return_value=75):  # 높음
-            result = GameService.play_high_low(db, rich_user.kakao_id, 10_000, "높")
-        assert result["success"] is True
-        assert result["won"] is True
+             patch("services.game_service.log_game"):
+            result = GameService.start_updown(db, rich_user.kakao_id, 50_000)
+        assert result["cash"] == initial_cash - 50_000
 
-    def test_highlow_draw(self, db, rich_user):
-        """하이로우 무승부 (50)"""
+    def test_updown_round_win(self, db, rich_user):
+        """업다운 라운드 적중"""
         with patch("services.common.is_market_open", return_value=False), \
-             patch("random.randint", return_value=50):
-            result = GameService.play_high_low(db, rich_user.kakao_id, 10_000, "높")
-        assert result["success"] is True
-        assert result["won"] is None  # 무승부
-        assert result["profit"] == 0
+             patch("services.game_service.log_game"):
+            GameService.start_updown(db, rich_user.kakao_id, 50_000)
 
-    def test_highlow_invalid_choice(self, db, rich_user):
-        """잘못된 선택"""
-        with patch("services.common.is_market_open", return_value=False):
-            result = GameService.play_high_low(db, rich_user.kakao_id, 10_000, "중간")
-        assert result["success"] is False
-        assert result["error_code"] == ErrorCode.INVALID_CHOICE
+        # 현재 숫자를 강제 설정
+        rich_user.updown_current_number = 30
+        db.commit()
 
-
-class TestCoinFlip:
-    """동전 던지기 테스트"""
-
-    def test_coinflip_win(self, db, rich_user):
-        """동전 당첨"""
-        with patch("services.common.is_market_open", return_value=False), \
-             patch("services.game_service.log_game"), \
-             patch("random.choice", return_value="앞"):
-            result = GameService.play_coin_flip(db, rich_user.kakao_id, 10_000, "앞")
+        # 다음 숫자를 60으로 고정 (상승 적중)
+        with patch("services.game_service.random.choice", return_value=60), \
+             patch("services.game_service.log_game"):
+            result = GameService.play_updown_round(db, rich_user.kakao_id, "상승")
         assert result["success"] is True
         assert result["won"] is True
+        assert result["total_multiplier"] > 1.0
 
-    def test_coinflip_loss(self, db, rich_user):
-        """동전 패배"""
+    def test_updown_round_loss(self, db, rich_user):
+        """업다운 라운드 실패"""
         with patch("services.common.is_market_open", return_value=False), \
-             patch("services.game_service.log_game"), \
-             patch("random.choice", return_value="뒤"):
-            result = GameService.play_coin_flip(db, rich_user.kakao_id, 10_000, "앞")
+             patch("services.game_service.log_game"):
+            GameService.start_updown(db, rich_user.kakao_id, 50_000)
+
+        rich_user.updown_current_number = 30
+        db.commit()
+
+        # 다음 숫자를 10으로 고정 (하락 → 상승 예측 실패)
+        with patch("services.game_service.random.choice", return_value=10), \
+             patch("services.game_service.log_game"):
+            result = GameService.play_updown_round(db, rich_user.kakao_id, "상승")
         assert result["success"] is True
         assert result["won"] is False
-        assert result["winnings"] == 0
-        assert result["profit"] < 0
+        assert result["profit"] == -50_000
+
+    def test_updown_cashout(self, db, rich_user):
+        """업다운 중간 정산"""
+        with patch("services.common.is_market_open", return_value=False), \
+             patch("services.game_service.log_game"):
+            GameService.start_updown(db, rich_user.kakao_id, 50_000)
+
+        # 1라운드 적중 시뮬레이션
+        rich_user.updown_current_number = 30
+        rich_user.updown_round = 2
+        rich_user.updown_multiplier = 1.42
+        db.commit()
+
+        with patch("services.game_service.log_game"):
+            result = GameService.cashout_updown(db, rich_user.kakao_id)
+        assert result["success"] is True
+        assert result["multiplier"] == 1.42
+        assert result["profit"] > 0
+
+    def test_updown_cashout_requires_round(self, db, rich_user):
+        """정산은 최소 1라운드 적중 필요"""
+        with patch("services.common.is_market_open", return_value=False), \
+             patch("services.game_service.log_game"):
+            GameService.start_updown(db, rich_user.kakao_id, 50_000)
+
+        result = GameService.cashout_updown(db, rich_user.kakao_id)
+        assert result["success"] is False
+
+    def test_updown_no_active_game(self, db, rich_user):
+        """진행 중인 게임 없이 라운드 시도"""
+        result = GameService.play_updown_round(db, rich_user.kakao_id, "상승")
+        assert result["success"] is False
+        assert result["error_code"] == ErrorCode.INVALID_STATE
+
+    def test_updown_prevents_double_start(self, db, rich_user):
+        """이미 진행 중인 게임이 있으면 새 게임 시작 불가"""
+        with patch("services.common.is_market_open", return_value=False), \
+             patch("services.game_service.log_game"):
+            GameService.start_updown(db, rich_user.kakao_id, 50_000)
+            result = GameService.start_updown(db, rich_user.kakao_id, 50_000)
+        assert result["success"] is False
+        assert result.get("active_game") is True
+
+    def test_updown_invalid_choice(self, db, rich_user):
+        """잘못된 선택"""
+        with patch("services.common.is_market_open", return_value=False), \
+             patch("services.game_service.log_game"):
+            GameService.start_updown(db, rich_user.kakao_id, 50_000)
+
+        result = GameService.play_updown_round(db, rich_user.kakao_id, "중간")
+        assert result["success"] is False
+        assert result["error_code"] == ErrorCode.INVALID_CHOICE

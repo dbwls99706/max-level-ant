@@ -13,7 +13,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from models import User
 from config import (
     GameConfig, Messages, ErrorCode,
-    is_market_closed, is_market_open, get_market_status_message
+    is_market_open, get_market_status_message
 )
 from utils import get_service_logger
 
@@ -100,7 +100,7 @@ def get_user_with_error_for_update(db: Session, kakao_id: str) -> Tuple[Optional
 
 
 # ===========================================
-# 배팅 검증
+# 투자금 검증
 # ===========================================
 
 def validate_bet(
@@ -110,13 +110,13 @@ def validate_bet(
     max_bet: int = None
 ) -> Tuple[bool, str]:
     """
-    배팅금 검증
+    투자금 검증
 
     Args:
-        bet: 배팅 금액
+        bet: 투자 금액
         user_cash: 유저 보유 현금
-        min_bet: 최소 배팅금 (기본: GameConfig.MIN_BET)
-        max_bet: 최대 배팅금 (기본: 100억)
+        min_bet: 최소 투자금 (기본: GameConfig.MIN_BET)
+        max_bet: 최대 투자금 (기본: 100억)
 
     Returns:
         (is_valid: bool, error_message: str)
@@ -127,13 +127,13 @@ def validate_bet(
         max_bet = 10_000_000_000  # 100억 (오버플로우 방지)
 
     if bet <= 0:
-        return False, "배팅금은 0보다 커야 합니다."
+        return False, "투자금은 0보다 커야 합니다."
 
     if bet < min_bet:
-        return False, f"최소 배팅금은 {min_bet:,}원입니다."
+        return False, f"최소 투자금은 {min_bet:,}원입니다."
 
     if bet > max_bet:
-        return False, f"최대 배팅금은 {max_bet:,}원입니다."
+        return False, f"최대 투자금은 {max_bet:,}원입니다."
 
     if user_cash < bet:
         return False, f"잔액 부족! (보유: {user_cash:,}원, 필요: {bet:,}원)"

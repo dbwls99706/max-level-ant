@@ -4,7 +4,6 @@ services/common.py 단위 테스트
 - validate_bet, validate_quantity
 - error_response, success_response
 """
-import pytest
 from services.common import (
     safe_add, safe_subtract, safe_multiply,
     validate_bet, validate_quantity,
@@ -55,7 +54,7 @@ class TestSafeMath:
 
 
 class TestValidateBet:
-    """배팅금 검증 테스트"""
+    """투자금 검증 테스트"""
 
     def test_valid_bet(self):
         is_valid, _ = validate_bet(10_000, 1_000_000)
@@ -82,7 +81,7 @@ class TestValidateBet:
         assert "최대" in msg
 
     def test_bet_exactly_cash(self):
-        """잔액과 동일한 배팅 허용"""
+        """잔액과 동일한 투자금 허용"""
         is_valid, _ = validate_bet(500_000, 500_000)
         assert is_valid is True
 

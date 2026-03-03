@@ -196,7 +196,7 @@ class MarketHandlerMixin(BaseHandlerMixin):
             change = k.get("change", 0)
             price = k.get("price", 0)
             emoji = "🔺" if change >= 0 else "🔻"
-            msg += f"\n🇰🇷 KOSPI"
+            msg += "\n🇰🇷 KOSPI"
             msg += f"\n   {price:,.2f} ({change:+.2f}%) {emoji}\n"
 
         if "kosdaq" in market:
@@ -204,7 +204,7 @@ class MarketHandlerMixin(BaseHandlerMixin):
             change = k.get("change", 0)
             price = k.get("price", 0)
             emoji = "🔺" if change >= 0 else "🔻"
-            msg += f"\n💹 KOSDAQ"
+            msg += "\n💹 KOSDAQ"
             msg += f"\n   {price:,.2f} ({change:+.2f}%) {emoji}\n"
 
         return KakaoResponse.quick_replies(

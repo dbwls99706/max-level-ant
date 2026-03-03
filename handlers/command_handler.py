@@ -35,7 +35,7 @@ class CommandHandler(
 
     각 기능별 핸들러 믹스인을 상속받아 사용합니다.
     - TradingHandlerMixin: 거래 관련 (매수, 매도, 포트폴리오)
-    - GameHandlerMixin: 미니게임 (복권, 슬롯, 동전 등)
+    - GameHandlerMixin: 예측게임 (복권, 시장예측, 업다운)
     - MarketHandlerMixin: 시장 정보 (급등주, 뉴스, 검색)
     - SocialHandlerMixin: 소셜/경쟁 (랭킹, 배틀, 챌린지)
     """
@@ -86,20 +86,20 @@ class CommandHandler(
         "/뉴스": "handle_news",
         "/ㄴㅅ": "handle_news",
 
-        # 미니게임
-        "/게임": "handle_game_menu",
-        "/미니게임": "handle_game_menu",
+        # 예측게임
+        "/예측": "handle_game_menu",
+        "/예측게임": "handle_game_menu",
         "/복권": "handle_lottery",
         "/ㅂㄱ": "handle_lottery",
-        "/슬롯머신": "handle_slot",
-        "/ㅅㄹㅁ": "handle_slot",
-        "/동전": "handle_coin",
-        "/코인": "handle_coin",
-        "/ㄷㅈ": "handle_coin",
-        "/하이로우": "handle_highlow",
-        "/ㅎㅇㄹㅇ": "handle_highlow",
-        "/룰렛": "handle_roulette",
-        "/ㄹㄹ": "handle_roulette",
+        "/시장예측": "handle_stock_quiz",
+        "/ㅅㅈ": "handle_stock_quiz",
+        "/업다운정산": "handle_updown_cashout",
+        "/업다운": "handle_updown",
+        "/ㅇㄷ": "handle_updown",
+        "/각성": "handle_enhance",
+        "/ㄱㅎ": "handle_enhance",
+        "/능력": "handle_enhance",
+        "/강화": "handle_enhance",
 
         # 소셜/경쟁
         "/랭킹": "handle_ranking",
@@ -201,7 +201,7 @@ class CommandHandler(
             welcome_msg = Messages.WELCOME.format(initial_cash=GameConfig.INITIAL_CASH)
             buttons = [
                 {"label": "📅 출석 +30만", "action": "message", "messageText": "/출석"},
-                {"label": "🎫 무료복권", "action": "message", "messageText": "/복권"},
+                {"label": "🎫 복권", "action": "message", "messageText": "/복권"},
                 {"label": "🚀 급등주", "action": "message", "messageText": "/급등"},
             ]
             return KakaoResponse.quick_replies(welcome_msg, buttons)
@@ -218,7 +218,7 @@ class CommandHandler(
 
     def handle_attendance(self) -> Dict:
         """출석 체크"""
-        success, reward, streak, cash = UserService.check_attendance(self.db, self.kakao_id)
+        success, reward, streak, cash, enhance_level = UserService.check_attendance(self.db, self.kakao_id)
 
         if not success and reward == 0 and streak == 0:
             return KakaoResponse.quick_replies(
@@ -248,9 +248,16 @@ class CommandHandler(
 
         if success:
             motivation = get_streak_motivation(streak, True)
+            enhance_line = ""
+            if enhance_level > 0:
+                from config import EnhanceConfig
+                title_name, title_emoji = EnhanceConfig.get_title(enhance_level)
+                att_bonus = int((EnhanceConfig.get_attendance_multiplier(enhance_level) - 1) * 100)
+                enhance_line = f"\n{title_emoji} {title_name} 보너스: +{att_bonus}% (Lv.{enhance_level})"
+
             msg = f"""✅ 출석 완료!
 
-💰 +{reward:,}원 지급!
+💰 +{reward:,}원 지급!{enhance_line}
 {streak_emoji} 연속 출석: {streak}일
 
 {motivation}

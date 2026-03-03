@@ -163,7 +163,7 @@ class TradingHandlerMixin(BaseHandlerMixin):
         return KakaoResponse.quick_replies(
             msg,
             [
-                {"label": f"🔄 추가매수", "action": "message", "messageText": f"/시세 {data['name']}"},
+                {"label": "🔄 추가매수", "action": "message", "messageText": f"/시세 {data['name']}"},
                 {"label": "💼 포트폴리오", "action": "message", "messageText": "/포트폴리오"},
                 {"label": "🚀 급등주", "action": "message", "messageText": "/급등"}
             ]

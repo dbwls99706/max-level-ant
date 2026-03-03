@@ -2,7 +2,6 @@
 MissionService 단위 테스트
 - 일간 미션, 업적 달성
 """
-import pytest
 from services.mission_service import MissionService, ACHIEVEMENTS
 from config import GameConfig
 

@@ -368,12 +368,12 @@ class GameConfig:
     WEEKLY_BONUS_DAY = 0  # 월요일 (0=월, 6=일)
     WEEKLY_BONUS_MULTIPLIER = 2.0  # 2배 보너스
 
-    # 미니게임/배팅 설정
-    MIN_BET = 10_000  # 최소 배팅금 1만원
-    MAX_BET = 999_999_999_999  # 최대 배팅금 9999억 9999만 9999원
-    DEFAULT_BET = 50_000  # 기본 배팅금 5만원
-    BIG_BET = 500_000  # 큰 배팅금 50만원 (게임 메뉴용)
-    DEFAULT_BATTLE_BET = 100_000  # 배틀 기본 배팅금 10만원
+    # 예측게임/투자 설정
+    MIN_BET = 10_000  # 최소 투자금 1만원
+    MAX_BET = 999_999_999_999  # 최대 투자금 9999억 9999만 9999원
+    DEFAULT_BET = 50_000  # 기본 투자금 5만원
+    BIG_BET = 500_000  # 큰 투자금 50만원 (게임 메뉴용)
+    DEFAULT_BATTLE_BET = 100_000  # 배틀 기본 투자금 10만원
     LOTTERY_COST = 0  # 복권 가격 (무료)
     MAX_LOTTERY_PER_DAY = 5  # 복권 1일 최대 횟수
 
@@ -407,34 +407,121 @@ class GameProbability:
         "꽝": {"prob": 0.33, "min_reward": 0, "max_reward": 0},                  # 33%
     }
 
-    # 슬롯머신 확률
-    SLOT_SYMBOLS = ["🍒", "🍋", "🍊", "🍇", "💎", "7️⃣", "🚀"]
+    # 시장예측 (역사 퀴즈) — 상승/하락 맞추면 x2 (기대값: 지식 의존)
+    STOCK_QUIZ_MULTIPLIER = 2.0
 
-    # (심볼, 배수, 확률) — 기대값 100%
-    SLOT_PAYOUTS = [
-        ("7️⃣", 50, 0.0005),   # 0.05% - 잭팟 (희귀)
-        ("💎", 20, 0.0015),    # 0.15% (희귀)
-        ("🚀", 10, 0.003),     # 0.3% (희귀)
-        ("🍇", 5, 0.012),      # 1.2%
-        ("🍊", 3, 0.025),      # 2.5%
-        ("🍋", 2, 0.0575),     # 5.75%
-        ("🍒", 1.5, 0.10),     # 10%
-        ("MATCH2", 1, 0.515),  # 51.5% - 2개 일치 (본전)
-        ("LOSE", 0, 0.2855),   # 28.55% - 꽝
+    # 역사 퀴즈 데이터 — 실제 한국 주식 역사 기반
+    # answer: "상승" 또는 "하락"
+    HISTORICAL_STOCK_DATA = [
+        # === 삼성전자 (005930) ===
+        {"stock_name": "삼성전자", "period": "2017년 1월 ~ 2018년 1월", "answer": "상승",
+         "description": "반도체 슈퍼사이클로 메모리 수요 폭발"},
+        {"stock_name": "삼성전자", "period": "2018년 1월 ~ 2019년 1월", "answer": "하락",
+         "description": "메모리 반도체 가격 하락 사이클 진입"},
+        {"stock_name": "삼성전자", "period": "2020년 3월 ~ 2021년 1월", "answer": "상승",
+         "description": "코로나 이후 반도체 수요 급증, 언택트 호황"},
+        {"stock_name": "삼성전자", "period": "2021년 1월 ~ 2022년 1월", "answer": "하락",
+         "description": "글로벌 공급망 혼란과 금리 인상 우려"},
+        {"stock_name": "삼성전자", "period": "2022년 1월 ~ 2023년 1월", "answer": "하락",
+         "description": "메모리 다운사이클, 글로벌 IT 투자 위축"},
+        {"stock_name": "삼성전자", "period": "2023년 1월 ~ 2024년 1월", "answer": "상승",
+         "description": "AI 반도체 기대감, HBM 수요 증가"},
+
+        # === SK하이닉스 (000660) ===
+        {"stock_name": "SK하이닉스", "period": "2017년 1월 ~ 2018년 1월", "answer": "상승",
+         "description": "메모리 호황, DRAM 가격 급등"},
+        {"stock_name": "SK하이닉스", "period": "2018년 6월 ~ 2019년 6월", "answer": "하락",
+         "description": "반도체 다운사이클, 재고 증가"},
+        {"stock_name": "SK하이닉스", "period": "2020년 3월 ~ 2021년 3월", "answer": "상승",
+         "description": "코로나 저점 반등, 서버 메모리 수요 증가"},
+        {"stock_name": "SK하이닉스", "period": "2021년 6월 ~ 2022년 6월", "answer": "하락",
+         "description": "메모리 업황 둔화, 금리 인상 공포"},
+        {"stock_name": "SK하이닉스", "period": "2023년 1월 ~ 2024년 1월", "answer": "상승",
+         "description": "AI 열풍, HBM3 독점 공급 기대"},
+
+        # === 네이버 (035420) ===
+        {"stock_name": "네이버", "period": "2020년 3월 ~ 2021년 3월", "answer": "상승",
+         "description": "코로나로 온라인 커머스/광고 폭발 성장"},
+        {"stock_name": "네이버", "period": "2021년 7월 ~ 2022년 7월", "answer": "하락",
+         "description": "기술주 밸류에이션 조정, 금리 인상"},
+        {"stock_name": "네이버", "period": "2019년 1월 ~ 2020년 1월", "answer": "상승",
+         "description": "커머스 사업 확대, 라인 실적 개선"},
+
+        # === 카카오 (035720) ===
+        {"stock_name": "카카오", "period": "2020년 3월 ~ 2021년 6월", "answer": "상승",
+         "description": "언택트 수혜, 카카오뱅크/카카오페이 상장 기대"},
+        {"stock_name": "카카오", "period": "2021년 6월 ~ 2022년 6월", "answer": "하락",
+         "description": "문어발 확장 규제 우려, 기술주 약세"},
+        {"stock_name": "카카오", "period": "2022년 10월 ~ 2023년 3월", "answer": "하락",
+         "description": "카카오 데이터센터 화재, SM엔터 인수전 혼란"},
+
+        # === 현대자동차 (005380) ===
+        {"stock_name": "현대자동차", "period": "2018년 1월 ~ 2019년 1월", "answer": "하락",
+         "description": "중국 시장 부진, SUV 트렌드 늦은 대응"},
+        {"stock_name": "현대자동차", "period": "2020년 3월 ~ 2021년 1월", "answer": "상승",
+         "description": "전기차 전환 기대, 애플카 협력 루머"},
+        {"stock_name": "현대자동차", "period": "2022년 1월 ~ 2023년 1월", "answer": "상승",
+         "description": "미국 IRA법 수혜, 전기차 판매 호조"},
+
+        # === 셀트리온 (068270) ===
+        {"stock_name": "셀트리온", "period": "2017년 1월 ~ 2018년 1월", "answer": "상승",
+         "description": "바이오시밀러 유럽 진출 성공, 개인 투자자 열풍"},
+        {"stock_name": "셀트리온", "period": "2021년 1월 ~ 2022년 1월", "answer": "하락",
+         "description": "바이오 거품 논란, 합병 불확실성"},
+
+        # === LG에너지솔루션 (373220) ===
+        {"stock_name": "LG에너지솔루션", "period": "2022년 1월 ~ 2022년 12월", "answer": "하락",
+         "description": "IPO 후 밸류에이션 부담, 원자재 가격 상승"},
+        {"stock_name": "LG에너지솔루션", "period": "2023년 1월 ~ 2023년 7월", "answer": "상승",
+         "description": "IRA 보조금 수혜, 북미 배터리 공장 수주"},
+
+        # === LG화학 (051910) ===
+        {"stock_name": "LG화학", "period": "2020년 1월 ~ 2021년 1월", "answer": "상승",
+         "description": "전기차 배터리 분사 기대, 테슬라 공급"},
+        {"stock_name": "LG화학", "period": "2021년 1월 ~ 2022년 6월", "answer": "하락",
+         "description": "배터리 부문 분사 후 밸류에이션 재평가"},
+
+        # === POSCO홀딩스 (005490) ===
+        {"stock_name": "POSCO홀딩스", "period": "2020년 3월 ~ 2021년 5월", "answer": "상승",
+         "description": "철강 가격 급등, 2차전지 소재 사업 부각"},
+        {"stock_name": "POSCO홀딩스", "period": "2021년 5월 ~ 2022년 7월", "answer": "하락",
+         "description": "철강 가격 하락, 글로벌 경기 둔화 우려"},
+        {"stock_name": "POSCO홀딩스", "period": "2023년 1월 ~ 2023년 7월", "answer": "상승",
+         "description": "리튬·니켈 등 2차전지 소재 밸류체인 기대"},
+
+        # === 삼성SDI (006400) ===
+        {"stock_name": "삼성SDI", "period": "2020년 3월 ~ 2021년 1월", "answer": "상승",
+         "description": "전기차 배터리 수주 확대, ESS 시장 성장"},
+        {"stock_name": "삼성SDI", "period": "2021년 11월 ~ 2022년 11월", "answer": "하락",
+         "description": "2차전지주 밸류에이션 조정"},
+
+        # === 기아 (000270) ===
+        {"stock_name": "기아", "period": "2020년 6월 ~ 2021년 6월", "answer": "상승",
+         "description": "EV6 출시 기대, 디자인 혁신 호평"},
+        {"stock_name": "기아", "period": "2022년 1월 ~ 2023년 1월", "answer": "상승",
+         "description": "미국 시장 판매 호조, 수익성 개선"},
+
+        # === 삼성바이오로직스 (207940) ===
+        {"stock_name": "삼성바이오로직스", "period": "2020년 1월 ~ 2020년 12월", "answer": "상승",
+         "description": "코로나 백신·치료제 위탁생산(CMO) 수주"},
+        {"stock_name": "삼성바이오로직스", "period": "2022년 1월 ~ 2022년 10월", "answer": "하락",
+         "description": "바이오주 전반 약세, 금리 인상 부담"},
+
+        # === 한화에어로스페이스 (012450) ===
+        {"stock_name": "한화에어로스페이스", "period": "2022년 2월 ~ 2023년 2월", "answer": "상승",
+         "description": "우크라이나 전쟁 이후 방산 수출 급증"},
+        {"stock_name": "한화에어로스페이스", "period": "2020년 1월 ~ 2020년 12월", "answer": "하락",
+         "description": "코로나 영향으로 항공 엔진 수요 급감"},
+
+        # === 크래프톤 (259960) ===
+        {"stock_name": "크래프톤", "period": "2021년 8월 ~ 2022년 8월", "answer": "하락",
+         "description": "IPO 후 게임주 약세, 신작 부진 우려"},
+        {"stock_name": "크래프톤", "period": "2023년 1월 ~ 2024년 1월", "answer": "상승",
+         "description": "배틀그라운드 인도 재출시, 실적 개선"},
     ]
 
-    # 룰렛 확률 (기대값 100%)
-    ROULETTE = {
-        "빨강": {"prob": 0.50, "multiplier": 2},    # 안정형: 높은 확률, 2배
-        "검정": {"prob": 0.40, "multiplier": 2.5},  # 균형형: 중간 확률, 2.5배
-        "초록": {"prob": 0.10, "multiplier": 10},   # 도전형: 낮은 확률, 10배
-    }
-
-    # 하이로우 (기대값 ~100%)
-    HIGHLOW_MULTIPLIER = 2.05  # 맞추면 2.05배
-
-    # 동전던지기 (기대값 100%)
-    COINFLIP_MULTIPLIER = 2.0  # 맞추면 2배
+    # 업다운 멀티라운드 — 배율은 확률 기반으로 동적 계산
+    # (EV 100%: 매 라운드 배율 = 1/확률)
 
     @classmethod
     def validate_probabilities(cls) -> bool:
@@ -446,15 +533,14 @@ class GameProbability:
         if not (0.999 <= lottery_sum <= 1.001):
             errors.append(f"복권 확률 합계 오류: {lottery_sum}")
 
-        # 슬롯 확률 합계 검증
-        slot_sum = sum(prob for _, _, prob in cls.SLOT_PAYOUTS)
-        if not (0.999 <= slot_sum <= 1.001):
-            errors.append(f"슬롯 확률 합계 오류: {slot_sum}")
+        # 역사 퀴즈 데이터 검증
+        if len(cls.HISTORICAL_STOCK_DATA) < 10:
+            errors.append(f"역사 퀴즈 데이터 부족: {len(cls.HISTORICAL_STOCK_DATA)}개")
 
-        # 룰렛 확률 합계 검증
-        roulette_sum = sum(color["prob"] for color in cls.ROULETTE.values())
-        if not (0.999 <= roulette_sum <= 1.001):
-            errors.append(f"룰렛 확률 합계 오류: {roulette_sum}")
+        up_count = sum(1 for q in cls.HISTORICAL_STOCK_DATA if q["answer"] == "상승")
+        down_count = len(cls.HISTORICAL_STOCK_DATA) - up_count
+        if up_count == 0 or down_count == 0:
+            errors.append("역사 퀴즈 데이터에 상승/하락이 균형적이지 않음")
 
         if errors:
             for error in errors:
@@ -468,37 +554,116 @@ class GameProbability:
     def calculate_expected_value(cls, game: str) -> float:
         """게임별 기대값 계산"""
         if game == "lottery":
-            # 복권 기대값 (무료이므로 기대값 검증 스킵)
             if GameConfig.LOTTERY_COST == 0:
-                return 100.0  # 무료 게임은 기대값 검증 불필요
+                return 100.0
             cost = GameConfig.LOTTERY_COST
             ev = 0
             for tier in cls.LOTTERY.values():
                 avg_reward = (tier["min_reward"] + tier["max_reward"]) / 2
                 ev += tier["prob"] * avg_reward
-            return (ev / cost) * 100  # % 반환
+            return (ev / cost) * 100
 
-        elif game == "slot":
-            # 슬롯 기대값
-            ev = sum(mult * prob for _, mult, prob in cls.SLOT_PAYOUTS)
-            return ev * 100  # % 반환
+        elif game == "stock_quiz":
+            # 역사 퀴즈 기대값 (지식 의존, 50% 기준)
+            return 0.5 * cls.STOCK_QUIZ_MULTIPLIER * 100
 
-        elif game == "roulette":
-            # 룰렛 기대값 (유저는 하나의 색에만 배팅하므로 색별 기대값의 평균)
-            ev_per_color = [color["prob"] * color["multiplier"] for color in cls.ROULETTE.values()]
-            return (sum(ev_per_color) / len(ev_per_color)) * 100
-
-        elif game == "highlow":
-            # 하이로우 기대값 (50은 무승부)
-            # P(win) = 49/99 (1-49 또는 51-100), P(draw) = 1/100
-            p_win = 49 / 100
-            return p_win * cls.HIGHLOW_MULTIPLIER * 100
-
-        elif game == "coinflip":
-            # 동전던지기 기대값
-            return 0.5 * cls.COINFLIP_MULTIPLIER * 100
+        elif game == "updown":
+            # 업다운 멀티라운드 - 매 라운드 EV = 100% (배율 = 1/확률)
+            return 100.0
 
         return 0
+
+
+# ===========================================
+# 각성 시스템 설정 (투자 감각 각성)
+# ===========================================
+class EnhanceConfig:
+    """
+    각성 시스템 — 투자 감각 각성
+
+    레벨이 오를수록 투자 능력이 각성되어
+    출석/복권 보상이 증가합니다.
+    실패 시 레벨이 하락할 수 있어 전략적 판단이 필요합니다.
+    """
+    MAX_LEVEL = 20
+
+    # 각성 비용: (현재 레벨 + 1) * BASE_COST
+    BASE_COST = 100_000  # 10만원
+
+    # 레벨별 성공 확률 (%) — 레벨 0→1 부터 19→20
+    SUCCESS_RATES = [
+        95, 90, 85, 80, 75,   # 0→1 ~ 4→5
+        65, 60, 55, 50, 45,   # 5→6 ~ 9→10
+        38, 32, 26, 22, 18,   # 10→11 ~ 14→15
+        14, 11, 8, 6, 4,      # 15→16 ~ 19→20
+    ]
+
+    # 실패 시 레벨 하락 규칙
+    # (최소 레벨, 최대 레벨): (하락 확률%, 하락량)
+    FAIL_PENALTIES = {
+        (0, 5): (0, 0),       # 안전 구간: 하락 없음
+        (6, 10): (30, 1),     # 주의 구간: 30% 확률로 -1
+        (11, 15): (50, 1),    # 위험 구간: 50% 확률로 -1
+        (16, 20): (100, 1),   # 극한 구간: 항상 -1, 20% 확률로 추가 -1
+    }
+
+    # 보너스 비율 (레벨당)
+    ATTENDANCE_BONUS_PER_LEVEL = 0.05   # 출석: 레벨당 +5% (레벨 20 = +100%)
+    LOTTERY_BONUS_PER_LEVEL = 0.08      # 복권: 레벨당 +8% (레벨 20 = +160%)
+
+    # 각성 단계 칭호 (레벨 구간별) — 투자 능력 성장 테마
+    TITLE_NAMES = {
+        0: ("주린이", "🔰"),
+        1: ("수습 트레이더", "📊"),
+        4: ("주식 분석가", "📈"),
+        7: ("펀드 매니저", "💼"),
+        10: ("월가의 늑대", "🐺"),
+        13: ("투자 귀재", "🧠"),
+        16: ("전설의 트레이더", "⭐"),
+        19: ("오마하의 현인", "🔮"),
+        20: ("투자의 신", "👑"),
+    }
+
+    @classmethod
+    def get_cost(cls, current_level: int) -> int:
+        """각성 비용 계산"""
+        return (current_level + 1) * cls.BASE_COST
+
+    @classmethod
+    def get_success_rate(cls, current_level: int) -> int:
+        """현재 레벨에서 각성 성공률 (%)"""
+        if current_level >= cls.MAX_LEVEL:
+            return 0
+        if current_level < 0:
+            return 95
+        return cls.SUCCESS_RATES[current_level]
+
+    @classmethod
+    def get_fail_penalty(cls, current_level: int) -> tuple:
+        """실패 시 페널티 (하락확률%, 하락량)"""
+        for (min_lv, max_lv), (prob, amount) in cls.FAIL_PENALTIES.items():
+            if min_lv <= current_level <= max_lv:
+                return prob, amount
+        return 0, 0
+
+    @classmethod
+    def get_title(cls, level: int) -> tuple:
+        """레벨에 해당하는 칭호와 이모지"""
+        result = ("주린이", "🔰")
+        for threshold in sorted(cls.TITLE_NAMES.keys()):
+            if level >= threshold:
+                result = cls.TITLE_NAMES[threshold]
+        return result
+
+    @classmethod
+    def get_attendance_multiplier(cls, level: int) -> float:
+        """출석 보상 배율"""
+        return 1.0 + (level * cls.ATTENDANCE_BONUS_PER_LEVEL)
+
+    @classmethod
+    def get_lottery_multiplier(cls, level: int) -> float:
+        """복권 보상 배율"""
+        return 1.0 + (level * cls.LOTTERY_BONUS_PER_LEVEL)
 
 
 # ===========================================
@@ -550,7 +715,7 @@ def validate_config() -> Tuple[bool, List[str]]:
         errors.append("게임 확률 설정 오류 - 확률 합계가 1이 아닙니다")
 
     # 5. 기대값 검증 (과도하게 높거나 낮은 경우 경고)
-    for game in ["lottery", "slot", "roulette", "highlow", "coinflip"]:
+    for game in ["lottery", "stock_quiz", "updown"]:
         ev = GameProbability.calculate_expected_value(game)
         if ev > 150:
             warnings.append(f"{game} 기대값이 너무 높음: {ev:.1f}%")
@@ -605,14 +770,16 @@ class Messages:
 
 💵 무료 보상
 /출석 - 매일 +30만원 (/ㅊㅅ)
-/복권 - 1만원 복권 1일5회 (/ㅂㄱ)
+/복권 - 무료 복권 1일5회 (/ㅂㄱ)
 
-🎰 미니게임 (장 마감 후)
-/게임 - 전체 게임 목록
-/슬롯머신 [금액] (/ㅅㄹㅁ)
-/동전 [금액] [앞/뒤] (/ㄷㅈ)
-/룰렛 [금액] [빨강/검정] (/ㄹㄹ)
-/하이로우 [금액] [높/낮] (/ㅎㅇㄹㅇ)
+🧬 각성 시스템
+/각성 - 투자 감각 각성! (/ㄱㅎ)
+/능력 - 내 투자 능력 보기
+
+📈 예측게임 (장 마감 후)
+/예측 - 전체 예측게임 목록
+/시장예측 [금액] - 역사 퀴즈! (/ㅅㅈ)
+/업다운 [금액] - 숫자 맞추기! (/ㅇㄷ)
 
 🏆 경쟁
 /랭킹 - 수익률 TOP 10 (/ㄹㅋ)
@@ -712,16 +879,16 @@ class Messages:
 • 정규장: 09:00~15:30
 • 시간외: 15:40~18:00"""
 
-    MARKET_CLOSED_GAME = """미니게임은 장 마감 후에만 가능해요!
+    MARKET_CLOSED_GAME = """예측게임은 장 마감 후에만 가능해요!
 
 {status_msg}
 
-🎮 게임 가능 시간:
+📈 예측게임 가능 시간:
 • 평일 18:00 이후
 • 평일 08:30 이전
 • 주말/공휴일 종일"""
 
-    INSUFFICIENT_BALANCE_GAME = "잔액 부족! (보유: {cash:,}원, 필요: {bet:,}원)"
+    INSUFFICIENT_BALANCE_GAME = "잔액 부족! (보유: {cash:,}원, 필요 투자금: {bet:,}원)"
 
     MIN_TRADE_AMOUNT_ERROR = "최소 {min_amount}주 이상 거래해야 합니다."
 

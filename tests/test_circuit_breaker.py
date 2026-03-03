@@ -1,8 +1,6 @@
 """
 CircuitBreaker 단위 테스트
 """
-import pytest
-from unittest.mock import patch
 from datetime import datetime, timezone, timedelta
 
 from services.stock_service import CircuitBreaker

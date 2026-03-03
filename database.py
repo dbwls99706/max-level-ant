@@ -78,11 +78,6 @@ def init_db():
     앱 시작 시 호출
     """
     # 모든 모델 임포트 (테이블 생성을 위해)
-    from models import (
-        User, Holding, Transaction,
-        Battle, WeeklyChallenge, UserChallenge,
-        Milestone, AssetHistory, StockCache
-    )
 
     # 테이블 생성
     Base.metadata.create_all(bind=engine)
@@ -117,6 +112,12 @@ def _migrate_db():
         'lottery_count_today': 'INTEGER DEFAULT 0',
         'nickname_change_count': 'INTEGER DEFAULT 0',
         'last_nickname_change': 'DATE',
+        'updown_active': 'INTEGER DEFAULT 0',
+        'updown_bet': 'BIGINT DEFAULT 0',
+        'updown_current_number': 'INTEGER DEFAULT 0',
+        'updown_round': 'INTEGER DEFAULT 0',
+        'updown_multiplier': 'FLOAT DEFAULT 1.0',
+        'enhance_level': 'INTEGER DEFAULT 0',
     }
 
     # 허용된 SQL 타입 화이트리스트 (SQL 인젝션 방지)
@@ -124,6 +125,7 @@ def _migrate_db():
     _ALLOWED_COL_TYPES = {
         'INTEGER', 'BIGINT', 'VARCHAR', 'TEXT', 'DATE', 'BOOLEAN', 'FLOAT', 'REAL',
         'INTEGER DEFAULT 0', 'BIGINT DEFAULT 0', 'INTEGER DEFAULT 1',
+        'FLOAT DEFAULT 1.0',
         "VARCHAR(1000) DEFAULT '[]'",
         'DATE', 'BOOLEAN DEFAULT FALSE', 'BOOLEAN DEFAULT TRUE',
     }
@@ -172,7 +174,6 @@ def reset_db():
     데이터베이스 초기화 (모든 데이터 삭제)
     주의: 모든 유저 데이터가 삭제됩니다!
     """
-    from models import User, Holding, Transaction
 
     # 모든 테이블 삭제
     Base.metadata.drop_all(bind=engine)
