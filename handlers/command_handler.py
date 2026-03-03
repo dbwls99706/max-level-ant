@@ -110,6 +110,8 @@ class CommandHandler(
         "/업적": "handle_achievements",
         "/닉네임": "handle_nickname",
         "/ㄴㄴ": "handle_nickname",
+        "/각성랭킹": "handle_enhance_ranking",
+        "/ㄱㅅㄹㅋ": "handle_enhance_ranking",
 
         # 배틀
         "/배틀설명": "handle_battle_help",
