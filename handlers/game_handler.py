@@ -83,7 +83,7 @@ class GameHandlerMixin(BaseHandlerMixin):
 
         reward_text = f"+{reward:,}원" if reward > 0 else "0원"
 
-        # 강화 보너스 표시
+        # 각성 보너스 표시
         enhance_bonus = result.get("enhance_bonus", 0)
         enhance_line = ""
         if enhance_bonus > 0:

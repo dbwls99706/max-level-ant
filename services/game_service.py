@@ -76,7 +76,7 @@ class GameService:
                 reward = random.randint(tier_info["min_reward"], tier_info["max_reward"])
                 break
 
-        # 강화 보너스 적용 (꽝이 아닌 경우)
+        # 각성 보너스 적용 (꽝이 아닌 경우)
         enhance_level = getattr(user, 'enhance_level', 0) or 0
         enhance_bonus = 0
         if reward > 0 and enhance_level > 0:

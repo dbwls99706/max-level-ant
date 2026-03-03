@@ -46,8 +46,8 @@ class ChallengeService:
             "rewards": [500_000, 1_500_000, 3_000_000]
         },
         "ENHANCE": {
-            "name": "대장장이",
-            "description": "강화 {target}회 성공하기",
+            "name": "각성 도전자",
+            "description": "각성 {target}회 성공하기",
             "targets": [3, 5, 8],
             "rewards": [500_000, 1_000_000, 2_000_000]
         },
