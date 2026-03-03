@@ -148,17 +148,9 @@ class EnhanceService:
                 "lottery_multiplier": EnhanceConfig.get_lottery_multiplier(new_level),
             }
         else:
-            # 실패 — 레벨 하락 판정
-            drop = 0
-            fail_prob, fail_amount = EnhanceConfig.get_fail_penalty(level)
-
-            if fail_prob > 0 and random.randint(1, 100) <= fail_prob:
-                drop = fail_amount
-                # 극한 구간 (16+): 20% 확률로 추가 -1
-                if level >= 16 and random.randint(1, 100) <= 20:
-                    drop += 1
-
-            new_level = max(0, level - drop)
+            # 실패 — 레벨 0으로 초기화
+            drop = level  # 현재 레벨 전부 하락
+            new_level = 0
             user.enhance_level = new_level
             new_name, new_emoji = EnhanceConfig.get_title(new_level)
 

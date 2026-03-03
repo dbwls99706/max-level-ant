@@ -648,19 +648,14 @@ class GameHandlerMixin(BaseHandlerMixin):
         else:
             cost = result["next_cost"]
             rate = result["next_success_rate"]
-            fail_prob = result.get("fail_drop_prob", 0)
             next_name = result.get("next_title_name", title_name)
             next_emoji = result.get("next_title_emoji", title_emoji)
 
-            # 위험도 표시
-            if fail_prob == 0:
-                risk = "🟢 안전 (실패해도 레벨 유지)"
-            elif fail_prob <= 30:
-                risk = f"🟡 주의 (실패 시 {fail_prob}% 확률로 하락)"
-            elif fail_prob <= 50:
-                risk = f"🟠 위험 (실패 시 {fail_prob}% 확률로 하락)"
+            # 위험도 표시 — 실패 시 항상 Lv.0 초기화
+            if level == 0:
+                risk = "🟢 실패해도 Lv.0 유지"
             else:
-                risk = "🔴 극한 (실패 시 레벨 하락)"
+                risk = f"🔴 실패 시 Lv.0으로 초기화! (-{level})"
 
             msg += f"""
 
@@ -699,7 +694,7 @@ class GameHandlerMixin(BaseHandlerMixin):
         rate = result["success_rate"]
 
         if result["enhanced"]:
-            # 성공 — 레벨 구간별 극적 연출
+            # 성공 — 레벨별 고유 연출
             new_emoji = result["new_emoji"]
             new_name = result["new_title"]
 
@@ -711,27 +706,25 @@ class GameHandlerMixin(BaseHandlerMixin):
             att_bonus = int((result["attendance_multiplier"] - 1) * 100)
             lot_bonus = int((result["lottery_multiplier"] - 1) * 100)
 
-            # 성공 연출 — 레벨/확률별 다르게
+            # 레벨별 고유 문구
+            flavor = EnhanceConfig.SUCCESS_FLAVORS[new_lv] if new_lv < len(EnhanceConfig.SUCCESS_FLAVORS) else ""
+
+            # 이펙트 — 레벨 구간별
             if new_lv >= 20:
-                header = "👑 만렙 달성! 전무후무한 경지!"
                 effect = "🎆🎇🎆🎇🎆"
-                flavor = "이 톡방의 전설로 기록됩니다."
+                header = "👑 만렙 달성!"
             elif new_lv >= 16:
-                header = f"⚡ Lv.{new_lv} 돌파! 이건 실력이다!"
                 effect = "✨🎉✨🎉✨"
-                flavor = f"성공률 {rate}%를 뚫었어요. 대단합니다."
+                header = f"⚡ Lv.{new_lv} 돌파!"
             elif new_lv >= 10:
-                header = f"🔥 Lv.{new_lv} 각성 성공!"
                 effect = "🎊✨🎊"
-                flavor = "여기서부터 진짜 시작입니다."
+                header = f"🔥 Lv.{new_lv} 각성 성공!"
             elif new_lv >= 5:
-                header = f"✨ Lv.{new_lv} 각성 성공!"
                 effect = "🎊✨"
-                flavor = "성장의 속도가 붙고 있어요."
-            else:
                 header = f"✨ Lv.{new_lv} 각성 성공!"
+            else:
                 effect = "✨"
-                flavor = "좋은 출발이에요!"
+                header = f"✨ Lv.{new_lv} 각성 성공!"
 
             msg = f"""{effect}
 {header}
@@ -747,42 +740,31 @@ class GameHandlerMixin(BaseHandlerMixin):
 💵 잔고: {result['cash']:,}원"""
 
         else:
-            # 실패 — 공감+자극하는 연출
-            drop = result.get("drop", 0)
+            # 실패 — 레벨 0으로 초기화 + 레벨별 고유 문구
             new_emoji = result["new_emoji"]
             new_name = result["new_title"]
 
-            if drop > 0:
-                drop_msg = f"💥 레벨 하락! Lv.{old_lv} → Lv.{new_lv} (-{drop})"
-                if drop >= 2:
-                    flavor = f"Lv.{old_lv}의 벽이 만만치 않네요... 하지만 올라갔었다는 건, 다시 올라갈 수 있다는 뜻!"
-                else:
-                    flavor = "한 발 물러났지만, 두 발 전진할 차례예요."
-            else:
-                drop_msg = f"🛡️ 레벨 유지! Lv.{old_lv}"
-                flavor = "레벨은 지켰어요. 다시 도전하면 됩니다."
+            # 레벨별 고유 실패 문구
+            fail_flavor = EnhanceConfig.FAIL_FLAVORS[old_lv] if old_lv < len(EnhanceConfig.FAIL_FLAVORS) else ""
 
-            # 실패 연출 — 성공률에 따라 아까움 차등
-            if rate <= 10:
-                header = f"😤 {rate}%의 벽..."
-                miss_comment = f"확률 {rate}%... 이건 뚫는 사람이 진짜 괴물이에요."
-            elif rate <= 30:
-                header = "💨 아슬아슬하게 빗나갔다!"
-                miss_comment = f"성공률 {rate}%, 분명 가능한 확률이었는데..."
-            elif rate <= 50:
-                header = "💨 이번엔 운이 안 따랐어요"
-                miss_comment = f"성공률 {rate}%면 반반인데, 다음엔 내 차례!"
+            if old_lv >= 10:
+                header = f"💀 Lv.{old_lv}에서 폭사..."
+                reset_msg = f"💥 Lv.{old_lv} → Lv.0 초기화!"
+            elif old_lv >= 5:
+                header = f"💨 Lv.{old_lv}에서 실패!"
+                reset_msg = f"💥 Lv.{old_lv} → Lv.0 초기화!"
+            elif old_lv >= 1:
+                header = "💨 각성 실패!"
+                reset_msg = f"🔄 Lv.{old_lv} → Lv.0 초기화"
             else:
-                header = "💨 에이, 이게 왜 실패야!"
-                miss_comment = f"성공률 {rate}%에서 빠지다니... 다음엔 반드시!"
+                header = "💨 각성 실패!"
+                reset_msg = "🛡️ Lv.0 유지"
 
             msg = f"""{header}
 
 {new_emoji} {new_name}
-{drop_msg}
-💬 {miss_comment}
-
-{flavor}
+{reset_msg}
+💬 {fail_flavor}
 
 💰 사용: -{cost:,}원
 💵 잔고: {result['cash']:,}원"""
