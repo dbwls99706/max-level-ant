@@ -45,10 +45,10 @@ class ChallengeService:
             "targets": [3, 5, 7],
             "rewards": [500_000, 1_500_000, 3_000_000]
         },
-        "LOTTERY": {
-            "name": "행운의 주인공",
-            "description": "복권 {target}회 당첨되기 (꽝 제외)",
-            "targets": [3, 5, 10],
+        "ENHANCE": {
+            "name": "대장장이",
+            "description": "강화 {target}회 성공하기",
+            "targets": [3, 5, 8],
             "rewards": [500_000, 1_000_000, 2_000_000]
         },
         "ASSET_GROWTH": {

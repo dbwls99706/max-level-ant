@@ -1,11 +1,12 @@
 """
 예측게임 관련 핸들러
-- 복권, 시장예측(역사 퀴즈), 업다운(멀티라운드)
+- 복권, 시장예측(역사 퀴즈), 업다운(멀티라운드), 강화(투자의 검)
 """
 from typing import Dict
 
 from services import GameService
-from config import GameConfig
+from services.enhance_service import EnhanceService
+from config import GameConfig, EnhanceConfig
 from utils import KakaoResponse
 
 from .base_handler import BaseHandlerMixin
@@ -21,9 +22,11 @@ class GameHandlerMixin(BaseHandlerMixin):
 🎫 /복권 - 무료 복권 (1일 5회)
 🔮 /시장예측 [금액] - 주식 역사 퀴즈!
 🔢 /업다운 [금액] - 숫자 예측 게임!
+⚔️ /강화 - 투자의 검 키우기!
 
 💡 시장예측: 실제 주식 역사로 상승/하락 맞추기!
 💡 업다운: 연속으로 맞출수록 배율 UP!
+💡 강화: 검 레벨 UP → 출석/복권 보상 UP!
 ⏰ 시장예측/업다운은 장 마감 후 이용 가능"""
 
         small_bet = GameConfig.DEFAULT_BET
@@ -32,10 +35,10 @@ class GameHandlerMixin(BaseHandlerMixin):
             msg,
             [
                 {"label": "🎫 복권", "action": "message", "messageText": "/복권"},
+                {"label": "⚔️ 강화", "action": "message", "messageText": "/강화"},
                 {"label": "🔮 5만 퀴즈", "action": "message", "messageText": f"/시장예측 {small_bet}"},
                 {"label": "🔮 50만 퀴즈", "action": "message", "messageText": f"/시장예측 {big_bet}"},
                 {"label": "🔢 5만 업다운", "action": "message", "messageText": f"/업다운 {small_bet}"},
-                {"label": "🔢 50만 업다운", "action": "message", "messageText": f"/업다운 {big_bet}"},
             ]
         )
 
@@ -80,11 +83,17 @@ class GameHandlerMixin(BaseHandlerMixin):
 
         reward_text = f"+{reward:,}원" if reward > 0 else "0원"
 
+        # 강화 보너스 표시
+        enhance_bonus = result.get("enhance_bonus", 0)
+        enhance_line = ""
+        if enhance_bonus > 0:
+            enhance_line = f"\n⚔️ 강화 보너스: +{enhance_bonus:,}원 (Lv.{result.get('enhance_level', 0)})"
+
         msg = f"""🎫 복권 긁기 {effect}
 
 {tier}! {result['message']}
 
-💰 당첨금: {reward_text}
+💰 당첨금: {reward_text}{enhance_line}
 
 {remaining_msg}
 💵 현재 잔고: {result['cash']:,}원"""
@@ -94,7 +103,7 @@ class GameHandlerMixin(BaseHandlerMixin):
             buttons.append({"label": "🎫 한번 더!", "action": "message", "messageText": "/복권"})
         buttons.extend([
             {"label": "🔮 시장예측", "action": "message", "messageText": f"/시장예측 {GameConfig.DEFAULT_BET}"},
-            {"label": "🚀 급등주", "action": "message", "messageText": "/급등"},
+            {"label": "⚔️ 강화", "action": "message", "messageText": "/강화"},
         ])
 
         return KakaoResponse.quick_replies(msg, buttons)
@@ -539,3 +548,185 @@ class GameHandlerMixin(BaseHandlerMixin):
                 {"label": "💰 정산", "action": "message", "messageText": "/업다운정산"},
             ]
         )
+
+    # ==========================================
+    # 강화 시스템 (투자의 검)
+    # ==========================================
+
+    def handle_enhance(self) -> Dict:
+        """강화 — 정보 보기 또는 강화 시도"""
+        parts = self.utterance.split()
+
+        # /강화 시도 → 실제 강화 실행
+        if len(parts) >= 2 and parts[1] in ["시도", "도전", "강화하기"]:
+            return self._do_enhance()
+
+        # /강화 → 정보 + 강화 버튼
+        return self._show_enhance_info()
+
+    def _show_enhance_info(self) -> Dict:
+        """강화 정보 표시"""
+        result = EnhanceService.get_enhance_info(self.db, self.kakao_id)
+
+        if not result["success"]:
+            return self._game_failure_response(result["message"])
+
+        level = result["level"]
+        sword_name = result["sword_name"]
+        sword_emoji = result["sword_emoji"]
+        att_mult = result["attendance_multiplier"]
+        lot_mult = result["lottery_multiplier"]
+
+        # 보너스 계산
+        att_bonus = int((att_mult - 1) * 100)
+        lot_bonus = int((lot_mult - 1) * 100)
+
+        # 레벨 게이지 바
+        gauge = self._make_gauge(level, EnhanceConfig.MAX_LEVEL)
+
+        msg = f"""{sword_emoji} 투자의 검 — {sword_name}
+
+⚔️ 강화 레벨: Lv.{level} / {EnhanceConfig.MAX_LEVEL}
+{gauge}
+
+📈 출석 보상 보너스: +{att_bonus}%
+🎫 복권 보상 보너스: +{lot_bonus}%"""
+
+        buttons = []
+
+        if result.get("max_reached"):
+            msg += "\n\n👑 최고 레벨 달성! 주식왕의 검을 손에 넣었습니다!"
+            buttons = [
+                {"label": "📅 출석", "action": "message", "messageText": "/출석"},
+                {"label": "🎫 복권", "action": "message", "messageText": "/복권"},
+            ]
+        else:
+            cost = result["next_cost"]
+            rate = result["next_success_rate"]
+            fail_prob = result.get("fail_drop_prob", 0)
+            next_name = result.get("next_sword_name", sword_name)
+            next_emoji = result.get("next_sword_emoji", sword_emoji)
+
+            # 위험도 표시
+            if fail_prob == 0:
+                risk = "🟢 안전 (실패해도 레벨 유지)"
+            elif fail_prob <= 30:
+                risk = f"🟡 주의 (실패 시 {fail_prob}% 확률로 하락)"
+            elif fail_prob <= 50:
+                risk = f"🟠 위험 (실패 시 {fail_prob}% 확률로 하락)"
+            else:
+                risk = "🔴 극한 (실패 시 레벨 하락)"
+
+            msg += f"""
+
+📋 다음 강화 정보:
+💰 비용: {cost:,}원
+🎯 성공률: {rate}%
+{risk}
+
+{next_emoji} 성공 시 → {next_name} Lv.{level + 1}"""
+
+            can_afford = result["cash"] >= cost
+            if can_afford:
+                buttons.append(
+                    {"label": f"⚔️ 강화하기 ({cost:,}원)", "action": "message", "messageText": "/강화 시도"}
+                )
+            else:
+                msg += f"\n\n❌ 잔고 부족 (보유: {result['cash']:,}원)"
+
+        buttons.extend([
+            {"label": "📅 출석", "action": "message", "messageText": "/출석"},
+            {"label": "📈 예측게임", "action": "message", "messageText": "/예측"},
+        ])
+
+        return KakaoResponse.quick_replies(msg, buttons)
+
+    def _do_enhance(self) -> Dict:
+        """실제 강화 실행"""
+        result = EnhanceService.attempt_enhance(self.db, self.kakao_id)
+
+        if not result["success"]:
+            return self._game_failure_response(result["message"])
+
+        old_lv = result["old_level"]
+        new_lv = result["new_level"]
+        cost = result["cost"]
+        rate = result["success_rate"]
+
+        if result["enhanced"]:
+            # 성공!
+            new_emoji = result["new_emoji"]
+            new_name = result["new_sword"]
+
+            if result["name_changed"]:
+                evolution_msg = f"\n\n🆙 검이 진화했습니다!\n{result['old_emoji']} {result['old_sword']} → {new_emoji} {new_name}"
+            else:
+                evolution_msg = ""
+
+            att_bonus = int((result["attendance_multiplier"] - 1) * 100)
+            lot_bonus = int((result["lottery_multiplier"] - 1) * 100)
+
+            # 성공 이펙트
+            if new_lv >= 20:
+                effect = "🎆🎇👑🎆🎇"
+            elif new_lv >= 15:
+                effect = "✨🎉✨"
+            elif new_lv >= 10:
+                effect = "🎊✨"
+            else:
+                effect = "✨"
+
+            msg = f"""{effect} 강화 성공! {effect}
+
+{new_emoji} {new_name} Lv.{old_lv} → Lv.{new_lv}
+🎯 성공률: {rate}%{evolution_msg}
+
+📈 출석 보너스: +{att_bonus}%
+🎫 복권 보너스: +{lot_bonus}%
+
+💰 사용: -{cost:,}원
+💵 잔고: {result['cash']:,}원"""
+
+        else:
+            # 실패
+            drop = result.get("drop", 0)
+            new_emoji = result["new_emoji"]
+            new_name = result["new_sword"]
+
+            if drop > 0:
+                drop_msg = f"\n💥 레벨 하락! Lv.{old_lv} → Lv.{new_lv} (-{drop})"
+            else:
+                drop_msg = f"\n🛡️ 레벨 유지! Lv.{old_lv}"
+
+            msg = f"""💨 강화 실패...
+
+{new_emoji} {new_name}{drop_msg}
+🎯 성공률: {rate}% → 아쉽게 빗나감
+
+💰 사용: -{cost:,}원
+💵 잔고: {result['cash']:,}원"""
+
+        # 다시 강화 가능 여부 체크
+        buttons = []
+        if new_lv < EnhanceConfig.MAX_LEVEL:
+            next_cost = EnhanceConfig.get_cost(new_lv)
+            if result["cash"] >= next_cost:
+                buttons.append(
+                    {"label": f"⚔️ 다시 강화! ({next_cost:,}원)", "action": "message", "messageText": "/강화 시도"}
+                )
+            buttons.append({"label": "⚔️ 강화 정보", "action": "message", "messageText": "/강화"})
+
+        buttons.extend([
+            {"label": "📈 예측게임", "action": "message", "messageText": "/예측"},
+            {"label": "🚀 급등주", "action": "message", "messageText": "/급등"},
+        ])
+
+        return KakaoResponse.quick_replies(msg, buttons)
+
+    @staticmethod
+    def _make_gauge(current: int, maximum: int, length: int = 10) -> str:
+        """레벨 게이지 바 생성"""
+        filled = int((current / maximum) * length) if maximum > 0 else 0
+        empty = length - filled
+        bar = "▰" * filled + "▱" * empty
+        return f"[{bar}] {current}/{maximum}"

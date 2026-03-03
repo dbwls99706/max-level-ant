@@ -13,7 +13,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy import exists
 
 from models import User
-from config import GameConfig, KST
+from config import GameConfig, EnhanceConfig, KST
 from services.common import safe_add, safe_subtract, get_user_for_update
 from utils import get_service_logger, log_attendance
 
@@ -126,21 +126,22 @@ class UserService:
         return user, True
 
     @classmethod
-    def check_attendance(cls, db: Session, kakao_id: str) -> Tuple[bool, int, int, int]:
+    def check_attendance(cls, db: Session, kakao_id: str) -> Tuple[bool, int, int, int, int]:
         """
         출석 체크 (FOR UPDATE로 동시성 제어)
-        Returns: (success, reward, streak, current_cash)
+        Returns: (success, reward, streak, current_cash, enhance_level)
         """
         # FOR UPDATE로 row lock 획득 (중복 출석 방지)
         user = get_user_for_update(db, kakao_id)
         if not user:
-            return False, 0, 0, 0
+            return False, 0, 0, 0, 0
 
         today = datetime.now(KST).date()
+        enhance_level = getattr(user, 'enhance_level', 0) or 0
 
         # 이미 출석했는지 확인
         if user.last_attendance == today:
-            return False, 0, user.attendance_streak, user.cash
+            return False, 0, user.attendance_streak, user.cash, enhance_level
 
         # 연속 출석 계산
         yesterday = today - timedelta(days=1)
@@ -156,6 +157,12 @@ class UserService:
                 reward = int(reward * multiplier)
                 break
 
+        # 강화 보너스 적용
+        enhance_level = getattr(user, 'enhance_level', 0) or 0
+        if enhance_level > 0:
+            enhance_mult = EnhanceConfig.get_attendance_multiplier(enhance_level)
+            reward = int(reward * enhance_mult)
+
         # 업데이트
         try:
             user.last_attendance = today
@@ -165,7 +172,7 @@ class UserService:
         except SQLAlchemyError as e:
             db.rollback()
             logger.error(f"출석 체크 DB 실패: {e}")
-            return False, 0, 0, user.cash
+            return False, 0, 0, user.cash, enhance_level
 
         # 감사 로그
         log_attendance(
@@ -182,7 +189,7 @@ class UserService:
         except Exception as e:
             logger.warning(f"자산 히스토리 기록 실패 (출석 후): {e}")
 
-        return True, reward, user.attendance_streak, user.cash
+        return True, reward, user.attendance_streak, user.cash, enhance_level
 
     @staticmethod
     def get_balance(db: Session, kakao_id: str) -> Optional[int]:

@@ -12,6 +12,7 @@ from .battle_service import BattleService
 from .challenge_service import ChallengeService
 from .milestone_service import MilestoneService
 from .asset_service import AssetService
+from .enhance_service import EnhanceService
 from .common import (
     get_user_with_error,
     get_user_with_error_for_update,
@@ -40,6 +41,7 @@ __all__ = [
     "ChallengeService",
     "MilestoneService",
     "AssetService",
+    "EnhanceService",
     # Common utilities
     "get_user_with_error",
     "get_user_with_error_for_update",

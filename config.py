@@ -575,6 +575,97 @@ class GameProbability:
 
 
 # ===========================================
+# 강화 시스템 설정 (투자의 검)
+# ===========================================
+class EnhanceConfig:
+    """
+    강화 시스템 — '투자의 검' 키우기
+
+    강화 레벨에 따라 출석/복권 보상이 증가합니다.
+    실패 시 레벨이 하락할 수 있어 전략적 판단이 필요합니다.
+    """
+    MAX_LEVEL = 20
+
+    # 강화 비용: (현재 레벨 + 1) * BASE_COST
+    BASE_COST = 100_000  # 10만원
+
+    # 레벨별 성공 확률 (%) — 레벨 0→1 부터 19→20
+    SUCCESS_RATES = [
+        95, 90, 85, 80, 75,   # 0→1 ~ 4→5
+        65, 60, 55, 50, 45,   # 5→6 ~ 9→10
+        38, 32, 26, 22, 18,   # 10→11 ~ 14→15
+        14, 11, 8, 6, 4,      # 15→16 ~ 19→20
+    ]
+
+    # 실패 시 레벨 하락 규칙
+    # (최소 레벨, 최대 레벨): (하락 확률%, 하락량)
+    FAIL_PENALTIES = {
+        (0, 5): (0, 0),       # 안전 구간: 하락 없음
+        (6, 10): (30, 1),     # 주의 구간: 30% 확률로 -1
+        (11, 15): (50, 1),    # 위험 구간: 50% 확률로 -1
+        (16, 20): (100, 1),   # 극한 구간: 항상 -1, 20% 확률로 추가 -1
+    }
+
+    # 보너스 비율 (레벨당)
+    ATTENDANCE_BONUS_PER_LEVEL = 0.05   # 출석: 레벨당 +5% (레벨 20 = +100%)
+    LOTTERY_BONUS_PER_LEVEL = 0.08      # 복권: 레벨당 +8% (레벨 20 = +160%)
+
+    # 검 이름 (레벨 구간별)
+    SWORD_NAMES = {
+        0: ("초보 투자자", "🔰"),
+        1: ("나무 검", "🪵"),
+        4: ("돌 검", "🪨"),
+        7: ("철 검", "⚔️"),
+        10: ("강철 검", "🗡️"),
+        13: ("미스릴 검", "💎"),
+        16: ("다이아 검", "💠"),
+        19: ("전설의 검", "⚡"),
+        20: ("주식왕의 검", "👑"),
+    }
+
+    @classmethod
+    def get_cost(cls, current_level: int) -> int:
+        """강화 비용 계산"""
+        return (current_level + 1) * cls.BASE_COST
+
+    @classmethod
+    def get_success_rate(cls, current_level: int) -> int:
+        """현재 레벨에서 강화 성공률 (%)"""
+        if current_level >= cls.MAX_LEVEL:
+            return 0
+        if current_level < 0:
+            return 95
+        return cls.SUCCESS_RATES[current_level]
+
+    @classmethod
+    def get_fail_penalty(cls, current_level: int) -> tuple:
+        """실패 시 페널티 (하락확률%, 하락량)"""
+        for (min_lv, max_lv), (prob, amount) in cls.FAIL_PENALTIES.items():
+            if min_lv <= current_level <= max_lv:
+                return prob, amount
+        return 0, 0
+
+    @classmethod
+    def get_sword_name(cls, level: int) -> tuple:
+        """레벨에 해당하는 검 이름과 이모지"""
+        result = ("초보 투자자", "🔰")
+        for threshold in sorted(cls.SWORD_NAMES.keys()):
+            if level >= threshold:
+                result = cls.SWORD_NAMES[threshold]
+        return result
+
+    @classmethod
+    def get_attendance_multiplier(cls, level: int) -> float:
+        """출석 보상 배율"""
+        return 1.0 + (level * cls.ATTENDANCE_BONUS_PER_LEVEL)
+
+    @classmethod
+    def get_lottery_multiplier(cls, level: int) -> float:
+        """복권 보상 배율"""
+        return 1.0 + (level * cls.LOTTERY_BONUS_PER_LEVEL)
+
+
+# ===========================================
 # 캐시 설정
 # ===========================================
 class CacheConfig:
@@ -679,6 +770,10 @@ class Messages:
 💵 무료 보상
 /출석 - 매일 +30만원 (/ㅊㅅ)
 /복권 - 무료 복권 1일5회 (/ㅂㄱ)
+
+⚔️ 강화 시스템
+/강화 - 투자의 검 키우기! (/ㄱㅎ)
+/내검 - 내 검 정보 보기
 
 📈 예측게임 (장 마감 후)
 /예측 - 전체 예측게임 목록

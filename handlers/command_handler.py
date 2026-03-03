@@ -96,6 +96,10 @@ class CommandHandler(
         "/업다운정산": "handle_updown_cashout",
         "/업다운": "handle_updown",
         "/ㅇㄷ": "handle_updown",
+        "/강화": "handle_enhance",
+        "/ㄱㅎ": "handle_enhance",
+        "/내검": "handle_enhance",
+        "/검": "handle_enhance",
 
         # 소셜/경쟁
         "/랭킹": "handle_ranking",
@@ -214,7 +218,7 @@ class CommandHandler(
 
     def handle_attendance(self) -> Dict:
         """출석 체크"""
-        success, reward, streak, cash = UserService.check_attendance(self.db, self.kakao_id)
+        success, reward, streak, cash, enhance_level = UserService.check_attendance(self.db, self.kakao_id)
 
         if not success and reward == 0 and streak == 0:
             return KakaoResponse.quick_replies(
@@ -244,9 +248,16 @@ class CommandHandler(
 
         if success:
             motivation = get_streak_motivation(streak, True)
+            enhance_line = ""
+            if enhance_level > 0:
+                from config import EnhanceConfig
+                sword_name, sword_emoji = EnhanceConfig.get_sword_name(enhance_level)
+                att_bonus = int((EnhanceConfig.get_attendance_multiplier(enhance_level) - 1) * 100)
+                enhance_line = f"\n{sword_emoji} 강화 보너스: +{att_bonus}% (Lv.{enhance_level})"
+
             msg = f"""✅ 출석 완료!
 
-💰 +{reward:,}원 지급!
+💰 +{reward:,}원 지급!{enhance_line}
 {streak_emoji} 연속 출석: {streak}일
 
 {motivation}

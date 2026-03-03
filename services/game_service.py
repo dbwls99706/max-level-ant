@@ -9,7 +9,7 @@ from typing import Dict
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import SQLAlchemyError
 
-from config import GameConfig, GameProbability, ErrorCode, KST
+from config import GameConfig, GameProbability, EnhanceConfig, ErrorCode, KST
 from services.common import (
     get_user_with_error_for_update,
     validate_bet,
@@ -75,6 +75,15 @@ class GameService:
                 reward = random.randint(tier_info["min_reward"], tier_info["max_reward"])
                 break
 
+        # 강화 보너스 적용 (꽝이 아닌 경우)
+        enhance_level = getattr(user, 'enhance_level', 0) or 0
+        enhance_bonus = 0
+        if reward > 0 and enhance_level > 0:
+            enhance_mult = EnhanceConfig.get_lottery_multiplier(enhance_level)
+            enhanced_reward = int(reward * enhance_mult)
+            enhance_bonus = enhanced_reward - reward
+            reward = enhanced_reward
+
         tier_text, tier_msg = tier_display.get(tier, ("😅 꽝", "다음 기회에..."))
         user.cash = safe_add(user.cash, reward)
 
@@ -98,7 +107,9 @@ class GameService:
             "tier": tier_text,
             "message": tier_msg,
             "cash": user.cash,
-            "remaining": remaining
+            "remaining": remaining,
+            "enhance_bonus": enhance_bonus,
+            "enhance_level": enhance_level,
         }
 
     # ==========================================

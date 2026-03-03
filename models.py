@@ -62,6 +62,9 @@ class User(Base):
     updown_round = Column(Integer, default=0)  # 현재 라운드
     updown_multiplier = Column(Float, default=1.0)  # 누적 배율
 
+    # 강화 시스템 (투자의 검)
+    enhance_level = Column(Integer, default=0)  # 강화 레벨 (0~20)
+
     # 업적 관련 (JSON 문자열로 저장)
     achievements = Column(String(1000), default="[]")
     total_profit_realized = Column(BigInteger, default=0)  # 실현 수익 누적
