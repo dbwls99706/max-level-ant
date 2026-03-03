@@ -558,7 +558,7 @@ class GameHandlerMixin(BaseHandlerMixin):
         parts = self.utterance.split()
 
         # /각성 시도 → 실제 각성 실행
-        if len(parts) >= 2 and parts[1] in ["시도", "도전", "강화하기"]:
+        if len(parts) >= 2 and parts[1] in ["시도", "도전", "각성하기", "강화하기"]:
             return self._do_enhance()
 
         # /각성 → 정보 + 각성 버튼

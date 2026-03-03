@@ -14,6 +14,7 @@ from config import EnhanceConfig, ErrorCode
 from services.common import (
     get_user_with_error_for_update,
     error_response,
+    safe_subtract,
 )
 from utils import get_service_logger, log_game
 
@@ -97,7 +98,7 @@ class EnhanceService:
             )
 
         # 비용 차감
-        user.cash -= cost
+        user.cash = safe_subtract(user.cash, cost)
 
         # 각성 시도
         success_rate = EnhanceConfig.get_success_rate(level)
