@@ -192,7 +192,7 @@ async def request_size_limit_middleware(request: Request, call_next: Callable) -
     최대 10KB 허용
     """
     content_length = request.headers.get("content-length")
-    if content_length and int(content_length) > SecurityConfig.MAX_REQUEST_SIZE:
+    if content_length and content_length.isdigit() and int(content_length) > SecurityConfig.MAX_REQUEST_SIZE:
         return JSONResponse(
             status_code=413,
             content={"error": "요청 크기가 너무 큽니다.", "max_size": SecurityConfig.MAX_REQUEST_SIZE}

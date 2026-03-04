@@ -97,10 +97,10 @@ class GameService:
             distance = roll - boundary  # 꽝 구간 진입 후 얼마나 들어왔는지
             miss_ratio = distance / GameProbability.LOTTERY["꽝"]["prob"]  # 0에 가까울수록 아슬아슬
 
-            if miss_ratio < 0.15:  # 꽝 구간의 첫 15% — 5등과 아슬아슬
+            if miss_ratio < 0.05:  # 꽝 구간의 첫 5% — 극도로 아까움
                 near_miss_tier = "5등"
                 near_miss_reward = 10_000
-            elif miss_ratio < 0.05:  # 꽝 구간의 첫 5% — 극도로 아까움
+            elif miss_ratio < 0.15:  # 꽝 구간의 첫 15% — 5등과 아슬아슬
                 near_miss_tier = "5등"
                 near_miss_reward = 10_000
 
@@ -502,7 +502,8 @@ class GameService:
     @classmethod
     def get_updown_status(cls, db: Session, kakao_id: str) -> Dict:
         """업다운 게임 현재 상태 조회"""
-        user, error = get_user_with_error_for_update(db, kakao_id)
+        from services.common import get_user_with_error
+        user, error = get_user_with_error(db, kakao_id)
         if error:
             return error
 
