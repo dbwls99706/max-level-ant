@@ -9,7 +9,7 @@ from services import (
     UserService, RankingService, MissionService,
     BattleService, ChallengeService, MilestoneService, AssetService
 )
-from utils import KakaoResponse
+from utils import KakaoResponse, get_rival_msg
 from config import GameConfig
 
 from .base_handler import BaseHandlerMixin
@@ -69,6 +69,18 @@ class SocialHandlerMixin(BaseHandlerMixin):
         # TOP 10 안에 있으면 축하 메시지
         if my_rank_in_top10:
             msg = f"🎉 축하해요! 이 톡방에서 {my_rank_in_top10}위!\n\n" + msg
+        else:
+            # TOP 10 밖이면 내 순위 + 바로 윗순위 경쟁자 표시
+            my_rank = RankingService.get_my_rank(self.db, self.kakao_id)
+            if my_rank:
+                msg += "\n━━━━━━━━━━━━━━━━━"
+                msg += f"\n📍 내 순위: {my_rank['rank']}위 / {my_rank['total']}명"
+                msg += f"\n   📊 {my_rank['profit_rate']:+.2f}%"
+                if my_rank.get("above_nickname"):
+                    gap = (my_rank.get("above_profit_rate", 0) or 0) - my_rank["profit_rate"]
+                    rival = get_rival_msg(my_rank["rank"], my_rank["above_nickname"], gap)
+                    if rival:
+                        msg += f"\n{rival}"
 
         return KakaoResponse.quick_replies(
             msg,
@@ -113,13 +125,19 @@ class SocialHandlerMixin(BaseHandlerMixin):
         # 수익률 기반 이모지
         rate_emoji = "📈" if profit_rate >= 0 else "📉"
 
+        # 바로 윗순위 경쟁자 표시
+        rival_line = ""
+        if rank_info.get("above_nickname"):
+            gap = (rank_info.get("above_profit_rate", 0) or 0) - profit_rate
+            rival_line = "\n" + get_rival_msg(rank, rank_info["above_nickname"], gap)
+
         msg = f"""📍 내 순위
 
 🏆 {rank}위 / 전체 {total}명
 {rate_emoji} 수익률: {profit_rate:+.2f}%
 💰 총 자산: {rank_info['total_asset']:,}원
 
-{motivation}"""
+{motivation}{rival_line}"""
 
         buttons = [
             {"label": "🏆 전체 랭킹", "action": "message", "messageText": "/랭킹"},
@@ -408,16 +426,17 @@ class SocialHandlerMixin(BaseHandlerMixin):
             return KakaoResponse.simple_text(result["message"])
 
         msg = f"""⚔️ 배틀 시작!
+━━━━━━━━━━━━━━━━━
+📊 {result['stock_name']} | 시작가 {result['start_price']:,}원
 
-📊 종목: {result['stock_name']}
-💰 시작가: {result['start_price']:,}원
-💵 투자금: {result['bet_amount']:,}원
+🔵 {result['challenger_name']} → 📈{result['challenger_prediction']}!
+  ⚡ VS ⚡
+🔴 {result['opponent_name']} → 📉{result['opponent_prediction']}!
 
-🔵 {result['challenger_name']}: {result['challenger_prediction']}
-🔴 {result['opponent_name']}: {result['opponent_prediction']}
-
-⏱️ {result['duration']}분 후 결과 확인!
-/배틀결과 {result['battle_id']}"""
+💰 상금: {result['bet_amount'] * 2:,}원
+⏱️ {result['duration']}분 뒤 승자 결정!
+━━━━━━━━━━━━━━━━━
+누가 맞을까?! /배틀결과 {result['battle_id']}"""
 
         return KakaoResponse.quick_replies(
             msg,
@@ -450,26 +469,25 @@ class SocialHandlerMixin(BaseHandlerMixin):
 
             if result['winner'] == "무승부":
                 result_header = "🤝 무승부!"
-                result_detail = "주가 변동 없음 - 투자금 반환"
+                result_detail = "주가 변동 없음 — 투자금 반환"
             else:
-                result_header = f"🎊🎊🎊 배틀 종료!{market_note} 🎊🎊🎊"
-                result_detail = f"🏆 승자: {result['winner']}"
+                result_header = f"🎊 배틀 종료!{market_note}"
+                result_detail = f"🏆 승자: {result['winner']}! 예측 적중!"
 
             msg = f"""⚔️ 배틀 결과
-
+━━━━━━━━━━━━━━━━━
 {result_header}
 
-📊 종목: {result['stock_name']}
-💰 시작가: {result['start_price']:,}원
-💰 종료가: {result['end_price']:,}원
-{change_emoji} 변동: {result['price_change']:+,}원 ({result['change_rate']:+.2f}%)
+📊 {result['stock_name']}
+💰 {result['start_price']:,}원 → {result['end_price']:,}원
+{change_emoji} {result['price_change']:+,}원 ({result['change_rate']:+.2f}%)
 
-👤 {result['challenger_name']} vs {result['opponent_name']}
-
+🔵 {result['challenger_name']} vs 🔴 {result['opponent_name']}
+━━━━━━━━━━━━━━━━━
 {result_detail}
-💰 상금: {result['prize']:,}원
+💰 상금 {result['prize']:,}원 획득!
 
-GG! 다음 배틀도 기대해주세요! 🎮"""
+다음 도전자는?! ⚔️"""
 
             return KakaoResponse.quick_replies(
                 msg,
@@ -495,12 +513,12 @@ GG! 다음 배틀도 기대해주세요! 🎮"""
                 ]
             )
 
-        msg = "⚔️ 대기 중인 배틀\n"
+        msg = f"⚔️ 대기 중인 배틀 ({len(battles)}건)\n도전장이 날아왔다!\n"
         buttons = []
         for b in battles[:5]:
             pred_emoji = "📈" if b["prediction"] == "상승" else "📉"
-            msg += f"\n🆔 {b['id']} | {b['challenger']}"
-            msg += f"\n   {b['stock_name']} {pred_emoji}{b['prediction']} ({b['bet_amount']:,}원)\n"
+            msg += f"\n🆔 #{b['id']} | {b['challenger']}의 도전!"
+            msg += f"\n   {b['stock_name']} {pred_emoji}{b['prediction']} | 💰 상금 {b['bet_amount'] * 2:,}원\n"
 
             if len(buttons) < 3:
                 buttons.append({

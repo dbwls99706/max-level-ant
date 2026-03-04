@@ -186,14 +186,22 @@ class RankingService:
         # 3. 전체 랭킹에서 내 순위 찾기
         for r in full_ranking:
             if r["kakao_id"] == kakao_id:
-                return {
+                result = {
                     "rank": r["rank"],
                     "total": len(full_ranking),
                     "kakao_id": kakao_id,
                     "nickname": r["nickname"],
                     "total_asset": r["total_asset"],
-                    "profit_rate": r["profit_rate"]
+                    "profit_rate": r["profit_rate"],
+                    "above_nickname": None,
+                    "above_profit_rate": None,
                 }
+                # 바로 윗순위 유저 정보 (경쟁 유도용)
+                if r["rank"] > 1:
+                    above = full_ranking[r["rank"] - 2]
+                    result["above_nickname"] = above["nickname"]
+                    result["above_profit_rate"] = above["profit_rate"]
+                return result
 
         # 4. 캐시에 없으면 직접 계산 (새 유저 등)
         total_asset, profit_rate = cls.calculate_total_asset(db, user)

@@ -138,3 +138,51 @@ def format_money(amount: int) -> str:
         return f"{만:,}만원"
     else:
         return f"{amount:,}원"
+
+
+def get_rival_msg(my_rank: int, above_nickname: str, gap_rate: float) -> str:
+    """
+    바로 윗순위 유저와의 격차 메시지 (10명+ 톡방용 경쟁 유도)
+    """
+    if my_rank <= 1 or not above_nickname:
+        return ""
+    gap_abs = abs(gap_rate)
+    if gap_abs < 1:
+        return f"⚡ {above_nickname} 역전까지 {gap_abs:.2f}%! 지금이 기회!"
+    elif gap_abs < 5:
+        return f"🔥 {above_nickname}까지 {gap_abs:.1f}% 차이! 충분히 잡을 수 있어요!"
+    elif gap_abs < 15:
+        return f"📈 {above_nickname}까지 {gap_abs:.1f}% — 급등주 한 방이면 역전!"
+    else:
+        return f"💪 {above_nickname}까지 {gap_abs:.1f}% — 꾸준히 가면 됩니다!"
+
+
+def get_sell_exclamation(profit_rate: float, profit: int = 0) -> str:
+    """
+    매도 수익률 기반 한국어 감탄사 (10명+ 톡방에서 주목받는 메시지)
+    전연령 건전 버전
+    """
+    if profit_rate >= 100:
+        return "🎆🎇🎆🎇🎆\n\n대박!! 수익률 +100%! 👑\n이 톡방 전설 등극!"
+    elif profit_rate >= 50:
+        return "🎉🔥✨\n\n헐 대박! +50%! 감이 미쳤어요!\n다들 이 사람 따라하세요!"
+    elif profit_rate >= 30:
+        return "🎊🌟\n\n와! +30% 수익! 프로 트레이더 인정!"
+    elif profit_rate >= 20:
+        return "🎊 훌륭해요! +20% 이상! 🌟"
+    elif profit_rate >= 10:
+        return "📈 좋아요! 꾸준한 수익! 💪"
+    elif profit_rate >= 5:
+        return "✨ 수익 실현! 잘하셨어요!"
+    elif profit_rate >= 0:
+        return "✅ 본전 이상! 성공적 마감!"
+    elif profit_rate >= -5:
+        return "💫 작은 손실, 다음이 기회예요!"
+    elif profit_rate >= -10:
+        return "😅 경험이 됐어요! 다시 도전!"
+    elif profit_rate >= -20:
+        return "😤 회복 가능! 급등주 노려보세요!"
+    elif profit_rate >= -30:
+        return "😢 분할매매로 리스크 관리 추천!"
+    else:
+        return "💪 포기 금지! 급등주에서 재기 가능!"

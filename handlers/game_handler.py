@@ -62,18 +62,18 @@ class GameHandlerMixin(BaseHandlerMixin):
         remaining = result.get("remaining", 0)
         is_big_win = "1등" in tier or "2등" in tier
 
-        # 등급별 연출
+        # 등급별 연출 (10명+ 톡방에서 주목받는 이펙트)
         if "1등" in tier:
-            effect = "🎆🎇🎆🎇🎆"
-            reveal = "스르르... 번쩍!"
+            effect = "🎆🎇🎆🎇🎆\n━━━━━━━━━━━━━━━━━\n  ★ 대박!! 1등 당첨! ★\n━━━━━━━━━━━━━━━━━"
+            reveal = "스르르... 번쩍!!"
         elif "2등" in tier:
-            effect = "✨🎉✨"
-            reveal = "스르르... 오!"
+            effect = "✨🎉✨ 2등! 대단해요!"
+            reveal = "스르르... 오!!"
         elif "3등" in tier:
-            effect = "🎊"
-            reveal = "스르르..."
+            effect = "🎊 3등!"
+            reveal = "스르르... 오!"
         elif "4등" in tier or "5등" in tier:
-            effect = ""
+            effect = "💫"
             reveal = "스르르..."
         else:
             effect = ""
@@ -104,7 +104,8 @@ class GameHandlerMixin(BaseHandlerMixin):
             near_miss_reward = result.get("near_miss_reward", 0)
             near_miss_line = f"\n\n😱 아깝다! {near_miss_tier} ({near_miss_reward:,}원)까지 한 끗 차이였어요..."
 
-        msg = f"""🎫 복권 긁기... {reveal}
+        name = self._display_name()
+        msg = f"""🎫 {name}의 복권 긁기... {reveal}
 
 {effect}
 {tier}! {result['message']}
@@ -211,20 +212,24 @@ class GameHandlerMixin(BaseHandlerMixin):
         quiz = result["quiz"]
 
         if result["won"]:
-            effect = "🎉 정답!"
+            if result['profit'] >= 500_000:
+                effect = "🎊🎉 정답! 대박!"
+            else:
+                effect = "🎉 정답!"
             profit_text = f"📈 +{result['profit']:,}원"
             encourage = "실제 역사를 꿰뚫어 보셨네요! 👏"
         else:
             effect = "💨 오답!"
             profit_text = f"📉 {result['profit']:,}원"
-            encourage = "이 사건을 기억해두세요! 다음에 써먹을 수 있어요 💪"
+            encourage = "📖 이 사건을 기억해두세요! 다음엔 써먹을 수 있어요 💪"
 
         answer_emoji = "📈" if quiz["answer"] == "상승" else "📉"
 
         # 투자 교훈 생성 — 역사 데이터 기반 맥락 제공
         lesson = self._generate_quiz_lesson(quiz)
 
-        msg = f"""🔮 시장예측 — 역사 퀴즈
+        name = self._display_name()
+        msg = f"""🔮 {name}의 시장예측
 
 📊 {quiz['stock_name']}
 📅 {quiz['period']}
@@ -393,7 +398,8 @@ class GameHandlerMixin(BaseHandlerMixin):
         up_mult = result["up_multiplier"]
         down_mult = result["down_multiplier"]
 
-        msg = f"""🔢 업다운 시작!
+        name = self._display_name()
+        msg = f"""🔢 {name}의 업다운 시작!
 
 🎲 첫 번째 숫자: {number}
 
@@ -430,9 +436,11 @@ class GameHandlerMixin(BaseHandlerMixin):
             current_round = result["round"]
             potential = result["potential_winnings"]
 
-            # 연승 이펙트
+            # 연승 이펙트 (톡방에서 주목받는 레벨)
             rounds_won = current_round - 1
-            if rounds_won >= 5:
+            if rounds_won >= 7:
+                streak_effect = "👑🔥🔥🔥 전설의 연승! 🔥🔥🔥👑"
+            elif rounds_won >= 5:
                 streak_effect = "🔥🔥🔥 연승의 달인! 🔥🔥🔥"
             elif rounds_won >= 3:
                 streak_effect = "🔥🔥 연승 중! 🔥🔥"
@@ -485,7 +493,8 @@ class GameHandlerMixin(BaseHandlerMixin):
             else:
                 fail_msg = "💨 빗나갔어요"
 
-            msg = f"""🔢 업다운 — 게임 오버!
+            name = self._display_name()
+            msg = f"""🔢 {name}의 업다운 — 게임 오버!
 
 {arrow} {prev} → {next_num}
 🎯 예측: {result['choice']} / 정답: {result['actual']}
@@ -516,10 +525,12 @@ class GameHandlerMixin(BaseHandlerMixin):
 
         if profit > 0:
             profit_text = f"📈 +{profit:,}원"
-            if result["multiplier"] >= 5:
-                effect = "🎆🎇 미친 정산! 🎆🎇"
+            if result["multiplier"] >= 8:
+                effect = "🎆🎇🎆🎇🎆\n━━━━━━━━━━━━━━━━━\n  ★ 대박! x{result['multiplier']} 정산! ★\n━━━━━━━━━━━━━━━━━"
+            elif result["multiplier"] >= 5:
+                effect = "🎆🎇 x{mult} 정산! 🎆🎇".format(mult=result["multiplier"])
             elif result["multiplier"] >= 3:
-                effect = "🎉 훌륭한 정산! 🎉"
+                effect = "🎉 x{mult} 훌륭한 정산! 🎉".format(mult=result["multiplier"])
             elif result["multiplier"] >= 2:
                 effect = "✨ 좋은 정산! ✨"
             else:
@@ -530,7 +541,8 @@ class GameHandlerMixin(BaseHandlerMixin):
 
         is_big_cashout = result["multiplier"] >= 3  # 3배 이상 정산 = 대박
 
-        msg = f"""🔢 업다운 — 정산!
+        name = self._display_name()
+        msg = f"""🔢 {name}의 업다운 — 정산!
 
 {effect}
 
@@ -629,7 +641,8 @@ class GameHandlerMixin(BaseHandlerMixin):
         # 레벨 게이지 바
         gauge = self._make_gauge(level, EnhanceConfig.MAX_LEVEL)
 
-        msg = f"""{title_emoji} {title_name}
+        name = self._display_name()
+        msg = f"""{title_emoji} {name} — {title_name}
 
 🧬 각성 레벨: Lv.{level} / {EnhanceConfig.MAX_LEVEL}
 {gauge}
@@ -726,8 +739,9 @@ class GameHandlerMixin(BaseHandlerMixin):
                 effect = "✨"
                 header = f"✨ Lv.{new_lv} 각성 성공!"
 
+            name = self._display_name()
             msg = f"""{effect}
-{header}
+{header} {name}!
 
 {new_emoji} {new_name} Lv.{old_lv} → Lv.{new_lv}
 🎯 성공률 {rate}%에서 성공!
@@ -747,20 +761,24 @@ class GameHandlerMixin(BaseHandlerMixin):
             # 레벨별 고유 실패 문구
             fail_flavor = EnhanceConfig.FAIL_FLAVORS[old_lv] if old_lv < len(EnhanceConfig.FAIL_FLAVORS) else ""
 
-            if old_lv >= 10:
-                header = f"💀 Lv.{old_lv}에서 폭사..."
-                reset_msg = f"💥 Lv.{old_lv} → Lv.0 초기화!"
+            if old_lv >= 15:
+                header = f"💀 Lv.{old_lv}의 빛이 꺼집니다..."
+                reset_msg = f"💥 Lv.{old_lv} → Lv.0\n쌓아온 모든 감각이 사라집니다.\n다시, 아무것도 모르던 그 첫날로."
+            elif old_lv >= 10:
+                header = f"💀 Lv.{old_lv}에서 추락..."
+                reset_msg = f"💥 Lv.{old_lv} → Lv.0\n시장을 읽던 눈이 닫힙니다.\n다시 백지에서부터."
             elif old_lv >= 5:
-                header = f"💨 Lv.{old_lv}에서 실패!"
-                reset_msg = f"💥 Lv.{old_lv} → Lv.0 초기화!"
+                header = f"💨 Lv.{old_lv}에서 실패..."
+                reset_msg = f"💥 Lv.{old_lv} → Lv.0\n익숙해진 감각이 흐려집니다.\n처음 차트를 펼쳤던 그 때로."
             elif old_lv >= 1:
-                header = "💨 각성 실패!"
-                reset_msg = f"🔄 Lv.{old_lv} → Lv.0 초기화"
+                header = "💨 각성 실패..."
+                reset_msg = f"🔄 Lv.{old_lv} → Lv.0\n짧은 성장이 리셋됩니다. 다시 첫 걸음."
             else:
                 header = "💨 각성 실패!"
-                reset_msg = "🛡️ Lv.0 유지"
+                reset_msg = "🛡️ Lv.0 유지 — 잃을 것도 없었습니다."
 
-            msg = f"""{header}
+            name = self._display_name()
+            msg = f"""{header} {name}...
 
 {new_emoji} {new_name}
 {reset_msg}

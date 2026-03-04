@@ -216,7 +216,8 @@ class CommandHandler(
                 {"label": "📰 뉴스", "action": "message", "messageText": "/뉴스"},
                 {"label": "🔍 검색", "action": "message", "messageText": "/검색"},
             ]
-            return KakaoResponse.quick_replies("이미 가입했어요! 바로 플레이 👇", buttons)
+            name = self._display_name()
+            return KakaoResponse.quick_replies(f"{name}, 이미 가입했어요! 바로 플레이 👇", buttons)
 
     def handle_attendance(self) -> Dict:
         """출석 체크"""
@@ -257,7 +258,8 @@ class CommandHandler(
                 att_bonus = int((EnhanceConfig.get_attendance_multiplier(enhance_level) - 1) * 100)
                 enhance_line = f"\n{title_emoji} {title_name} 보너스: +{att_bonus}% (Lv.{enhance_level})"
 
-            msg = f"""✅ 출석 완료!
+            name = self._display_name()
+            msg = f"""✅ {name} 출석 완료!
 
 💰 +{reward:,}원 지급!{enhance_line}
 {streak_emoji} 연속 출석: {streak}일
@@ -279,7 +281,8 @@ class CommandHandler(
                 warning = f"⚠️ 내일 출석 안 하면 {streak}일 스트릭 리셋!\n💸 잃게 될 보너스: {bonus_losing:,}원/일"
             else:
                 warning = "📅 내일 다시 출석해주세요!"
-            msg = f"""✅ 오늘 출석 완료!
+            name = self._display_name()
+            msg = f"""✅ {name}, 오늘 이미 출석했어요!
 
 {warning}
 {streak_emoji} 현재 연속 출석: {streak}일

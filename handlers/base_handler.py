@@ -22,6 +22,22 @@ class BaseHandlerMixin:
     nickname: str
 
     # ===========================================
+    # 유저 표시명
+    # ===========================================
+
+    def _display_name(self) -> str:
+        """카카오톡 @멘션 형태 유저 표시명"""
+        name = self.nickname
+        if not name:
+            from models import User
+            user = self.db.query(User).filter(User.kakao_id == self.kakao_id).first()
+            if user and user.nickname:
+                name = user.nickname
+        if name:
+            return f"@{name} 님"
+        return ""
+
+    # ===========================================
     # 도파민 요소: 효과음/이펙트
     # ===========================================
     EFFECTS = {
@@ -259,30 +275,8 @@ class BaseHandlerMixin:
 
     def _get_sell_celebration(self, profit_rate: float, profit: int = 0) -> str:
         """수익률 기반 축하 메시지 (매도 시 사용) - 도파민 극대화"""
-        if profit_rate >= 100:
-            return "🎆🎇🚀💰🎆🎇\n\n🏆 전설의 수익! +100%! 👑\n당신은 진정한 주식왕!"
-        elif profit_rate >= 50:
-            return "🎉🔥✨\n\n💎 +50% 수익! 감이 미쳤어요!\n이 톡방에서 전설 찍는 중!"
-        elif profit_rate >= 30:
-            return "🎊🌟\n\n🚀 멋져요! +30% 수익!\n프로 트레이더 인정!"
-        elif profit_rate >= 20:
-            return "🎊 훌륭해요! +20% 이상 수익! 🌟"
-        elif profit_rate >= 10:
-            return "📈 좋은 거래! 꾸준히 가세요! 💪"
-        elif profit_rate >= 5:
-            return "✨ 수익 실현 성공! 잘하셨어요!"
-        elif profit_rate >= 0:
-            return "✅ 수익 마감! 본전 이상은 성공!"
-        elif profit_rate >= -5:
-            return "💫 작은 손실, 다음이 기회예요!"
-        elif profit_rate >= -10:
-            return "😅 아쉽지만 경험이 됐어요!"
-        elif profit_rate >= -20:
-            return "😤 회복 가능! 다시 도전하세요!"
-        elif profit_rate >= -30:
-            return "😢 조금 많이... 분할매매 추천드려요"
-        else:
-            return "💪 큰 손실이지만 포기하지 마세요!\n🎯 급등주에서 재기 가능!"
+        from utils import get_sell_exclamation
+        return get_sell_exclamation(profit_rate, profit)
 
     def _add_celebration(self, msg: str, profit: int) -> str:
         """큰 수익에 축하 이펙트 추가"""

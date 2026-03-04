@@ -9,7 +9,9 @@ from .visual_helpers import (
     get_profit_emoji,
     get_tier_title,
     sanitize_input,
-    format_money
+    format_money,
+    get_rival_msg,
+    get_sell_exclamation,
 )
 from .logger import (
     setup_logger,
@@ -37,6 +39,8 @@ __all__ = [
     "get_tier_title",
     "sanitize_input",
     "format_money",
+    "get_rival_msg",
+    "get_sell_exclamation",
     "setup_logger",
     "configure_root_logger",
     "get_main_logger",
