@@ -164,9 +164,27 @@ class GameHandlerMixin(BaseHandlerMixin):
 
         # 선택지가 없으면 퀴즈 출제 (상승/하락 선택 유도)
         if len(parts) < 3:
-            # 먼저 퀴즈 문제를 보여주고 유저가 선택하게 함
-            import random
+            from services.common import (
+                check_market_closed_for_game, get_user_with_error, validate_bet
+            )
             from config import GameProbability
+
+            # 장 마감 여부 사전 확인
+            can_play, market_error = check_market_closed_for_game("🔮")
+            if not can_play:
+                return self._market_closed_response(market_error["message"])
+
+            # 유저 조회 및 잔액 사전 확인
+            user, user_error = get_user_with_error(self.db, self.kakao_id)
+            if user_error:
+                return self._game_failure_response(user_error["message"])
+
+            is_valid, bet_error = validate_bet(bet, user.cash)
+            if not is_valid:
+                return self._game_failure_response(bet_error)
+
+            # 퀴즈 출제
+            import random
             quiz = random.choice(GameProbability.HISTORICAL_STOCK_DATA)
 
             return KakaoResponse.quick_replies(
