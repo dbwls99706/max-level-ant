@@ -368,9 +368,11 @@ class BattleService:
         ch_name = cls._get_user_display_name(challenger, battle.challenger_id) if challenger else "???"
         op_name = cls._get_user_display_name(opponent, battle.opponent_id) if opponent else "???"
 
-        price_change = battle.end_price - battle.start_price
-        # 0으로 나누기 방지
-        change_rate = (price_change / battle.start_price) * 100 if battle.start_price > 0 else 0
+        start_price = battle.start_price or 0
+        end_price = battle.end_price or 0
+        price_change = end_price - start_price
+        # 0으로 나누기 방지 + None 방어
+        change_rate = (price_change / start_price) * 100 if start_price > 0 else 0
 
         if battle.winner_id == battle.challenger_id:
             winner_name = ch_name
@@ -387,8 +389,8 @@ class BattleService:
             "finished": True,
             "battle_id": battle.id,
             "stock_name": battle.stock_name,
-            "start_price": battle.start_price,
-            "end_price": battle.end_price,
+            "start_price": start_price,
+            "end_price": end_price,
             "price_change": price_change,
             "change_rate": change_rate,
             "challenger_name": ch_name,

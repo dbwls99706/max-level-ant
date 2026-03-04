@@ -48,7 +48,7 @@ class CircuitBreaker:
             if self._state == "OPEN":
                 # 복구 타임아웃 확인
                 if self._last_failure_time and \
-                        (datetime.now(timezone.utc) - self._last_failure_time).seconds >= self.RECOVERY_TIMEOUT:
+                        (datetime.now(timezone.utc) - self._last_failure_time).total_seconds() >= self.RECOVERY_TIMEOUT:
                     self._state = "HALF_OPEN"
                     logger.info("KIS API 서킷 브레이커: HALF_OPEN (복구 시도)")
                     return False

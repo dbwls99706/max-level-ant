@@ -27,7 +27,8 @@ class EnhanceService:
     @classmethod
     def get_enhance_info(cls, db: Session, kakao_id: str) -> Dict:
         """현재 각성 정보 조회"""
-        user, error = get_user_with_error_for_update(db, kakao_id)
+        from services.common import get_user_with_error
+        user, error = get_user_with_error(db, kakao_id)
         if error:
             return error
 
