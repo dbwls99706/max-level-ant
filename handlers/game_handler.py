@@ -20,14 +20,14 @@ class GameHandlerMixin(BaseHandlerMixin):
         msg = """⚔️ 던전 게임
 
 🎁 /복권 - 무료 보물상자 (1일 5회)
-🔮 /시장예측 [금액] - 역사 던전 퀴즈!
+⚡ /시장예측 [금액] - 과거 주가 예언 배틀!
 🔢 /업다운 [금액] - 숫자 도전 게임!
 🧬 /각성 - 캐릭터 각성! ⚠️ 장 마감 후
 
-💡 역사 퀴즈: 실제 주식 역사로 상승/하락 맞추기!
+💡 예언 배틀: 실제 역사 주가! 맞추면 2배 💰 틀리면 전멸!
 💡 업다운: 연속으로 맞출수록 배율 UP!
 💡 각성: 레벨 UP → 출석/보물상자 보상 UP!
-⏰ 역사 퀴즈/업다운/각성은 장 마감 후 이용 가능"""
+⏰ 예언 배틀/업다운/각성은 장 마감 후 이용 가능"""
 
         small_bet = GameConfig.DEFAULT_BET
         big_bet = GameConfig.BIG_BET
@@ -36,8 +36,8 @@ class GameHandlerMixin(BaseHandlerMixin):
             [
                 {"label": "🎫 복권", "action": "message", "messageText": "/복권"},
                 {"label": "🧬 각성", "action": "message", "messageText": "/각성"},
-                {"label": "🔮 5만 퀴즈", "action": "message", "messageText": f"/시장예측 {small_bet}"},
-                {"label": "🔮 50만 퀴즈", "action": "message", "messageText": f"/시장예측 {big_bet}"},
+                {"label": "⚡ 5만 예언 배틀", "action": "message", "messageText": f"/시장예측 {small_bet}"},
+                {"label": "🔥 50만 대박 배틀", "action": "message", "messageText": f"/시장예측 {big_bet}"},
                 {"label": "🔢 5만 업다운", "action": "message", "messageText": f"/업다운 {small_bet}"},
             ]
         )
@@ -51,7 +51,7 @@ class GameHandlerMixin(BaseHandlerMixin):
             return KakaoResponse.quick_replies(
                 result["message"],
                 [
-                    {"label": "🔮 시장예측", "action": "message", "messageText": f"/시장예측 {bet}"},
+                    {"label": "⚡ 예언 배틀", "action": "message", "messageText": f"/시장예측 {bet}"},
                     {"label": "🔢 업다운", "action": "message", "messageText": f"/업다운 {bet}"},
                     {"label": "🚀 급등주", "action": "message", "messageText": "/급등"}
                 ]
@@ -122,7 +122,7 @@ class GameHandlerMixin(BaseHandlerMixin):
         if is_big_win:
             buttons.append({"label": "🏆 던전 랭킹", "action": "message", "messageText": "/랭킹"})
         buttons.extend([
-            {"label": "🔮 역사 퀴즈", "action": "message", "messageText": f"/시장예측 {GameConfig.DEFAULT_BET}"},
+            {"label": "⚡ 예언 배틀", "action": "message", "messageText": f"/시장예측 {GameConfig.DEFAULT_BET}"},
             {"label": "🧬 각성", "action": "message", "messageText": "/각성"},
         ])
 
@@ -138,16 +138,16 @@ class GameHandlerMixin(BaseHandlerMixin):
 
         if len(parts) < 2:
             return KakaoResponse.quick_replies(
-                "🔮 시장예측 — 주식 역사 퀴즈!\n\n"
-                "실제 한국 주식의 역사 데이터로\n"
-                "해당 기간에 주가가 올랐는지 내렸는지 맞춰보세요!\n\n"
-                "맞추면 x2 배율!\n\n"
+                "⚡ 과거 주가 예언 배틀!\n\n"
+                "실제 역사 주가 종목이 출제됩니다.\n"
+                "📈 상승? 📉 하락? 맞추면 골드 2배 💰\n"
+                "틀리면 전멸! 각오는 됐나? 🔥\n\n"
                 "사용법: /시장예측 [금액]\n"
                 "예: /시장예측 100000",
                 [
-                    {"label": "🔮 5만원", "action": "message", "messageText": "/시장예측 50000"},
-                    {"label": "🔮 10만원", "action": "message", "messageText": "/시장예측 100000"},
-                    {"label": "🔮 50만원", "action": "message", "messageText": "/시장예측 500000"},
+                    {"label": "⚡ 5만 예언!", "action": "message", "messageText": "/시장예측 50000"},
+                    {"label": "🔥 10만 배팅!", "action": "message", "messageText": "/시장예측 100000"},
+                    {"label": "💥 50만 올인!", "action": "message", "messageText": "/시장예측 500000"},
                 ]
             )
 
@@ -155,10 +155,10 @@ class GameHandlerMixin(BaseHandlerMixin):
             bet = int(parts[1].replace(",", ""))
         except ValueError:
             return KakaoResponse.quick_replies(
-                "투자금은 숫자로 입력해주세요.\n예: /시장예측 100000",
+                "골드 금액을 숫자로 입력해주세요.\n예: /시장예측 100000",
                 [
-                    {"label": "🔮 5만원", "action": "message", "messageText": "/시장예측 50000"},
-                    {"label": "🔮 10만원", "action": "message", "messageText": "/시장예측 100000"},
+                    {"label": "⚡ 5만 예언!", "action": "message", "messageText": "/시장예측 50000"},
+                    {"label": "🔥 10만 배팅!", "action": "message", "messageText": "/시장예측 100000"},
                 ]
             )
 
@@ -188,12 +188,12 @@ class GameHandlerMixin(BaseHandlerMixin):
             quiz = random.choice(GameProbability.HISTORICAL_STOCK_DATA)
 
             return KakaoResponse.quick_replies(
-                f"🔮 역사 던전 퀴즈!\n\n"
+                f"⚡ 예언 배틀 시작!\n\n"
                 f"📊 종목: {quiz['stock_name']}\n"
                 f"📅 기간: {quiz['period']}\n\n"
-                f"🪙 투입 골드: {bet:,}원\n"
-                f"🎯 정답 시: {bet * 2:,}원 획득!\n\n"
-                f"이 기간 동안 주가가 올랐을까, 내렸을까?",
+                f"💰 맞추면 {bet * 2:,}원!\n"
+                f"💸 틀리면 {bet:,}원 전멸!\n\n"
+                f"직감을 믿어라! 📈 상승? 📉 하락?",
                 [
                     {"label": "📈 상승!", "action": "message",
                      "messageText": f"/시장예측 {bet} 상승 {quiz['stock_name']}|{quiz['period']}"},
@@ -231,15 +231,15 @@ class GameHandlerMixin(BaseHandlerMixin):
 
         if result["won"]:
             if result['profit'] >= 500_000:
-                effect = "🎊🎉 퀴즈 정복! 대박 골드 획득!"
+                effect = "💥⚡ 예언 적중! 대박 골드 폭발!"
             else:
-                effect = "🎉 정답! 던전 퀴즈 클리어!"
+                effect = "⚡ 예언 적중! 골드 2배 획득!"
             profit_text = f"📈 +{result['profit']:,}원"
-            encourage = "역사를 꿰뚫는 개미의 눈! 👏"
+            encourage = "역사를 꿰뚫는 개미의 눈! 다음엔 더 크게 배팅해봐 👏"
         else:
-            effect = "💨 오답! 던전의 함정에 빠졌습니다..."
+            effect = "💨 빗나갔다! 골드 전멸..."
             profit_text = f"📉 {result['profit']:,}원"
-            encourage = "📖 이 사건을 기억해두세요! 다음 던전에서 써먹을 수 있어요 💪"
+            encourage = "📖 이 사건을 기억해둬! 다음엔 반드시 복수해 💪"
 
         answer_emoji = "📈" if quiz["answer"] == "상승" else "📉"
 
@@ -247,7 +247,7 @@ class GameHandlerMixin(BaseHandlerMixin):
         lesson = self._generate_quiz_lesson(quiz)
 
         name = self._display_name()
-        msg = f"""🔮 {name}의 역사 던전 퀴즈
+        msg = f"""⚡ {name}의 과거 주가 예언 배틀
 
 📊 {quiz['stock_name']}
 📅 {quiz['period']}
@@ -258,18 +258,18 @@ class GameHandlerMixin(BaseHandlerMixin):
 {effect}
 {encourage}
 
-📰 당시 던전 상황
+📰 당시 시장 상황
 {quiz['description']}
 
 {lesson}
 
-🪙 투입 골드: {result['bet']:,}원
+🪙 베팅: {result['bet']:,}원
 {profit_text}
 💰 현재 골드: {result['cash']:,}원"""
 
         buttons = [
-            {"label": "🔮 한번 더!", "action": "message", "messageText": f"/시장예측 {bet}"},
-            {"label": "🔮 2배 도전!", "action": "message", "messageText": f"/시장예측 {bet * 2}"},
+            {"label": "⚡ 다시 예언!", "action": "message", "messageText": f"/시장예측 {bet}"},
+            {"label": "🔥 2배 올인!", "action": "message", "messageText": f"/시장예측 {bet * 2}"},
         ]
         # 큰 판돈(50만원 이상) 정답 시 랭킹 버튼
         if result["won"] and result["bet"] >= 500_000:
@@ -526,7 +526,7 @@ class GameHandlerMixin(BaseHandlerMixin):
                 msg,
                 [
                     {"label": "🔢 다시 도전!", "action": "message", "messageText": f"/업다운 {result['bet']}"},
-                    {"label": "🔮 역사 퀴즈", "action": "message", "messageText": f"/시장예측 {GameConfig.DEFAULT_BET}"},
+                    {"label": "⚡ 예언 배틀", "action": "message", "messageText": f"/시장예측 {GameConfig.DEFAULT_BET}"},
                     {"label": "🚀 급등주 정찰", "action": "message", "messageText": "/급등"}
                 ]
             )
@@ -580,7 +580,7 @@ class GameHandlerMixin(BaseHandlerMixin):
         if is_big_cashout:
             buttons.append({"label": "🏆 던전 랭킹", "action": "message", "messageText": "/랭킹"})
         buttons.extend([
-            {"label": "🔮 역사 퀴즈", "action": "message", "messageText": f"/시장예측 {GameConfig.DEFAULT_BET}"},
+            {"label": "⚡ 예언 배틀", "action": "message", "messageText": f"/시장예측 {GameConfig.DEFAULT_BET}"},
             {"label": "🚀 급등주 정찰", "action": "message", "messageText": "/급등"}
         ])
 
