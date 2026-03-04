@@ -1,5 +1,5 @@
 """
-주식왕 카카오톡 챗봇 - 메인 서버
+만렙개미 카카오톡 챗봇 - 메인 서버
 """
 import os
 import uuid
@@ -104,7 +104,7 @@ rate_limiter = RateLimiter(
 async def lifespan(app: FastAPI):
     """앱 시작/종료 시 실행"""
     # 시작 시
-    logger.info("주식왕 봇 서버 시작!")
+    logger.info("만렙개미 봇 서버 시작!")
 
     # 설정 검증
     is_valid, errors = validate_config()
@@ -144,15 +144,15 @@ async def lifespan(app: FastAPI):
 
     yield
     # 종료 시
-    logger.info("주식왕 봇 서버 종료!")
+    logger.info("만렙개미 봇 서버 종료!")
 
 
 # ===========================================
 # FastAPI 앱 생성
 # ===========================================
 app = FastAPI(
-    title="주식왕 카카오톡 챗봇",
-    description="가상 주식 투자 게임 챗봇 API",
+    title="만렙개미 카카오톡 챗봇",
+    description="주식 던전 RPG 챗봇 API — 쪼렙 개미에서 만렙 개미로",
     version="1.0.0",
     lifespan=lifespan
 )
@@ -211,7 +211,7 @@ async def root():
     """서버 상태 확인"""
     return {
         "status": "ok",
-        "message": "주식왕 봇 서버가 실행 중입니다!",
+        "message": "만렙개미 봇 서버가 실행 중입니다!",
         "version": "1.0.0"
     }
 
