@@ -289,8 +289,9 @@ class BattleService:
 
         current_price = stock_info["price"]
 
-        # 승패 판정
-        price_change = current_price - battle.start_price
+        # 승패 판정 (start_price None 방어)
+        start_price = battle.start_price or 0
+        price_change = current_price - start_price
         actual_direction = "UP" if price_change > 0 else "DOWN" if price_change < 0 else "DRAW"
 
         # FOR UPDATE로 동시성 제어 (상금 지급 시 race condition 방지)
