@@ -36,7 +36,6 @@ class SocialHandlerMixin(BaseHandlerMixin):
         total_users = len(rankings)
 
         for r in rankings:
-            medal = ""
             if r["rank"] == 1:
                 medal = "🥇"
             elif r["rank"] == 2:
@@ -44,23 +43,30 @@ class SocialHandlerMixin(BaseHandlerMixin):
             elif r["rank"] == 3:
                 medal = "🥉"
             else:
-                medal = f"{r['rank']}."
+                medal = f"{r['rank']}위"
 
-            emoji = "📈" if r["profit_rate"] >= 0 else "📉"
+            profit_emoji = "📈" if r["profit_rate"] >= 0 else "📉"
+            profit_amount = r.get("profit_amount", 0)
+            amount_str = f"+{profit_amount:,}원" if profit_amount >= 0 else f"{profit_amount:,}원"
 
-            # 각성 칭호 표시
-            enhance_emoji = r.get("enhance_emoji", "")
+            # 각성 칭호 표시 (칭호명 + 레벨)
             enhance_lv = r.get("enhance_level", 0)
-            enhance_tag = f" {enhance_emoji}Lv.{enhance_lv}" if enhance_lv > 0 else ""
+            enhance_emoji = r.get("enhance_emoji", "")
+            enhance_title = r.get("enhance_title", "")
+            if enhance_lv > 0:
+                enhance_tag = f"\n       {enhance_emoji} {enhance_title} Lv.{enhance_lv}"
+            else:
+                enhance_tag = ""
 
             # 본인 하이라이트
             is_me = r.get("kakao_id") == self.kakao_id
+            name = r['nickname']
             if is_me:
                 my_rank_in_top10 = r["rank"]
-                ranking_list += f"\n{medal} ★{r['nickname']}★{enhance_tag} ← 나!"
+                ranking_list += f"\n{medal} @{name} ⭐나"
             else:
-                ranking_list += f"\n{medal} {r['nickname']}{enhance_tag}"
-            ranking_list += f"\n   {emoji} {r['profit_rate']:+.2f}% ({r['total_asset']:,}원)\n"
+                ranking_list += f"\n{medal} @{name}"
+            ranking_list += f"\n   {profit_emoji} {r['profit_rate']:+.2f}% ({amount_str}){enhance_tag}\n"
 
         # 톡방 전체 유저 수 표기
         header = f"🏆 수익률 랭킹 (총 {total_users}명)\n"
@@ -68,7 +74,7 @@ class SocialHandlerMixin(BaseHandlerMixin):
 
         # TOP 10 안에 있으면 축하 메시지
         if my_rank_in_top10:
-            msg = f"🎉 축하해요! {my_rank_in_top10}위!\n\n" + msg
+            msg = f"🎉 {my_rank_in_top10}위! 대단해요!\n\n" + msg
         else:
             # TOP 10 밖이면 내 순위 + 바로 윗순위 경쟁자 표시
             my_rank = RankingService.get_my_rank(self.db, self.kakao_id)
@@ -164,7 +170,6 @@ class SocialHandlerMixin(BaseHandlerMixin):
         my_rank = None
 
         for r in rankings:
-            medal = ""
             if r["rank"] == 1:
                 medal = "🥇"
             elif r["rank"] == 2:
@@ -172,14 +177,15 @@ class SocialHandlerMixin(BaseHandlerMixin):
             elif r["rank"] == 3:
                 medal = "🥉"
             else:
-                medal = f"{r['rank']}."
+                medal = f"{r['rank']}위"
 
             is_me = r.get("kakao_id") == self.kakao_id
+            name = r['nickname']
             if is_me:
                 my_rank = r["rank"]
-                ranking_list += f"\n{medal} ★{r['nickname']}★ ← 나!"
+                ranking_list += f"\n{medal} @{name} ⭐나"
             else:
-                ranking_list += f"\n{medal} {r['nickname']}"
+                ranking_list += f"\n{medal} @{name}"
             ranking_list += f"\n   {r['enhance_emoji']} {r['enhance_title']} Lv.{r['enhance_level']}\n"
 
         msg = f"🧬 각성 랭킹\n{ranking_list}"

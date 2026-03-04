@@ -118,6 +118,7 @@ def _migrate_db():
         'updown_round': 'INTEGER DEFAULT 0',
         'updown_multiplier': 'FLOAT DEFAULT 1.0',
         'enhance_level': 'INTEGER DEFAULT 0',
+        'enhance_title_seed': 'INTEGER DEFAULT 0',
     }
 
     # 허용된 SQL 타입 화이트리스트 (SQL 인젝션 방지)
