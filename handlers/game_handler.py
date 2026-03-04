@@ -117,14 +117,13 @@ class GameHandlerMixin(BaseHandlerMixin):
 
         buttons = []
         if remaining > 0:
-            buttons.append({"label": "🎁 한번 더!", "action": "message", "messageText": "/복권"})
-        # 대박 시 랭킹 버튼 추가
+            buttons.append({"label": f"🎁 한번 더! ({remaining}회 남음)", "action": "message", "messageText": "/복권"})
         if is_big_win:
-            buttons.append({"label": "🏆 던전 랭킹", "action": "message", "messageText": "/랭킹"})
-        buttons.extend([
-            {"label": "⚡ 예언 배틀", "action": "message", "messageText": f"/시장예측 {GameConfig.DEFAULT_BET}"},
-            {"label": "🧬 각성", "action": "message", "messageText": "/각성"},
-        ])
+            buttons.append({"label": "💼 자산 확인", "action": "message", "messageText": "/포트폴리오"})
+            buttons.append({"label": "🏆 랭킹 확인", "action": "message", "messageText": "/랭킹"})
+        else:
+            buttons.append({"label": "⚡ 예언 배틀", "action": "message", "messageText": f"/시장예측 {GameConfig.DEFAULT_BET}"})
+            buttons.append({"label": "🚀 급등주 투자", "action": "message", "messageText": "/급등"})
 
         return KakaoResponse.quick_replies(msg, buttons)
 
@@ -268,16 +267,21 @@ class GameHandlerMixin(BaseHandlerMixin):
 {profit_text}
 💰 현재 골드: {result['cash']:,}원"""
 
-        buttons = [
-            {"label": "⚡ 다시 예언!", "action": "message", "messageText": f"/시장예측 {bet}"},
-            {"label": "🔥 2배 올인!", "action": "message", "messageText": f"/시장예측 {bet * 2}"},
-        ]
-        # 큰 판돈(50만원 이상) 정답 시 랭킹 버튼
-        if result["won"] and result["bet"] >= 500_000:
-            buttons.append({"label": "🏆 던전 랭킹", "action": "message", "messageText": "/랭킹"})
+        if result["won"]:
+            buttons = [
+                {"label": "⚡ 다시 예언!", "action": "message", "messageText": f"/시장예측 {bet}"},
+                {"label": "🔥 2배 올인!", "action": "message", "messageText": f"/시장예측 {bet * 2}"},
+                {"label": "💼 자산 확인", "action": "message", "messageText": "/포트폴리오"},
+                {"label": "🚀 주식도 투자!", "action": "message", "messageText": "/급등"},
+            ]
+            if result["bet"] >= 500_000:
+                buttons[2] = {"label": "🏆 랭킹 확인", "action": "message", "messageText": "/랭킹"}
         else:
-            buttons.append({"label": "🔢 숫자 도전", "action": "message", "messageText": f"/업다운 {bet}"})
-        buttons.append({"label": "🚀 급등주 정찰", "action": "message", "messageText": "/급등"})
+            buttons = [
+                {"label": "⚡ 다시 예언!", "action": "message", "messageText": f"/시장예측 {bet}"},
+                {"label": "🎁 복권으로 복구", "action": "message", "messageText": "/복권"},
+                {"label": "🚀 급등주로 만회", "action": "message", "messageText": "/급등"},
+            ]
 
         return KakaoResponse.quick_replies(msg, buttons)
 

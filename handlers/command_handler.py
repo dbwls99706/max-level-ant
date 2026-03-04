@@ -289,23 +289,22 @@ class CommandHandler(
 {motivation}"""
 
         buttons = [
-            {"label": "🚀 급등주 정찰", "action": "message", "messageText": "/급등"},
-            {"label": "🎁 보물상자", "action": "message", "messageText": "/복권"},
+            {"label": "🚀 받은 골드로 투자!", "action": "message", "messageText": "/급등"},
+            {"label": "🎁 복권도 긁기", "action": "message", "messageText": "/복권"},
+            {"label": "💼 포폴 확인", "action": "message", "messageText": "/포트폴리오"},
         ]
         buttons.extend(self._get_game_buttons())
         return KakaoResponse.quick_replies(msg, buttons)
 
     def handle_help(self) -> Dict:
         """도움말"""
-        return KakaoResponse.quick_replies(
-            Messages.HELP,
-            [
-                {"label": "🎮 시작하기", "action": "message", "messageText": "/시작"},
-                {"label": "📊 시세 조회", "action": "message", "messageText": "/시세"},
-                {"label": "🚀 급등주", "action": "message", "messageText": "/급등"},
-                {"label": "💼 포트폴리오", "action": "message", "messageText": "/포트폴리오"}
-            ]
-        )
+        buttons = [
+            {"label": "🚀 지금 급등주", "action": "message", "messageText": "/급등"},
+            {"label": "🎁 무료 복권", "action": "message", "messageText": "/복권"},
+            {"label": "📅 출석 +30만", "action": "message", "messageText": "/출석"},
+            {"label": "💼 내 자산", "action": "message", "messageText": "/포트폴리오"},
+        ]
+        return KakaoResponse.quick_replies(Messages.HELP, buttons)
 
     def handle_welcome(self) -> Dict:
         """웰컴 블록 응답 - 채팅방 진입 시 빈 utterance로 트리거됨"""
