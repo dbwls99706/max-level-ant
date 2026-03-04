@@ -119,14 +119,17 @@ async def lifespan(app: FastAPI):
     StockService.load_stock_cache()
 
     # 만료된 대기 배틀 정리 (서버 재시작 시)
+    cleanup_db = None
     try:
         cleanup_db = SessionLocal()
         cleaned = BattleService.cleanup_stale_battles(cleanup_db)
         if cleaned > 0:
             logger.info(f"서버 시작 시 만료 배틀 {cleaned}건 정리")
-        cleanup_db.close()
     except Exception as e:
         logger.warning(f"만료 배틀 정리 실패: {e}")
+    finally:
+        if cleanup_db:
+            cleanup_db.close()
 
     # KIS API 토큰 미리 발급 (타임아웃 방지)
     token = KISAPIClient.get_access_token()
