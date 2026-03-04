@@ -24,10 +24,10 @@ class SocialHandlerMixin(BaseHandlerMixin):
 
         if not rankings:
             return KakaoResponse.quick_replies(
-                "아직 던전 랭킹 데이터가 없습니다.\n던전에 먼저 입장해서 첫 번째 랭커가 되어보세요!",
+                "아직 랭킹 데이터가 없습니다.\n먼저 시작해서 첫 번째 랭커가 되어보세요!",
                 [
-                    {"label": "⚔️ 던전 입장", "action": "message", "messageText": "/시작"},
-                    {"label": "🚀 급등주 정찰", "action": "message", "messageText": "/급등"}
+                    {"label": "🚀 시작하기", "action": "message", "messageText": "/시작"},
+                    {"label": "📈 급등주", "action": "message", "messageText": "/급등"}
                 ]
             )
 
@@ -63,12 +63,12 @@ class SocialHandlerMixin(BaseHandlerMixin):
             ranking_list += f"\n   {emoji} {r['profit_rate']:+.2f}% ({r['total_asset']:,}원)\n"
 
         # 톡방 전체 유저 수 표기
-        header = f"🏆 던전 수익률 랭킹 (총 {total_users}명)\n"
+        header = f"🏆 수익률 랭킹 (총 {total_users}명)\n"
         msg = header + ranking_list
 
         # TOP 10 안에 있으면 축하 메시지
         if my_rank_in_top10:
-            msg = f"🎉 축하해요! 이 던전에서 {my_rank_in_top10}위!\n\n" + msg
+            msg = f"🎉 축하해요! {my_rank_in_top10}위!\n\n" + msg
         else:
             # TOP 10 밖이면 내 순위 + 바로 윗순위 경쟁자 표시
             my_rank = RankingService.get_my_rank(self.db, self.kakao_id)
@@ -87,7 +87,7 @@ class SocialHandlerMixin(BaseHandlerMixin):
             [
                 {"label": "📍 내 순위", "action": "message", "messageText": "/내순위"},
                 {"label": "🧬 각성 랭킹", "action": "message", "messageText": "/각성랭킹"},
-                {"label": "🚀 급등주 정찰", "action": "message", "messageText": "/급등"}
+                {"label": "📈 급등주", "action": "message", "messageText": "/급등"}
             ]
         )
 
@@ -97,8 +97,8 @@ class SocialHandlerMixin(BaseHandlerMixin):
 
         if rank_info is None:
             return KakaoResponse.quick_replies(
-                "먼저 /시작 으로 던전에 참가하세요.",
-                [{"label": "⚔️ 던전 입장", "action": "message", "messageText": "/시작"}]
+                "먼저 /시작 으로 참가하세요.",
+                [{"label": "🚀 시작하기", "action": "message", "messageText": "/시작"}]
             )
 
         rank = rank_info["rank"]
@@ -110,7 +110,7 @@ class SocialHandlerMixin(BaseHandlerMixin):
 
         # 순위 기반 동기부여 메시지
         if rank == 1:
-            motivation = "👑 당신이 1위! 이 던전의 만렙 개미!"
+            motivation = "👑 당신이 1위! 만렙개미 최강자!"
         elif rank <= 3:
             motivation = f"🏆 TOP 3! 정상까지 {rank - 1}명 남았어요!"
         elif percentile >= 90:
@@ -131,7 +131,7 @@ class SocialHandlerMixin(BaseHandlerMixin):
             gap = (rank_info.get("above_profit_rate", 0) or 0) - profit_rate
             rival_line = "\n" + get_rival_msg(rank, rank_info["above_nickname"], gap)
 
-        msg = f"""📍 내 던전 순위
+        msg = f"""📍 내 순위
 
 🏆 {rank}위 / 전체 {total}명
 {rate_emoji} 수익률: {profit_rate:+.2f}%
@@ -140,9 +140,9 @@ class SocialHandlerMixin(BaseHandlerMixin):
 {motivation}{rival_line}"""
 
         buttons = [
-            {"label": "🏆 던전 랭킹", "action": "message", "messageText": "/랭킹"},
+            {"label": "🏆 랭킹", "action": "message", "messageText": "/랭킹"},
             {"label": "💼 포트폴리오", "action": "message", "messageText": "/포트폴리오"},
-            {"label": "🚀 급등주 정찰", "action": "message", "messageText": "/급등"},
+            {"label": "📈 급등주", "action": "message", "messageText": "/급등"},
         ]
 
         return KakaoResponse.quick_replies(msg, buttons)
@@ -156,7 +156,7 @@ class SocialHandlerMixin(BaseHandlerMixin):
                 "🧬 아직 각성한 개미가 없습니다.\n장 마감 후 각성에 도전해보세요!",
                 [
                     {"label": "🧬 각성", "action": "message", "messageText": "/각성"},
-                    {"label": "🏆 던전 랭킹", "action": "message", "messageText": "/랭킹"}
+                    {"label": "🏆 랭킹", "action": "message", "messageText": "/랭킹"}
                 ]
             )
 
@@ -182,27 +182,27 @@ class SocialHandlerMixin(BaseHandlerMixin):
                 ranking_list += f"\n{medal} {r['nickname']}"
             ranking_list += f"\n   {r['enhance_emoji']} {r['enhance_title']} Lv.{r['enhance_level']}\n"
 
-        msg = f"🧬 던전 각성 랭킹\n{ranking_list}"
+        msg = f"🧬 각성 랭킹\n{ranking_list}"
 
         if my_rank:
-            msg = f"🎉 각성 랭킹 {my_rank}위! 던전 강자!\n\n" + msg
+            msg = f"🎉 각성 랭킹 {my_rank}위! 개미계 강자!\n\n" + msg
 
         return KakaoResponse.quick_replies(
             msg,
             [
-                {"label": "🏆 던전 랭킹", "action": "message", "messageText": "/랭킹"},
+                {"label": "🏆 랭킹", "action": "message", "messageText": "/랭킹"},
                 {"label": "🧬 각성", "action": "message", "messageText": "/각성"},
                 {"label": "📍 내 순위", "action": "message", "messageText": "/내순위"}
             ]
         )
 
     def handle_mission(self) -> Dict:
-        """던전 일간 퀘스트 현황"""
+        """일간 미션 현황"""
         user = UserService.get_user(self.db, self.kakao_id)
         if not user:
             return KakaoResponse.quick_replies(
-                "먼저 /시작 으로 던전에 참가하세요.",
-                [{"label": "⚔️ 던전 입장", "action": "message", "messageText": "/시작"}]
+                "먼저 /시작 으로 참가하세요.",
+                [{"label": "🚀 시작하기", "action": "message", "messageText": "/시작"}]
             )
 
         status = MissionService.get_mission_status(self.db, self.kakao_id)
@@ -217,7 +217,7 @@ class SocialHandlerMixin(BaseHandlerMixin):
         else:
             mission_status = f"{mission['progress']}/{mission['target']}회"
 
-        msg = f"""⚔️ 던전 일간 퀘스트{bonus_text}
+        msg = f"""📋 오늘의 미션{bonus_text}
 
 🎯 오늘의 퀘스트: {GameConfig.DAILY_MISSION_TRADE_COUNT}회 거래하기
 📊 진행 현황: {mission_status}
@@ -229,23 +229,23 @@ class SocialHandlerMixin(BaseHandlerMixin):
         return KakaoResponse.quick_replies(
             msg,
             [
-                {"label": "🏆 던전 업적", "action": "message", "messageText": "/업적"},
+                {"label": "🏆 업적", "action": "message", "messageText": "/업적"},
                 {"label": "📊 인기 종목", "action": "message", "messageText": "/인기"}
             ]
         )
 
     def handle_achievements(self) -> Dict:
-        """던전 업적 현황"""
+        """업적 현황"""
         user = UserService.get_user(self.db, self.kakao_id)
         if not user:
             return KakaoResponse.quick_replies(
-                "먼저 /시작 으로 던전에 참가하세요.",
-                [{"label": "⚔️ 던전 입장", "action": "message", "messageText": "/시작"}]
+                "먼저 /시작 으로 참가하세요.",
+                [{"label": "🚀 시작하기", "action": "message", "messageText": "/시작"}]
             )
 
         status = MissionService.get_mission_status(self.db, self.kakao_id)
 
-        msg = f"""🏆 던전 업적
+        msg = f"""🏆 업적
 달성: {status['achievements_completed']}/{status['achievements_total']}개
 
 """
@@ -264,7 +264,7 @@ class SocialHandlerMixin(BaseHandlerMixin):
         return KakaoResponse.quick_replies(
             msg,
             [
-                {"label": "⚔️ 던전 퀘스트", "action": "message", "messageText": "/미션"},
+                {"label": "📋 오늘의 미션", "action": "message", "messageText": "/미션"},
                 {"label": "💼 포트폴리오", "action": "message", "messageText": "/포트폴리오"}
             ]
         )
@@ -308,14 +308,14 @@ class SocialHandlerMixin(BaseHandlerMixin):
     # ==========================================
 
     def handle_battle_help(self) -> Dict:
-        """던전 배틀 설명"""
-        msg = """⚔️ 던전 주가 배틀
+        """배틀 설명"""
+        msg = """⚔️ 주가 배틀
 
 🎯 배틀이란?
 다른 개미와 주가 예측 대결!
 종목의 주가가 오를지 내릴지 예측하세요.
 
-📝 던전 배틀 진행 방식
+📝 배틀 진행 방식
 1. 도전자가 종목/예측/골드로 배틀 생성
 2. 상대 개미가 배틀에 참가 (반대 방향 예측)
 3. 60분 후 주가 변동으로 승패 결정
@@ -358,7 +358,7 @@ class SocialHandlerMixin(BaseHandlerMixin):
             else:
                 battle_btn = {"label": "📊 인기종목", "action": "message", "messageText": "/인기"}
             return KakaoResponse.quick_replies(
-                f"⚔️ 던전 배틀 생성\n\n사용법: /배틀 [종목] [상승/하락] [금액]\n예: /배틀 삼성전자 상승 {default_bet}\n\n❓ /배틀설명 으로 자세한 설명 확인",
+                f"⚔️ 주가 배틀 생성\n\n사용법: /배틀 [종목] [상승/하락] [금액]\n예: /배틀 삼성전자 상승 {default_bet}\n\n❓ /배틀설명 으로 자세한 설명 확인",
                 [
                     {"label": "❓ 배틀설명", "action": "message", "messageText": "/배틀설명"},
                     battle_btn,
@@ -382,7 +382,7 @@ class SocialHandlerMixin(BaseHandlerMixin):
         if not result["success"]:
             return KakaoResponse.simple_text(result["message"])
 
-        msg = f"""⚔️ 던전 배틀 생성 완료!
+        msg = f"""⚔️ 배틀 생성 완료!
 
 📊 종목: {result['stock_name']}
 💰 현재가: {result['current_price']:,}원
@@ -425,7 +425,7 @@ class SocialHandlerMixin(BaseHandlerMixin):
         if not result["success"]:
             return KakaoResponse.simple_text(result["message"])
 
-        msg = f"""⚔️ 던전 배틀 시작!
+        msg = f"""⚔️ 배틀 시작!
 ━━━━━━━━━━━━━━━━━
 📊 {result['stock_name']} | 시작가 {result['start_price']:,}원
 
