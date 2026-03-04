@@ -33,7 +33,8 @@ class EnhanceService:
             return error
 
         level = user.enhance_level or 0
-        title_name, title_emoji = EnhanceConfig.get_title(level)
+        seed = getattr(user, 'enhance_title_seed', 0) or 0
+        title_name, title_emoji = EnhanceConfig.get_title(level, seed=seed)
 
         result = {
             "success": True,
@@ -80,7 +81,8 @@ class EnhanceService:
 
         # 만렙 체크
         if level >= EnhanceConfig.MAX_LEVEL:
-            title_name, title_emoji = EnhanceConfig.get_title(level)
+            seed = getattr(user, 'enhance_title_seed', 0) or 0
+            title_name, title_emoji = EnhanceConfig.get_title(level, seed=seed)
             return error_response(
                 ErrorCode.INVALID_STATE,
                 f"{title_emoji} 이미 최고 경지에 도달했습니다!\n"
@@ -107,13 +109,16 @@ class EnhanceService:
         succeeded = roll <= success_rate
 
         old_level = level
-        old_name, old_emoji = EnhanceConfig.get_title(old_level)
+        old_seed = getattr(user, 'enhance_title_seed', 0) or 0
+        old_name, old_emoji = EnhanceConfig.get_title(old_level, seed=old_seed)
 
         if succeeded:
             # 성공!
             user.enhance_level = level + 1
             new_level = level + 1
-            new_name, new_emoji = EnhanceConfig.get_title(new_level)
+            new_seed = random.randint(0, 4)
+            user.enhance_title_seed = new_seed
+            new_name, new_emoji = EnhanceConfig.get_title(new_level, seed=new_seed)
 
             try:
                 db.commit()
@@ -153,7 +158,9 @@ class EnhanceService:
             drop = level  # 현재 레벨 전부 하락
             new_level = 0
             user.enhance_level = new_level
-            new_name, new_emoji = EnhanceConfig.get_title(new_level)
+            new_seed = random.randint(0, 4)
+            user.enhance_title_seed = new_seed
+            new_name, new_emoji = EnhanceConfig.get_title(new_level, seed=new_seed)
 
             try:
                 db.commit()

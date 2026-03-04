@@ -91,13 +91,15 @@ class RankingService:
 
             # 각성 정보
             enhance_level = getattr(user, 'enhance_level', 0) or 0
-            title_name, title_emoji = EnhanceConfig.get_title(enhance_level)
+            seed = getattr(user, 'enhance_title_seed', 0) or 0
+            title_name, title_emoji = EnhanceConfig.get_title(enhance_level, seed=seed)
 
             rankings.append({
                 "kakao_id": user.kakao_id,
                 "nickname": cls._get_display_name(user),
                 "total_asset": total_asset,
                 "profit_rate": profit_rate,
+                "profit_amount": total_asset - (user.initial_cash or 5_000_000),
                 "enhance_level": enhance_level,
                 "enhance_title": title_name,
                 "enhance_emoji": title_emoji,
@@ -251,7 +253,8 @@ class RankingService:
         result = []
         for i, user in enumerate(users):
             level = user.enhance_level or 0
-            title_name, title_emoji = EnhanceConfig.get_title(level)
+            seed = getattr(user, 'enhance_title_seed', 0) or 0
+            title_name, title_emoji = EnhanceConfig.get_title(level, seed=seed)
             result.append({
                 "rank": i + 1,
                 "kakao_id": user.kakao_id,

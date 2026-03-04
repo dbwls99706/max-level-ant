@@ -217,7 +217,7 @@ class CommandHandler(
                 {"label": "🏆 랭킹", "action": "message", "messageText": "/랭킹"},
             ]
             name = self._display_name()
-            return KakaoResponse.quick_replies(f"⚔️ {name}, 던전에 다시 오셨군요! 바로 시작 👇", buttons)
+            return KakaoResponse.quick_replies(f"{name}, 다시 오셨군요! 바로 시작 👇", buttons)
 
     def handle_attendance(self) -> Dict:
         """출석 체크"""
@@ -235,9 +235,9 @@ class CommandHandler(
         def get_streak_motivation(s: int, is_new: bool) -> str:
             if s >= 7:
                 if s == 7 and is_new:
-                    return "🎊🎊 7일 연속 던전 입장! 최대 보너스 골드 획득! 🎊🎊"
+                    return "🎊🎊 7일 연속 출석! 최대 보너스 골드 획득! 🎊🎊"
                 elif s == 14 and is_new:
-                    return "👑 2주 연속! 당신은 이 던전의 진정한 용사! 👑"
+                    return "👑 2주 연속! 진정한 장기 투자자! 👑"
                 elif s == 30 and is_new:
                     return "🏆 한 달 연속!!! 전설의 개미로 등극! 🏆"
                 return f"🔥 최대 보너스 유지 중! ({s}일 연속)"
@@ -259,7 +259,7 @@ class CommandHandler(
                 enhance_line = f"\n{title_emoji} {title_name} 보너스: +{att_bonus}% (Lv.{enhance_level})"
 
             name = self._display_name()
-            msg = f"""⚔️ {name} 던전 입장 완료!
+            msg = f"""📅 {name} 출석 완료!
 
 🪙 +{reward:,}원 획득!{enhance_line}
 {streak_emoji} 연속 입장: {streak}일
@@ -280,40 +280,39 @@ class CommandHandler(
                 bonus_losing = int(GameConfig.ATTENDANCE_REWARD * 1.2)
                 warning = f"⚠️ 내일 입장 안 하면 {streak}일 스트릭 리셋!\n💸 잃게 될 보너스: {bonus_losing:,}원/일"
             else:
-                warning = "📅 내일 다시 던전에 입장해주세요!"
+                warning = "📅 내일 다시 출석해주세요!"
             name = self._display_name()
-            msg = f"""⚔️ {name}, 오늘 이미 던전에 입장했어요!
+            msg = f"""📅 {name}, 오늘 이미 출석했어요!
 
 {warning}
 {streak_emoji} 현재 연속 입장: {streak}일
 {motivation}"""
 
         buttons = [
-            {"label": "🚀 급등주 정찰", "action": "message", "messageText": "/급등"},
-            {"label": "🎁 보물상자", "action": "message", "messageText": "/복권"},
+            {"label": "📈 급등주", "action": "message", "messageText": "/급등"},
+            {"label": "🎁 복권", "action": "message", "messageText": "/복권"},
+            {"label": "💼 포트폴리오", "action": "message", "messageText": "/포트폴리오"},
         ]
         buttons.extend(self._get_game_buttons())
         return KakaoResponse.quick_replies(msg, buttons)
 
     def handle_help(self) -> Dict:
         """도움말"""
-        return KakaoResponse.quick_replies(
-            Messages.HELP,
-            [
-                {"label": "🎮 시작하기", "action": "message", "messageText": "/시작"},
-                {"label": "📊 시세 조회", "action": "message", "messageText": "/시세"},
-                {"label": "🚀 급등주", "action": "message", "messageText": "/급등"},
-                {"label": "💼 포트폴리오", "action": "message", "messageText": "/포트폴리오"}
-            ]
-        )
+        buttons = [
+            {"label": "📈 급등주", "action": "message", "messageText": "/급등"},
+            {"label": "🎁 복권", "action": "message", "messageText": "/복권"},
+            {"label": "📅 출석", "action": "message", "messageText": "/출석"},
+            {"label": "💼 포트폴리오", "action": "message", "messageText": "/포트폴리오"},
+        ]
+        return KakaoResponse.quick_replies(Messages.HELP, buttons)
 
     def handle_welcome(self) -> Dict:
         """웰컴 블록 응답 - 채팅방 진입 시 빈 utterance로 트리거됨"""
         return KakaoResponse.quick_replies(
-            "⚔️ 만렙개미 던전에 오신 것을 환영합니다!\n쪼렙 개미에서 만렙 개미로 성장하는 주식 RPG!",
+            "🐜 만렙개미에 오신 것을 환영합니다!\n쪼렙 개미에서 만렙 개미로 성장하세요!",
             [
-                {"label": "⚔️ 던전 입장", "action": "message", "messageText": "/시작"},
-                {"label": "📖 던전 가이드", "action": "message", "messageText": "/도움말"},
+                {"label": "🚀 시작하기", "action": "message", "messageText": "/시작"},
+                {"label": "📖 도움말", "action": "message", "messageText": "/도움말"},
             ]
         )
 
@@ -323,9 +322,9 @@ class CommandHandler(
         return KakaoResponse.quick_replies(
             Messages.UNKNOWN_COMMAND,
             [
-                {"label": "⚔️ 던전 입장", "action": "message", "messageText": "/시작"},
-                {"label": "📖 던전 가이드", "action": "message", "messageText": "/도움말"},
-                {"label": "🚀 급등주 정찰", "action": "message", "messageText": "/급등"},
+                {"label": "🚀 시작하기", "action": "message", "messageText": "/시작"},
+                {"label": "📖 도움말", "action": "message", "messageText": "/도움말"},
+                {"label": "📈 급등주", "action": "message", "messageText": "/급등"},
                 {"label": "📅 출석", "action": "message", "messageText": "/출석"},
             ]
         )
