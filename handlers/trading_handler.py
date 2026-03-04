@@ -6,8 +6,8 @@
 from typing import Dict
 
 from services import UserService, TradeService, StockService
-from utils import KakaoResponse, get_profit_bar, get_tier_title
-from config import Messages
+from utils import KakaoResponse, get_profit_bar, get_tier_title, format_money
+from config import Messages, GameConfig
 
 from .base_handler import BaseHandlerMixin
 
@@ -451,13 +451,28 @@ class TradingHandlerMixin(BaseHandlerMixin):
         tier = get_tier_title(portfolio['total_asset'])
         profit_bar = get_profit_bar(portfolio['profit_rate'])
 
+        # 총자산 억/만 단위 + 시작금 대비 수익
+        total_asset = portfolio['total_asset']
+        total_display = f"{total_asset:,}원"
+        if total_asset >= 10_000_000:
+            total_display = f"{total_asset:,}원 ({format_money(total_asset)})"
+
+        # 시작금 대비 수익금
+        initial = GameConfig.INITIAL_CASH
+        profit_from_start = total_asset - initial
+        if profit_from_start >= 0:
+            start_compare = f"📈 시작금 대비: +{profit_from_start:,}원"
+        else:
+            start_compare = f"📉 시작금 대비: {profit_from_start:,}원"
+
         msg = f"""💼 내 포트폴리오
 
 {tier}
 💵 현금: {portfolio['cash']:,}원
 {holdings_text}
 {profit_bar}
-💰 총자산: {portfolio['total_asset']:,}원"""
+💰 총자산: {total_display}
+{start_compare}"""
 
         if not buttons:
             buttons = [{"label": "📊 인기종목", "action": "message", "messageText": "/인기"}]

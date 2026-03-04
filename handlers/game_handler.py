@@ -62,18 +62,18 @@ class GameHandlerMixin(BaseHandlerMixin):
         remaining = result.get("remaining", 0)
         is_big_win = "1등" in tier or "2등" in tier
 
-        # 등급별 연출
+        # 등급별 연출 (10명+ 톡방에서 주목받는 이펙트)
         if "1등" in tier:
-            effect = "🎆🎇🎆🎇🎆"
-            reveal = "스르르... 번쩍!"
+            effect = "🎆🎇🎆🎇🎆\n━━━━━━━━━━━━━━━━━\n  ★ 대박!! 1등 당첨! ★\n━━━━━━━━━━━━━━━━━"
+            reveal = "스르르... 번쩍!!"
         elif "2등" in tier:
-            effect = "✨🎉✨"
-            reveal = "스르르... 오!"
+            effect = "✨🎉✨ 2등! 대단해요!"
+            reveal = "스르르... 오!!"
         elif "3등" in tier:
-            effect = "🎊"
-            reveal = "스르르..."
+            effect = "🎊 3등!"
+            reveal = "스르르... 오!"
         elif "4등" in tier or "5등" in tier:
-            effect = ""
+            effect = "💫"
             reveal = "스르르..."
         else:
             effect = ""
@@ -212,13 +212,16 @@ class GameHandlerMixin(BaseHandlerMixin):
         quiz = result["quiz"]
 
         if result["won"]:
-            effect = "🎉 정답!"
+            if result['profit'] >= 500_000:
+                effect = "🎊🎉 정답! 대박!"
+            else:
+                effect = "🎉 정답!"
             profit_text = f"📈 +{result['profit']:,}원"
             encourage = "실제 역사를 꿰뚫어 보셨네요! 👏"
         else:
             effect = "💨 오답!"
             profit_text = f"📉 {result['profit']:,}원"
-            encourage = "이 사건을 기억해두세요! 다음에 써먹을 수 있어요 💪"
+            encourage = "📖 이 사건을 기억해두세요! 다음엔 써먹을 수 있어요 💪"
 
         answer_emoji = "📈" if quiz["answer"] == "상승" else "📉"
 
@@ -433,9 +436,11 @@ class GameHandlerMixin(BaseHandlerMixin):
             current_round = result["round"]
             potential = result["potential_winnings"]
 
-            # 연승 이펙트
+            # 연승 이펙트 (톡방에서 주목받는 레벨)
             rounds_won = current_round - 1
-            if rounds_won >= 5:
+            if rounds_won >= 7:
+                streak_effect = "👑🔥🔥🔥 전설의 연승! 🔥🔥🔥👑"
+            elif rounds_won >= 5:
                 streak_effect = "🔥🔥🔥 연승의 달인! 🔥🔥🔥"
             elif rounds_won >= 3:
                 streak_effect = "🔥🔥 연승 중! 🔥🔥"
@@ -520,10 +525,12 @@ class GameHandlerMixin(BaseHandlerMixin):
 
         if profit > 0:
             profit_text = f"📈 +{profit:,}원"
-            if result["multiplier"] >= 5:
-                effect = "🎆🎇 미친 정산! 🎆🎇"
+            if result["multiplier"] >= 8:
+                effect = "🎆🎇🎆🎇🎆\n━━━━━━━━━━━━━━━━━\n  ★ 대박! x{result['multiplier']} 정산! ★\n━━━━━━━━━━━━━━━━━"
+            elif result["multiplier"] >= 5:
+                effect = "🎆🎇 x{mult} 정산! 🎆🎇".format(mult=result["multiplier"])
             elif result["multiplier"] >= 3:
-                effect = "🎉 훌륭한 정산! 🎉"
+                effect = "🎉 x{mult} 훌륭한 정산! 🎉".format(mult=result["multiplier"])
             elif result["multiplier"] >= 2:
                 effect = "✨ 좋은 정산! ✨"
             else:
