@@ -761,18 +761,21 @@ class GameHandlerMixin(BaseHandlerMixin):
             # 레벨별 고유 실패 문구
             fail_flavor = EnhanceConfig.FAIL_FLAVORS[old_lv] if old_lv < len(EnhanceConfig.FAIL_FLAVORS) else ""
 
-            if old_lv >= 10:
-                header = f"💀 Lv.{old_lv}에서 폭사..."
-                reset_msg = f"💥 Lv.{old_lv} → Lv.0 초기화!"
+            if old_lv >= 15:
+                header = f"💀 Lv.{old_lv}의 빛이 꺼집니다..."
+                reset_msg = f"💥 Lv.{old_lv} → Lv.0\n쌓아온 모든 감각이 사라집니다.\n다시, 아무것도 모르던 그 첫날로."
+            elif old_lv >= 10:
+                header = f"💀 Lv.{old_lv}에서 추락..."
+                reset_msg = f"💥 Lv.{old_lv} → Lv.0\n시장을 읽던 눈이 닫힙니다.\n다시 백지에서부터."
             elif old_lv >= 5:
-                header = f"💨 Lv.{old_lv}에서 실패!"
-                reset_msg = f"💥 Lv.{old_lv} → Lv.0 초기화!"
+                header = f"💨 Lv.{old_lv}에서 실패..."
+                reset_msg = f"💥 Lv.{old_lv} → Lv.0\n익숙해진 감각이 흐려집니다.\n처음 차트를 펼쳤던 그 때로."
             elif old_lv >= 1:
-                header = "💨 각성 실패!"
-                reset_msg = f"🔄 Lv.{old_lv} → Lv.0 초기화"
+                header = "💨 각성 실패..."
+                reset_msg = f"🔄 Lv.{old_lv} → Lv.0\n짧은 성장이 리셋됩니다. 다시 첫 걸음."
             else:
                 header = "💨 각성 실패!"
-                reset_msg = "🛡️ Lv.0 유지"
+                reset_msg = "🛡️ Lv.0 유지 — 잃을 것도 없었습니다."
 
             name = self._display_name()
             msg = f"""{header} {name}...
