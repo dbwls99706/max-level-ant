@@ -191,9 +191,9 @@ class GameHandlerMixin(BaseHandlerMixin):
                 f"⚡ 예언 배틀 시작!\n\n"
                 f"📊 종목: {quiz['stock_name']}\n"
                 f"📅 기간: {quiz['period']}\n\n"
-                f"💰 맞추면 {bet * 2:,}원!\n"
-                f"💸 틀리면 {bet:,}원 전멸!\n\n"
-                f"직감을 믿어라! 📈 상승? 📉 하락?",
+                f"💡 당시 이슈: {quiz['description']}\n\n"
+                f"이 상황에서 주가는 올랐을까, 내렸을까?\n"
+                f"💰 맞추면 {bet * 2:,}원 / 💸 틀리면 전멸!",
                 [
                     {"label": "📈 상승!", "action": "message",
                      "messageText": f"/시장예측 {bet} 상승 {quiz['stock_name']}|{quiz['period']}"},
@@ -235,11 +235,11 @@ class GameHandlerMixin(BaseHandlerMixin):
             else:
                 effect = "⚡ 예언 적중! 골드 2배 획득!"
             profit_text = f"📈 +{result['profit']:,}원"
-            encourage = "역사를 꿰뚫는 개미의 눈! 다음엔 더 크게 배팅해봐 👏"
+            encourage = "역사를 꿰뚫는 개미의 눈! 왜 맞았는지 아래 해설을 확인해봐요 🔍"
         else:
             effect = "💨 빗나갔다! 골드 전멸..."
             profit_text = f"📉 {result['profit']:,}원"
-            encourage = "📖 이 사건을 기억해둬! 다음엔 반드시 복수해 💪"
+            encourage = "틀렸다면 더욱 중요! 아래 당시 상황을 읽으면 다음엔 맞출 수 있어요 📖"
 
         answer_emoji = "📈" if quiz["answer"] == "상승" else "📉"
 
@@ -258,9 +258,10 @@ class GameHandlerMixin(BaseHandlerMixin):
 {effect}
 {encourage}
 
-📰 당시 시장 상황
+📰 왜 이런 움직임이었을까?
 {quiz['description']}
 
+💡 투자 인사이트
 {lesson}
 
 🪙 베팅: {result['bet']:,}원
