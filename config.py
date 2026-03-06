@@ -348,7 +348,7 @@ class KISConfig:
 # ===========================================
 class GameConfig:
     # 초기 자금
-    INITIAL_CASH = 5_000_000  # 500만원
+    INITIAL_CASH = 10_000_000  # 1000만원
 
     # 출석 보상
     ATTENDANCE_REWARD = 300_000  # 30만원

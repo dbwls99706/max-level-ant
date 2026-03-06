@@ -111,7 +111,7 @@ class SocialHandlerMixin(BaseHandlerMixin):
 
         total_asset, profit_rate = RankingService.calculate_total_asset(self.db, user)
         rate_emoji = "📈" if profit_rate >= 0 else "📉"
-        profit_amount = total_asset - (user.initial_cash or 5_000_000)
+        profit_amount = total_asset - (user.initial_cash or GameConfig.INITIAL_CASH)
         amount_str = f"+{profit_amount:,}원" if profit_amount >= 0 else f"{profit_amount:,}원"
 
         # 수익률 기반 동기부여
