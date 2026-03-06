@@ -203,7 +203,7 @@ class SocialHandlerMixin(BaseHandlerMixin):
         )
 
     def handle_mission(self) -> Dict:
-        """일간 미션 현황"""
+        """일간 미션 + 주간 챌린지 + 업적 요약 한 화면"""
         user = UserService.get_user(self.db, self.kakao_id)
         if not user:
             return KakaoResponse.quick_replies(
@@ -214,31 +214,67 @@ class SocialHandlerMixin(BaseHandlerMixin):
         status = MissionService.get_mission_status(self.db, self.kakao_id)
         mission = status["daily_mission"]
 
-        bonus_text = ""
+        # ── 일간 미션 ──
+        bonus_line = ""
         if status["is_bonus_day"]:
-            bonus_text = f"\n\n🎉 오늘은 보너스 요일! (보상 {status['bonus_multiplier']}배)"
+            bonus_line = f" 🎉 보너스 요일 x{status['bonus_multiplier']}!"
 
+        target = mission["target"]
+        prog = mission["progress"]
         if mission["completed"]:
-            mission_status = "✅ 퀘스트 완료!"
+            mission_bar = "▓" * 5
+            mission_status = "✅ 완료!"
         else:
-            mission_status = f"{mission['progress']}/{mission['target']}회"
+            filled = int(prog / target * 5)
+            mission_bar = "▓" * filled + "░" * (5 - filled)
+            mission_status = f"{prog}/{target}회"
 
-        msg = f"""📋 오늘의 미션{bonus_text}
+        # ── 주간 챌린지 ──
+        try:
+            ch_result = ChallengeService.get_user_challenge_progress(self.db, self.kakao_id)
+            if ch_result["success"]:
+                ch = ch_result["challenge"]
+                pr = ch_result["progress"]
+                filled_ch = int(pr["progress_rate"] / 10)
+                ch_bar = "▓" * filled_ch + "░" * (10 - filled_ch)
+                if pr["completed"]:
+                    ch_status = "✅ 완료!" if pr["reward_claimed"] else "✅ 완료! (보상 대기)"
+                else:
+                    ch_status = f"{pr['current']}/{pr['target']}"
+                ch_line = f"""
+🗓️ 주간 챌린지: {ch['description']}
+   [{ch_bar}] {ch_status}  💰 {ch['reward']:,}원"""
+            else:
+                ch_line = ""
+        except Exception:
+            ch_line = ""
 
-🎯 오늘의 퀘스트: {GameConfig.DAILY_MISSION_TRADE_COUNT}회 거래하기
-📊 진행 현황: {mission_status}
-🪙 퀘스트 보상: {mission['reward']:,}원
+        # ── 업적 요약 ──
+        done = status["achievements_completed"]
+        total = status["achievements_total"]
+        ach_bar = "▓" * done + "░" * (total - done)
+        next_ach = status["available_achievements"][0] if status["available_achievements"] else None
+        next_ach_line = f"
+   다음: {next_ach['icon']} {next_ach['name']} (💰 {next_ach['reward']:,}원)" if next_ach else ""
 
-📈 총 거래 횟수: {status['total_trades']:,}회
-💵 누적 실현 수익: {status['total_profit_realized']:,}원"""
+        msg = f"""📋 오늘의 미션{bonus_line}
 
-        return KakaoResponse.quick_replies(
-            msg,
-            [
-                {"label": "🏆 업적", "action": "message", "messageText": "/업적"},
-                {"label": "📊 인기 종목", "action": "message", "messageText": "/인기"}
-            ]
-        )
+🎯 일간 퀘스트: {GameConfig.DAILY_MISSION_TRADE_COUNT}회 거래하기
+   [{mission_bar}] {mission_status}  💰 {mission['reward']:,}원{ch_line}
+
+🏆 업적: {done}/{total}개 [{ach_bar}]{next_ach_line}
+
+📈 총 거래 {status['total_trades']:,}회 | 누적 수익 {status['total_profit_realized']:,}원"""
+
+        buttons = [
+            {"label": "🏆 업적", "action": "message", "messageText": "/업적"},
+            {"label": "🎖️ 마일스톤", "action": "message", "messageText": "/마일스톤"},
+            {"label": "📊 인기 종목", "action": "message", "messageText": "/인기"}
+        ]
+        if ch_line and "보상 대기" in ch_line:
+            buttons.insert(0, {"label": "🎁 챌린지 보상받기", "action": "message", "messageText": "/챌린지보상"})
+
+        return KakaoResponse.quick_replies(msg, buttons)
 
     def handle_achievements(self) -> Dict:
         """업적 현황"""
@@ -250,27 +286,77 @@ class SocialHandlerMixin(BaseHandlerMixin):
             )
 
         status = MissionService.get_mission_status(self.db, self.kakao_id)
+        total_trades = status.get("total_trades", 0)
+        total_profit = status.get("total_profit_realized", 0)
 
-        msg = f"""🏆 업적
-달성: {status['achievements_completed']}/{status['achievements_total']}개
+        done = status["achievements_completed"]
+        total = status["achievements_total"]
+        gauge = "▓" * done + "░" * (total - done)
+
+        msg = f"""🏆 업적 — {done}/{total}개 달성
+[{gauge}]
 
 """
+        # 달성 완료 업적
         if status["achievements"]:
-            msg += "✅ 달성한 업적\n"
+            msg += "✅ 달성 완료
+"
             for ach in status["achievements"]:
-                msg += f"{ach['icon']} {ach['name']}\n"
-            msg += "\n"
+                msg += f"  {ach['icon']} {ach['name']}
+"
+            msg += "
+"
 
+        # 도전 중인 업적 — 진행도 힌트 포함
         if status["available_achievements"]:
-            msg += "🎯 도전 중인 업적\n"
-            for ach in status["available_achievements"][:3]:
-                msg += f"⬜ {ach['name']}: {ach['description']}\n"
-                msg += f"   보상: {ach['reward']:,}원\n"
+            msg += "🎯 도전 중 (보상 자동 지급)
+"
+            # 진행도를 보여줄 수 있는 업적 먼저 정렬
+            def progress_hint(ach):
+                ach_id = ach.get("id", "")
+                if ach_id == "trades_10":
+                    left = max(0, 10 - total_trades)
+                    return f"거래 {left}회 남음!" if left > 0 else None
+                elif ach_id == "trades_50":
+                    left = max(0, 50 - total_trades)
+                    return f"거래 {left}회 남음!" if left > 0 else None
+                elif ach_id == "trades_100":
+                    left = max(0, 100 - total_trades)
+                    return f"거래 {left}회 남음!" if left > 0 else None
+                elif ach_id == "profit_1m":
+                    pct = int(min(100, total_profit / 1_000_000 * 100))
+                    return f"수익 {pct}% 달성" if pct > 0 else None
+                elif ach_id == "profit_10m":
+                    pct = int(min(100, total_profit / 10_000_000 * 100))
+                    return f"수익 {pct}% 달성" if pct > 0 else None
+                elif ach_id == "profit_100m":
+                    pct = int(min(100, total_profit / 100_000_000 * 100))
+                    return f"수익 {pct}% 달성" if pct > 0 else None
+                elif ach_id == "first_trade":
+                    return "첫 거래만 하면 달성!"
+                elif ach_id == "first_profit":
+                    return "첫 수익 실현만 하면 달성!"
+                elif ach_id == "streak_7":
+                    streak = getattr(user, "attendance_streak", 0) or 0
+                    left = max(0, 7 - streak)
+                    return f"연속 출석 {left}일 남음!" if left > 0 else None
+                elif ach_id == "millionaire":
+                    return "총 자산 1억 달성!"
+                return None
+
+            for ach in status["available_achievements"][:4]:
+                hint = progress_hint(ach)
+                hint_str = f" → {hint}" if hint else ""
+                msg += f"  ⬜ {ach['icon']} {ach['name']}{hint_str}
+"
+                msg += f"     💰 보상 {ach['reward']:,}원
+"
 
         return KakaoResponse.quick_replies(
             msg,
             [
                 {"label": "📋 오늘의 미션", "action": "message", "messageText": "/미션"},
+                {"label": "🎖️ 마일스톤", "action": "message", "messageText": "/마일스톤"},
                 {"label": "💼 포트폴리오", "action": "message", "messageText": "/포트폴리오"}
             ]
         )
@@ -612,35 +698,64 @@ class SocialHandlerMixin(BaseHandlerMixin):
 
         result = MilestoneService.get_user_milestones(self.db, self.kakao_id)
 
-        msg = f"""🏆 마일스톤
+        achieved_cnt = len(result["achieved"])
+        total_cnt = achieved_cnt + len(result["pending"])
 
-✅ 달성: {len(result['achieved'])}개
-⬜ 미달성: {len(result['pending'])}개
+        msg = f"""🎖️ 마일스톤 — {achieved_cnt}/{total_cnt}개 달성
+(달성 시 보상 자동 지급!)
+
 """
-
-        if result["unclaimed_rewards"] > 0:
-            msg += f"🎁 미수령 보상: {result['unclaimed_rewards']:,}원\n"
-
+        # 달성 완료
         if result["achieved"]:
-            msg += "\n✅ 최근 달성\n"
+            msg += "✅ 달성 완료
+"
             for m in result["achieved"][-3:]:
-                claimed = "✓" if m["reward_claimed"] else "🎁"
-                msg += f"  {m['name']} {claimed}\n"
+                msg += f"  {m['name']}
+"
+            if len(result["achieved"]) > 3:
+                msg += f"  ...외 {len(result['achieved'])-3}개
+"
+            msg += "
+"
 
+        # 다음 목표 — 카테고리별 가장 가까운 것 2개
         if result["pending"]:
-            msg += "\n🎯 다음 목표\n"
-            for m in result["pending"][:2]:
-                msg += f"  {m['name']}\n"
-                msg += f"    {m['description']} (보상: {m['reward']:,}원)\n"
+            msg += "🎯 다음 목표 (보상 자동 지급)
+"
+            # 자산 마일스톤: 진행도 표시
+            try:
+                from services.asset_service import AssetService
+                total_asset = AssetService.get_total_asset(self.db, self.kakao_id)
+            except Exception:
+                total_asset = 0
+            total_trades = getattr(user, "total_trades", 0) or 0
 
-        buttons = []
-        if result["unclaimed_rewards"] > 0:
-            buttons.append({"label": "🎁 전체 보상받기", "action": "message", "messageText": "/마일스톤보상"})
+            for m in result["pending"][:3]:
+                cat = m.get("category", "")
+                threshold = m.get("threshold", 0)
+                if cat == "asset" and total_asset and threshold:
+                    pct = int(min(99, total_asset / threshold * 100))
+                    bar = "▓" * (pct // 10) + "░" * (10 - pct // 10)
+                    hint = f" [{bar}] {pct}%"
+                elif cat == "trade" and threshold:
+                    left = max(0, threshold - total_trades)
+                    hint = f" (거래 {left}회 남음)" if left > 0 else " (달성 직전!)"
+                elif cat == "streak":
+                    streak = getattr(user, "attendance_streak", 0) or 0
+                    left = max(0, threshold - streak)
+                    hint = f" (출석 {left}일 남음)" if left > 0 else " (달성 직전!)"
+                else:
+                    hint = ""
+                msg += f"  ⬜ {m['name']}{hint}
+"
+                msg += f"     💰 {m['reward']:,}원
+"
 
-        buttons.extend([
+        buttons = [
+            {"label": "🏆 업적", "action": "message", "messageText": "/업적"},
             {"label": "🎯 챌린지", "action": "message", "messageText": "/챌린지"},
             {"label": "💼 포트폴리오", "action": "message", "messageText": "/포트폴리오"}
-        ])
+        ]
 
         return KakaoResponse.quick_replies(msg, buttons)
 

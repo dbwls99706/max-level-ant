@@ -13,6 +13,7 @@ from models import Holding, Transaction
 from services.stock_service import StockService
 from services.user_service import UserService
 from services.mission_service import MissionService
+from services.milestone_service import MilestoneService
 from services.common import (
     get_user_with_error_for_update,
     validate_quantity,
@@ -223,6 +224,12 @@ class TradeService:
         mission_reward = MissionService.increment_trade_count(db, kakao_id)
         new_achievements = MissionService.check_and_award_achievements(db, kakao_id)
 
+        # 마일스톤 자동 체크·지급 (거래 횟수 기준)
+        new_milestones = MilestoneService.check_milestones(
+            db, kakao_id,
+            total_trades=user.total_trades,
+        )
+
         # 감사 로그
         log_trade(
             kakao_id=kakao_id,
@@ -255,7 +262,8 @@ class TradeService:
                 "fee": fee,
                 "cash": user.cash,
                 "mission_reward": mission_reward,
-                "new_achievements": new_achievements
+                "new_achievements": new_achievements,
+                "new_milestones": new_milestones,
             }
         }
 
@@ -387,6 +395,18 @@ class TradeService:
             db, kakao_id, trade_profit=profit if profit > 0 else 0
         )
 
+        # 마일스톤 자동 체크·지급 (자산·거래 횟수 기준)
+        try:
+            from services.asset_service import AssetService
+            total_asset = AssetService.get_total_asset(db, kakao_id)
+        except Exception:
+            total_asset = None
+        new_milestones = MilestoneService.check_milestones(
+            db, kakao_id,
+            total_asset=total_asset,
+            total_trades=user.total_trades,
+        )
+
         # 감사 로그
         log_trade(
             kakao_id=kakao_id,
@@ -423,7 +443,8 @@ class TradeService:
                 "profit_rate": profit_rate,
                 "cash": user.cash,
                 "mission_reward": mission_reward,
-                "new_achievements": new_achievements
+                "new_achievements": new_achievements,
+                "new_milestones": new_milestones,
             }
         }
 

@@ -60,20 +60,20 @@ class GameHandlerMixin(BaseHandlerMixin):
         tier = result["tier"]
         reward = result["reward"]
         remaining = result.get("remaining", 0)
-        is_big_win = "1등" in tier or "2등" in tier
+        is_big_win = tier in ("전설", "영웅")
 
-        # 등급별 연출 (10명+ 톡방에서 주목받는 이펙트)
-        if "1등" in tier:
-            effect = "🎆🎇🎆🎇🎆\n━━━━━━━━━━━━━━━━━\n  ★ 대박!! 1등 당첨! ★\n━━━━━━━━━━━━━━━━━"
+        # 희귀도별 연출 (10명+ 톡방에서 주목받는 이펙트)
+        if tier == "전설":
+            effect = "🎆🎇🎆🎇🎆\n━━━━━━━━━━━━━━━━━\n  🟠 전설 등급 획득!! 🟠\n━━━━━━━━━━━━━━━━━"
             reveal = "스르르... 번쩍!!"
-        elif "2등" in tier:
-            effect = "✨🎉✨ 2등! 대단해요!"
+        elif tier == "영웅":
+            effect = "✨🎉✨ 🟣 영웅 등급! 대단해요!"
             reveal = "스르르... 오!!"
-        elif "3등" in tier:
-            effect = "🎊 3등!"
+        elif tier == "희귀":
+            effect = "🎊 🔵 희귀 등급!"
             reveal = "스르르... 오!"
-        elif "4등" in tier or "5등" in tier:
-            effect = "💫"
+        elif tier == "고급":
+            effect = "🟢 고급"
             reveal = "스르르..."
         else:
             effect = ""

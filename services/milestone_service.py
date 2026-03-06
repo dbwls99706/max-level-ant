@@ -131,8 +131,8 @@ class MilestoneService:
         streak: int = None
     ) -> List[Dict]:
         """
-        마일스톤 달성 체크
-        Returns: 새로 달성한 마일스톤 리스트
+        마일스톤 달성 체크 & 자동 보상 지급
+        Returns: 새로 달성한 마일스톤 리스트 (보상 이미 지급됨)
         """
         user = db.query(User).filter(User.kakao_id == kakao_id).first()
         if not user:
@@ -140,7 +140,7 @@ class MilestoneService:
 
         achieved = []
 
-        # 이미 달성한 마일스톤 배치 조회 (N+1 방지: 13개 개별 쿼리 → 1개)
+        # 이미 달성한 마일스톤 배치 조회 (N+1 방지)
         existing_milestones = db.query(Milestone.milestone_type).filter(
             Milestone.kakao_id == kakao_id
         ).all()
@@ -150,7 +150,6 @@ class MilestoneService:
             if milestone_type in achieved_types:
                 continue
 
-            # 카테고리별 체크
             should_achieve = False
             current_value = 0
 
@@ -170,14 +169,15 @@ class MilestoneService:
                     current_value = streak
 
             if should_achieve:
-                # 마일스톤 달성 기록
+                # 마일스톤 달성 기록 + 보상 즉시 지급 (수동 수령 불필요)
                 milestone = Milestone(
                     kakao_id=kakao_id,
                     milestone_type=milestone_type,
                     asset_at_achievement=current_value,
-                    reward_claimed=0
+                    reward_claimed=1  # 자동 지급
                 )
                 db.add(milestone)
+                user.cash = safe_add(user.cash, info["reward"])
 
                 achieved.append({
                     "type": milestone_type,
