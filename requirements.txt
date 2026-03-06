@@ -18,6 +18,3 @@ python-dotenv==1.0.0
 python-dateutil==2.8.2
 pytz==2024.1
 cachetools==5.3.2
-
-# Stock Data (historical quiz)
-pykrx>=1.0.45

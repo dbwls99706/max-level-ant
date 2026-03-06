@@ -321,6 +321,15 @@ if DATABASE_URL.startswith("postgres://"):
 
 
 # ===========================================
+# 공공데이터포털 API 설정 (금융위원회 주식시세정보)
+# ===========================================
+class PublicDataConfig:
+    SERVICE_KEY = os.getenv("PUBLIC_DATA_SERVICE_KEY", "")
+    BASE_URL = "https://apis.data.go.kr/1160100/service/GetStockSecuritiesInfoService"
+    API_TIMEOUT = 10
+
+
+# ===========================================
 # 한국투자증권 KIS API 설정
 # ===========================================
 class KISConfig:
