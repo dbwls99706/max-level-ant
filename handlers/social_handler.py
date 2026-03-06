@@ -19,7 +19,11 @@ class SocialHandlerMixin(BaseHandlerMixin):
     """소셜/경쟁 관련 핸들러 믹스인"""
 
     def handle_ranking(self) -> Dict:
-        """랭킹 조회 (그룹 챗봇: 채팅방별 랭킹)"""
+        """랭킹 조회 (그룹 챗봇: 채팅방별 랭킹, 1:1: 내 순위만)"""
+        # 1:1 채널에서는 내 순위만 표시
+        if not self.group_key:
+            return self._handle_ranking_solo()
+
         rankings = RankingService.get_group_ranking(self.db, self.group_key, limit=10)
 
         if not rankings:
@@ -68,9 +72,7 @@ class SocialHandlerMixin(BaseHandlerMixin):
                 ranking_list += f"\n{medal} @{name}"
             ranking_list += f"\n   {profit_emoji} {r['profit_rate']:+.2f}% ({amount_str}){enhance_tag}\n"
 
-        # 톡방 전체 유저 수 표기
-        scope = "이 방" if self.group_key else "전체"
-        header = f"🏆 수익률 랭킹 ({scope} {total_users}명)\n"
+        header = f"🏆 수익률 랭킹 (이 방 {total_users}명)\n"
         msg = header + ranking_list
 
         # TOP 10 안에 있으면 축하 메시지
@@ -98,9 +100,69 @@ class SocialHandlerMixin(BaseHandlerMixin):
             ]
         )
 
+    def _handle_ranking_solo(self) -> Dict:
+        """1:1 채널 랭킹 — 내 순위 + 자산 요약"""
+        rank_info = RankingService.get_my_rank(self.db, self.kakao_id)
+
+        if rank_info is None:
+            return KakaoResponse.quick_replies(
+                "먼저 /시작 으로 참가하세요.",
+                [{"label": "🚀 시작하기", "action": "message", "messageText": "/시작"}]
+            )
+
+        rank = rank_info["rank"]
+        total = rank_info["total"]
+        profit_rate = rank_info["profit_rate"]
+        rate_emoji = "📈" if profit_rate >= 0 else "📉"
+
+        # 퍼센타일
+        percentile = ((total - rank + 1) / total) * 100 if total > 0 else 0
+
+        if rank == 1:
+            motivation = "👑 전체 1위! 만렙개미 최강자!"
+        elif rank <= 3:
+            motivation = f"🏆 TOP 3! 정상까지 {rank - 1}명!"
+        elif percentile >= 90:
+            motivation = f"🌟 상위 {100 - percentile:.0f}%!"
+        elif percentile >= 70:
+            motivation = f"📈 상위 {100 - percentile:.0f}%! 좋은 성적!"
+        elif percentile >= 50:
+            motivation = f"💪 상위 {100 - percentile:.0f}%! 조금만 더!"
+        else:
+            motivation = f"🔥 역전의 기회는 있어요!"
+
+        rival_line = ""
+        if rank_info.get("above_nickname"):
+            gap = (rank_info.get("above_profit_rate", 0) or 0) - profit_rate
+            rival_line = "\n" + get_rival_msg(rank, rank_info["above_nickname"], gap)
+
+        msg = f"""🏆 내 랭킹
+
+📍 {rank}위 / 전체 {total}명
+{rate_emoji} 수익률: {profit_rate:+.2f}%
+💰 총 자산: {rank_info['total_asset']:,}원
+
+{motivation}{rival_line}
+
+💡 그룹 채팅방에서 친구들과 랭킹을 겨뤄보세요!"""
+
+        return KakaoResponse.quick_replies(
+            msg,
+            [
+                {"label": "🧬 각성 랭킹", "action": "message", "messageText": "/각성랭킹"},
+                {"label": "💼 포트폴리오", "action": "message", "messageText": "/포트폴리오"},
+                {"label": "📈 급등주", "action": "message", "messageText": "/급등"}
+            ]
+        )
+
     def handle_my_rank(self) -> Dict:
-        """내 순위 조회 (그룹 챗봇: 채팅방별 순위)"""
-        rank_info = RankingService.get_my_group_rank(self.db, self.kakao_id, self.group_key)
+        """내 순위 조회 (그룹 챗봇: 채팅방별 순위, 1:1: 전체 순위)"""
+        if self.group_key:
+            rank_info = RankingService.get_my_group_rank(self.db, self.kakao_id, self.group_key)
+            scope = "이 방"
+        else:
+            rank_info = RankingService.get_my_rank(self.db, self.kakao_id)
+            scope = "전체"
 
         if rank_info is None:
             return KakaoResponse.quick_replies(
@@ -140,7 +202,7 @@ class SocialHandlerMixin(BaseHandlerMixin):
 
         msg = f"""📍 내 순위
 
-🏆 {rank}위 / 전체 {total}명
+🏆 {rank}위 / {scope} {total}명
 {rate_emoji} 수익률: {profit_rate:+.2f}%
 💰 총 자산: {rank_info['total_asset']:,}원
 
@@ -155,7 +217,11 @@ class SocialHandlerMixin(BaseHandlerMixin):
         return KakaoResponse.quick_replies(msg, buttons)
 
     def handle_enhance_ranking(self) -> Dict:
-        """각성 랭킹 조회 (그룹 챗봇: 채팅방별)"""
+        """각성 랭킹 조회 (그룹 챗봇: 채팅방별, 1:1: 내 각성 정보)"""
+        # 1:1 채널에서는 내 각성 정보로 안내
+        if not self.group_key:
+            return self._handle_enhance_ranking_solo()
+
         rankings = RankingService.get_group_enhance_ranking(self.db, self.group_key, limit=10)
 
         if not rankings:
@@ -189,7 +255,7 @@ class SocialHandlerMixin(BaseHandlerMixin):
                 ranking_list += f"\n{medal} @{name}"
             ranking_list += f"\n   {r['enhance_emoji']} {r['enhance_title']} Lv.{r['enhance_level']}\n"
 
-        msg = f"🧬 각성 랭킹\n{ranking_list}"
+        msg = f"🧬 각성 랭킹 (이 방)\n{ranking_list}"
 
         if my_rank:
             msg = f"🎉 각성 랭킹 {my_rank}위! 개미계 강자!\n\n" + msg
@@ -200,6 +266,40 @@ class SocialHandlerMixin(BaseHandlerMixin):
                 {"label": "🏆 랭킹", "action": "message", "messageText": "/랭킹"},
                 {"label": "🧬 각성", "action": "message", "messageText": "/각성"},
                 {"label": "📍 내 순위", "action": "message", "messageText": "/내순위"}
+            ]
+        )
+
+    def _handle_enhance_ranking_solo(self) -> Dict:
+        """1:1 채널 각성 랭킹 — 내 각성 정보만"""
+        from services.enhance_service import EnhanceService
+        result = EnhanceService.get_enhance_info(self.db, self.kakao_id)
+
+        if not result["success"]:
+            return KakaoResponse.quick_replies(
+                "먼저 /시작 으로 참가하세요.",
+                [{"label": "🚀 시작하기", "action": "message", "messageText": "/시작"}]
+            )
+
+        level = result["level"]
+        title_name = result["title_name"]
+        title_emoji = result["title_emoji"]
+        att_bonus = int((result["attendance_multiplier"] - 1) * 100)
+        lot_bonus = int((result["lottery_multiplier"] - 1) * 100)
+
+        msg = f"""🧬 내 각성 현황
+
+{title_emoji} {title_name} Lv.{level}
+📅 출석 보너스: +{att_bonus}%
+🎁 보물상자 보너스: +{lot_bonus}%
+
+💡 그룹 채팅방에서 각성 랭킹을 겨뤄보세요!"""
+
+        return KakaoResponse.quick_replies(
+            msg,
+            [
+                {"label": "🧬 각성", "action": "message", "messageText": "/각성"},
+                {"label": "🏆 랭킹", "action": "message", "messageText": "/랭킹"},
+                {"label": "💼 포트폴리오", "action": "message", "messageText": "/포트폴리오"}
             ]
         )
 
