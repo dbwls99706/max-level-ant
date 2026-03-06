@@ -175,8 +175,8 @@ class BattleService:
         if err:
             return err
 
-        # 배틀 확인
-        battle = db.query(Battle).filter(Battle.id == battle_id).first()
+        # 배틀 확인 (FOR UPDATE로 동시 참가 방지)
+        battle = db.query(Battle).filter(Battle.id == battle_id).with_for_update().first()
         if not battle:
             return error_response(ErrorCode.NOT_FOUND, "❌ 해당 배틀을 찾을 수 없습니다.")
 

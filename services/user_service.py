@@ -28,6 +28,13 @@ def register_chatroom_member(db: Session, group_key: str, kakao_id: str) -> None
     separate_db = None
     try:
         separate_db = SessionLocal()
+        # FK 제약: users 테이블에 존재하는 유저만 등록 가능
+        user_exists = separate_db.query(
+            exists().where(User.kakao_id == kakao_id)
+        ).scalar()
+        if not user_exists:
+            return
+
         existing = separate_db.query(ChatRoomMember).filter(
             ChatRoomMember.group_key == group_key,
             ChatRoomMember.kakao_id == kakao_id
