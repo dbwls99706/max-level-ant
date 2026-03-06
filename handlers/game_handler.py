@@ -657,6 +657,9 @@ class GameHandlerMixin(BaseHandlerMixin):
         title_emoji = result["title_emoji"]
         att_mult = result["attendance_multiplier"]
         lot_mult = result["lottery_multiplier"]
+        enhance_class = result.get("enhance_class", 0)
+        class_name = result.get("class_name")
+        class_emoji = result.get("class_emoji", "")
 
         # 보너스 계산
         att_bonus = int((att_mult - 1) * 100)
@@ -668,11 +671,14 @@ class GameHandlerMixin(BaseHandlerMixin):
         # 장 마감 여부 확인 (각성 버튼 노출 제어)
         can_enhance, _ = check_market_closed_for_game("🧬")
 
+        # 직군 표시 줄 (Lv.10 이상이고 직군 배정 완료)
+        class_line = f"\n{class_emoji} 직군: {class_name}" if class_name else ""
+
         name = self._display_name()
         msg = f"""{title_emoji} {name} — {title_name}
 
 🧬 각성 레벨: Lv.{level} / {EnhanceConfig.MAX_LEVEL}
-{gauge}
+{gauge}{class_line}
 
 📅 출석 보상 보너스: +{att_bonus}%
 🎁 보물상자 보너스: +{lot_bonus}%"""
@@ -745,7 +751,19 @@ class GameHandlerMixin(BaseHandlerMixin):
             new_emoji = result["new_emoji"]
             new_name = result["new_title"]
 
-            if result["title_changed"]:
+            if result.get("class_assigned"):
+                # 레벨 10 직군 배정 — 특별 연출
+                class_emoji = result.get("class_emoji", "")
+                class_name = result.get("class_name", "")
+                class_info = EnhanceConfig.CLASS_INFO.get(result.get("enhance_class", 0), {})
+                class_desc = class_info.get("desc", "")
+                evolution_msg = (
+                    f"\n\n🎖️ 직군 배정!\n"
+                    f"{class_emoji} {class_name}\n"
+                    f"└ {class_desc}\n"
+                    f"이제 {class_name} 트리로 성장합니다!"
+                )
+            elif result["title_changed"]:
                 evolution_msg = f"\n\n🆙 직업 승급!\n{result['old_emoji']} {result['old_title']} → {new_emoji} {new_name}"
             else:
                 evolution_msg = ""
