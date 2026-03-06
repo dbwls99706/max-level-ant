@@ -142,7 +142,7 @@ class BaseHandlerMixin:
         buttons = []
 
         if game_type == "lottery":
-            buttons.append({"label": "🎫 한번 더!", "action": "message", "messageText": "/복권"})
+            buttons.append({"label": "🎁 한번 더!", "action": "message", "messageText": "/복권"})
         elif game_type == "stock_quiz":
             buttons.extend([
                 {"label": "🔮 한번 더!", "action": "message", "messageText": f"/시장예측 {bet}"},
@@ -296,7 +296,7 @@ class BaseHandlerMixin:
         return KakaoResponse.quick_replies(
             message,
             [
-                {"label": "🎫 복권", "action": "message", "messageText": "/복권"},
+                {"label": "🎁 보물상자", "action": "message", "messageText": "/복권"},
                 {"label": "🔮 시장예측", "action": "message", "messageText": f"/시장예측 {GameConfig.DEFAULT_BET}"},
                 {"label": "💼 포트폴리오", "action": "message", "messageText": "/포트폴리오"}
             ]
@@ -319,7 +319,7 @@ class BaseHandlerMixin:
             message,
             [
                 {"label": "📅 출석체크", "action": "message", "messageText": "/출석"},
-                {"label": "🎫 복권", "action": "message", "messageText": "/복권"},
+                {"label": "🎁 보물상자", "action": "message", "messageText": "/복권"},
                 {"label": "💼 포트폴리오", "action": "message", "messageText": "/포트폴리오"}
             ]
         )

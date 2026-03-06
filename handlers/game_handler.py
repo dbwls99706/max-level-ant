@@ -34,7 +34,7 @@ class GameHandlerMixin(BaseHandlerMixin):
         return KakaoResponse.quick_replies(
             msg,
             [
-                {"label": "🎫 복권", "action": "message", "messageText": "/복권"},
+                {"label": "🎁 보물상자", "action": "message", "messageText": "/복권"},
                 {"label": "🧬 각성", "action": "message", "messageText": "/각성"},
                 {"label": "⚡ 5만 예언 배틀", "action": "message", "messageText": f"/시장예측 {small_bet}"},
                 {"label": "🔥 50만 대박 배틀", "action": "message", "messageText": f"/시장예측 {big_bet}"},
@@ -81,7 +81,7 @@ class GameHandlerMixin(BaseHandlerMixin):
 
         # 남은 횟수 — 긴급성 연출
         if remaining == 0:
-            remaining_msg = "🚫 오늘 복권 모두 소진!"
+            remaining_msg = "🚫 오늘 보물상자 모두 소진!"
         elif remaining == 1:
             remaining_msg = "⚡ 마지막 1회 남음!"
         elif remaining == 2:
@@ -279,7 +279,7 @@ class GameHandlerMixin(BaseHandlerMixin):
         else:
             buttons = [
                 {"label": "⚡ 다시 예언!", "action": "message", "messageText": f"/시장예측 {bet}"},
-                {"label": "🎁 복권", "action": "message", "messageText": "/복권"},
+                {"label": "🎁 보물상자", "action": "message", "messageText": "/복권"},
                 {"label": "📈 급등주", "action": "message", "messageText": "/급등"},
             ]
 

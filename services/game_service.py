@@ -49,7 +49,7 @@ class GameService:
         if user.lottery_count_today >= GameConfig.MAX_LOTTERY_PER_DAY:
             return error_response(
                 ErrorCode.DAILY_LIMIT_REACHED,
-                f"🎫 오늘 복권은 모두 긁었어요! ({GameConfig.MAX_LOTTERY_PER_DAY}회)\n내일 다시 도전하세요 🍀"
+                f"🎁 오늘 보물상자를 모두 열었어요! ({GameConfig.MAX_LOTTERY_PER_DAY}회)\n내일 다시 도전하세요 🍀"
             )
 
         user.lottery_count_today += 1

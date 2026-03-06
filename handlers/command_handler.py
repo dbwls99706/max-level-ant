@@ -90,6 +90,7 @@ class CommandHandler(
         "/예측": "handle_game_menu",
         "/예측게임": "handle_game_menu",
         "/복권": "handle_lottery",
+        "/보물상자": "handle_lottery",
         "/ㅂㄱ": "handle_lottery",
         "/시장예측": "handle_stock_quiz",
         "/ㅅㅈ": "handle_stock_quiz",
@@ -290,7 +291,7 @@ class CommandHandler(
 
         buttons = [
             {"label": "📈 급등주", "action": "message", "messageText": "/급등"},
-            {"label": "🎁 복권", "action": "message", "messageText": "/복권"},
+            {"label": "🎁 보물상자", "action": "message", "messageText": "/복권"},
             {"label": "💼 포트폴리오", "action": "message", "messageText": "/포트폴리오"},
         ]
         buttons.extend(self._get_game_buttons())
@@ -300,7 +301,7 @@ class CommandHandler(
         """도움말"""
         buttons = [
             {"label": "📈 급등주", "action": "message", "messageText": "/급등"},
-            {"label": "🎁 복권", "action": "message", "messageText": "/복권"},
+            {"label": "🎁 보물상자", "action": "message", "messageText": "/복권"},
             {"label": "📅 출석", "action": "message", "messageText": "/출석"},
             {"label": "💼 포트폴리오", "action": "message", "messageText": "/포트폴리오"},
         ]
