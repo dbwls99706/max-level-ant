@@ -208,23 +208,34 @@ class CommandHandler(
             masked_id = f"{self.kakao_id[:4]}****" if len(self.kakao_id) > 4 else "****"
             logger.info(f"새 유저 가입: {masked_id}")
             welcome_msg = Messages.WELCOME.format(initial_cash=GameConfig.INITIAL_CASH)
+            # 닉네임 미설정이면 안내 추가
+            if not user.nickname:
+                welcome_msg += "\n\n💡 닉네임을 설정하면 랭킹에서 멋지게 보여요!\n예: /닉네임 투자왕"
             buttons = [
+                {"label": "🏷️ 닉네임 설정", "action": "message", "messageText": "/닉네임"},
                 {"label": "📅 출석 +30만", "action": "message", "messageText": "/출석"},
                 {"label": "🎁 보물상자", "action": "message", "messageText": "/보물상자"},
                 {"label": "🚀 급등주 정찰", "action": "message", "messageText": "/급등"},
             ]
             return KakaoResponse.quick_replies(welcome_msg, buttons)
         else:
-            buttons = [
+            buttons = []
+            nickname_hint = ""
+            # 닉네임 미설정 유저에게 설정 안내
+            if not user.nickname:
+                nickname_hint = "\n\n💡 아직 닉네임이 없어요! 설정하면 랭킹에서 멋지게 보여요."
+                buttons.append({"label": "🏷️ 닉네임 설정", "action": "message", "messageText": "/닉네임"})
+            buttons.extend([
                 {"label": "📅 출석", "action": "message", "messageText": "/출석"},
                 {"label": "🎁 보물상자", "action": "message", "messageText": "/보물상자"},
                 {"label": "💼 포폴", "action": "message", "messageText": "/포트폴리오"},
                 {"label": "🚀 급등주", "action": "message", "messageText": "/급등"},
                 {"label": "🧬 각성", "action": "message", "messageText": "/각성"},
                 {"label": "🏆 랭킹", "action": "message", "messageText": "/랭킹"},
-            ]
+            ])
             name = self._display_name()
-            return KakaoResponse.quick_replies(f"{name}, 다시 오셨군요! 바로 시작 👇", buttons)
+            greeting = f"{name}, 다시 오셨군요!" if name else "다시 오셨군요!"
+            return KakaoResponse.quick_replies(f"{greeting} 바로 시작 👇{nickname_hint}", buttons)
 
     def handle_attendance(self) -> Dict:
         """출석 체크"""
