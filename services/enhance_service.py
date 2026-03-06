@@ -34,7 +34,10 @@ class EnhanceService:
 
         level = user.enhance_level or 0
         seed = getattr(user, 'enhance_title_seed', 0) or 0
-        title_name, title_emoji = EnhanceConfig.get_title(level, seed=seed)
+        enhance_class = getattr(user, 'enhance_class', 0) or 0
+        title_name, title_emoji = EnhanceConfig.get_title(level, seed=seed, enhance_class=enhance_class)
+
+        class_info = EnhanceConfig.CLASS_INFO.get(enhance_class) if enhance_class else None
 
         result = {
             "success": True,
@@ -42,6 +45,9 @@ class EnhanceService:
             "max_level": EnhanceConfig.MAX_LEVEL,
             "title_name": title_name,
             "title_emoji": title_emoji,
+            "enhance_class": enhance_class,
+            "class_name": class_info["name"] if class_info else None,
+            "class_emoji": class_info["emoji"] if class_info else None,
             "attendance_multiplier": EnhanceConfig.get_attendance_multiplier(level),
             "lottery_multiplier": EnhanceConfig.get_lottery_multiplier(level),
             "cash": user.cash,
@@ -110,15 +116,26 @@ class EnhanceService:
 
         old_level = level
         old_seed = getattr(user, 'enhance_title_seed', 0) or 0
-        old_name, old_emoji = EnhanceConfig.get_title(old_level, seed=old_seed)
+        enhance_class = getattr(user, 'enhance_class', 0) or 0
+        old_name, old_emoji = EnhanceConfig.get_title(old_level, seed=old_seed, enhance_class=enhance_class)
 
         if succeeded:
             # 성공!
             user.enhance_level = level + 1
             new_level = level + 1
-            new_seed = random.randint(0, 4)
+
+            # 레벨 10 도달 시 직군 자동 랜덤 배정
+            enhance_class = getattr(user, 'enhance_class', 0) or 0
+            if new_level == EnhanceConfig.CLASS_LEVEL_THRESHOLD and not enhance_class:
+                enhance_class = random.randint(1, 3)
+                user.enhance_class = enhance_class
+
+            # 직군 칭호는 후보가 3개이므로 seed 범위 0~2
+            class_candidates = EnhanceConfig.get_class_candidates(new_level, enhance_class)
+            seed_max = len(class_candidates) - 1 if class_candidates else 4
+            new_seed = random.randint(0, seed_max)
             user.enhance_title_seed = new_seed
-            new_name, new_emoji = EnhanceConfig.get_title(new_level, seed=new_seed)
+            new_name, new_emoji = EnhanceConfig.get_title(new_level, seed=new_seed, enhance_class=enhance_class)
 
             try:
                 db.commit()
@@ -137,6 +154,11 @@ class EnhanceService:
             # 레벨업으로 칭호가 바뀌었는지 확인
             title_changed = old_name != new_name
 
+            # 직군 배정 여부 (Lv.9→10 시 신규 배정)
+            class_assigned = (new_level == EnhanceConfig.CLASS_LEVEL_THRESHOLD and enhance_class != 0
+                              and (old_level < EnhanceConfig.CLASS_LEVEL_THRESHOLD))
+            class_info = EnhanceConfig.CLASS_INFO.get(enhance_class) if enhance_class else None
+
             return {
                 "success": True,
                 "enhanced": True,
@@ -152,15 +174,20 @@ class EnhanceService:
                 "cash": user.cash,
                 "attendance_multiplier": EnhanceConfig.get_attendance_multiplier(new_level),
                 "lottery_multiplier": EnhanceConfig.get_lottery_multiplier(new_level),
+                "enhance_class": enhance_class,
+                "class_name": class_info["name"] if class_info else None,
+                "class_emoji": class_info["emoji"] if class_info else None,
+                "class_assigned": class_assigned,
             }
         else:
-            # 실패 — 레벨 0으로 초기화
+            # 실패 — 레벨 0으로 초기화 (직군은 유지)
             drop = level  # 현재 레벨 전부 하락
             new_level = 0
             user.enhance_level = new_level
             new_seed = random.randint(0, 4)
             user.enhance_title_seed = new_seed
-            new_name, new_emoji = EnhanceConfig.get_title(new_level, seed=new_seed)
+            # 레벨 0은 직군 무관 공통 칭호
+            new_name, new_emoji = EnhanceConfig.get_title(new_level, seed=new_seed, enhance_class=0)
 
             try:
                 db.commit()

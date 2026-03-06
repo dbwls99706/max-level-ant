@@ -34,7 +34,7 @@ class GameHandlerMixin(BaseHandlerMixin):
         return KakaoResponse.quick_replies(
             msg,
             [
-                {"label": "🎫 복권", "action": "message", "messageText": "/복권"},
+                {"label": "🎁 보물상자", "action": "message", "messageText": "/복권"},
                 {"label": "🧬 각성", "action": "message", "messageText": "/각성"},
                 {"label": "⚡ 5만 예언 배틀", "action": "message", "messageText": f"/시장예측 {small_bet}"},
                 {"label": "🔥 50만 대박 배틀", "action": "message", "messageText": f"/시장예측 {big_bet}"},
@@ -60,20 +60,20 @@ class GameHandlerMixin(BaseHandlerMixin):
         tier = result["tier"]
         reward = result["reward"]
         remaining = result.get("remaining", 0)
-        is_big_win = "1등" in tier or "2등" in tier
+        is_big_win = tier in ("전설", "영웅")
 
-        # 등급별 연출 (10명+ 톡방에서 주목받는 이펙트)
-        if "1등" in tier:
-            effect = "🎆🎇🎆🎇🎆\n━━━━━━━━━━━━━━━━━\n  ★ 대박!! 1등 당첨! ★\n━━━━━━━━━━━━━━━━━"
+        # 희귀도별 연출 (10명+ 톡방에서 주목받는 이펙트)
+        if tier == "전설":
+            effect = "🎆🎇🎆🎇🎆\n━━━━━━━━━━━━━━━━━\n  🟠 전설 등급 획득!! 🟠\n━━━━━━━━━━━━━━━━━"
             reveal = "스르르... 번쩍!!"
-        elif "2등" in tier:
-            effect = "✨🎉✨ 2등! 대단해요!"
+        elif tier == "영웅":
+            effect = "✨🎉✨ 🟣 영웅 등급! 대단해요!"
             reveal = "스르르... 오!!"
-        elif "3등" in tier:
-            effect = "🎊 3등!"
+        elif tier == "희귀":
+            effect = "🎊 🔵 희귀 등급!"
             reveal = "스르르... 오!"
-        elif "4등" in tier or "5등" in tier:
-            effect = "💫"
+        elif tier == "고급":
+            effect = "🟢 고급"
             reveal = "스르르..."
         else:
             effect = ""
@@ -81,7 +81,7 @@ class GameHandlerMixin(BaseHandlerMixin):
 
         # 남은 횟수 — 긴급성 연출
         if remaining == 0:
-            remaining_msg = "🚫 오늘 복권 모두 소진!"
+            remaining_msg = "🚫 오늘 보물상자 모두 소진!"
         elif remaining == 1:
             remaining_msg = "⚡ 마지막 1회 남음!"
         elif remaining == 2:
@@ -279,7 +279,7 @@ class GameHandlerMixin(BaseHandlerMixin):
         else:
             buttons = [
                 {"label": "⚡ 다시 예언!", "action": "message", "messageText": f"/시장예측 {bet}"},
-                {"label": "🎁 복권", "action": "message", "messageText": "/복권"},
+                {"label": "🎁 보물상자", "action": "message", "messageText": "/복권"},
                 {"label": "📈 급등주", "action": "message", "messageText": "/급등"},
             ]
 
@@ -657,6 +657,9 @@ class GameHandlerMixin(BaseHandlerMixin):
         title_emoji = result["title_emoji"]
         att_mult = result["attendance_multiplier"]
         lot_mult = result["lottery_multiplier"]
+        enhance_class = result.get("enhance_class", 0)
+        class_name = result.get("class_name")
+        class_emoji = result.get("class_emoji", "")
 
         # 보너스 계산
         att_bonus = int((att_mult - 1) * 100)
@@ -668,11 +671,14 @@ class GameHandlerMixin(BaseHandlerMixin):
         # 장 마감 여부 확인 (각성 버튼 노출 제어)
         can_enhance, _ = check_market_closed_for_game("🧬")
 
+        # 직군 표시 줄 (Lv.10 이상이고 직군 배정 완료)
+        class_line = f"\n{class_emoji} 직군: {class_name}" if class_name else ""
+
         name = self._display_name()
         msg = f"""{title_emoji} {name} — {title_name}
 
 🧬 각성 레벨: Lv.{level} / {EnhanceConfig.MAX_LEVEL}
-{gauge}
+{gauge}{class_line}
 
 📅 출석 보상 보너스: +{att_bonus}%
 🎁 보물상자 보너스: +{lot_bonus}%"""
@@ -745,7 +751,19 @@ class GameHandlerMixin(BaseHandlerMixin):
             new_emoji = result["new_emoji"]
             new_name = result["new_title"]
 
-            if result["title_changed"]:
+            if result.get("class_assigned"):
+                # 레벨 10 직군 배정 — 특별 연출
+                class_emoji = result.get("class_emoji", "")
+                class_name = result.get("class_name", "")
+                class_info = EnhanceConfig.CLASS_INFO.get(result.get("enhance_class", 0), {})
+                class_desc = class_info.get("desc", "")
+                evolution_msg = (
+                    f"\n\n🎖️ 직군 배정!\n"
+                    f"{class_emoji} {class_name}\n"
+                    f"└ {class_desc}\n"
+                    f"이제 {class_name} 트리로 성장합니다!"
+                )
+            elif result["title_changed"]:
                 evolution_msg = f"\n\n🆙 직업 승급!\n{result['old_emoji']} {result['old_title']} → {new_emoji} {new_name}"
             else:
                 evolution_msg = ""

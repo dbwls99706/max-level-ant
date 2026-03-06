@@ -65,6 +65,7 @@ class User(Base):
     # 각성 시스템 (투자 감각 각성)
     enhance_level = Column(Integer, default=0)       # 각성 레벨 (0~20)
     enhance_title_seed = Column(Integer, default=0)  # 칭호 후보 인덱스 (0~4, 레벨업 시 랜덤 고정)
+    enhance_class = Column(Integer, default=0)       # 직군 (0=미선택, 1=국장파, 2=서학파, 3=퀀트파)
 
     # 업적 관련 (JSON 문자열로 저장)
     achievements = Column(String(1000), default="[]")

@@ -128,7 +128,7 @@ class TradingHandlerMixin(BaseHandlerMixin):
                     msg,
                     [
                         {"label": "📅 출석체크", "action": "message", "messageText": "/출석"},
-                        {"label": "🎫 복권", "action": "message", "messageText": "/복권"},
+                        {"label": "🎁 보물상자", "action": "message", "messageText": "/복권"},
                         {"label": "🎯 미션확인", "action": "message", "messageText": "/미션"}
                     ]
                 )
@@ -158,7 +158,11 @@ class TradingHandlerMixin(BaseHandlerMixin):
 
         new_achievements = data.get("new_achievements") or []
         for ach in new_achievements:
-            msg += f"\n\n🏆 업적 달성: {ach['name']}!\n💰 +{ach['reward']:,}원 획득!"
+            msg += f"\n\n🏆 업적 달성: {ach['name']}!\n💰 +{ach['reward']:,}원 자동 지급!"
+
+        new_milestones = data.get("new_milestones") or []
+        for ms in new_milestones:
+            msg += f"\n\n🎖️ 마일스톤 달성: {ms['name']}!\n💰 +{ms['reward']:,}원 자동 지급!"
 
         return KakaoResponse.quick_replies(
             msg,
@@ -258,7 +262,11 @@ class TradingHandlerMixin(BaseHandlerMixin):
 
         new_achievements = data.get("new_achievements") or []
         for ach in new_achievements:
-            msg += f"\n\n🏆 업적 달성: {ach['name']}!\n💰 +{ach['reward']:,}원 획득!"
+            msg += f"\n\n🏆 업적 달성: {ach['name']}!\n💰 +{ach['reward']:,}원 자동 지급!"
+
+        new_milestones = data.get("new_milestones") or []
+        for ms in new_milestones:
+            msg += f"\n\n🎖️ 마일스톤 달성: {ms['name']}!\n💰 +{ms['reward']:,}원 자동 지급!"
 
         return KakaoResponse.quick_replies(
             msg,
@@ -297,7 +305,7 @@ class TradingHandlerMixin(BaseHandlerMixin):
                     result["message"],
                     [
                         {"label": "📅 출석체크", "action": "message", "messageText": "/출석"},
-                        {"label": "🎫 복권", "action": "message", "messageText": "/복권"},
+                        {"label": "🎁 보물상자", "action": "message", "messageText": "/복권"},
                         {"label": "🎯 미션확인", "action": "message", "messageText": "/미션"}
                     ]
                 )
