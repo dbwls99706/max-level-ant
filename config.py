@@ -451,7 +451,7 @@ class GameProbability:
         {"stock_name": "카카오", "period": "2020년 3월 ~ 2021년 6월", "answer": "상승",
          "description": "언택트 수혜, 카카오뱅크/카카오페이 상장 기대"},
         {"stock_name": "카카오", "period": "2021년 6월 ~ 2022년 6월", "answer": "하락",
-         "description": "문어발 확장 규제 우려, 기술주 약세"},
+         "description": "사업 다각화 관련 규제 이슈, 기술주 약세"},
         {"stock_name": "카카오", "period": "2022년 10월 ~ 2023년 3월", "answer": "하락",
          "description": "카카오 데이터센터 화재, SM엔터 인수전 혼란"},
 
@@ -467,7 +467,7 @@ class GameProbability:
         {"stock_name": "셀트리온", "period": "2017년 1월 ~ 2018년 1월", "answer": "상승",
          "description": "바이오시밀러 유럽 진출 성공, 개인 투자자 열풍"},
         {"stock_name": "셀트리온", "period": "2021년 1월 ~ 2022년 1월", "answer": "하락",
-         "description": "바이오 거품 논란, 합병 불확실성"},
+         "description": "바이오 업종 밸류에이션 조정, 합병 불확실성"},
 
         # === LG에너지솔루션 (373220) ===
         {"stock_name": "LG에너지솔루션", "period": "2022년 1월 ~ 2022년 12월", "answer": "하락",
@@ -920,7 +920,7 @@ class Messages:
 
 🎁 매일 무료 보상
 /출석 — 매일 +30만 골드 (각성 레벨에 따라 보너스)
-/보물상자 — 하루 최대 5회 무료 (= /복권)
+/보물상자 — 하루 최대 5회 무료
 
 🧬 각성 · 게임  ⚠️ 장 마감 후만 가능
 /각성 (/ㄱㅎ) — 골드를 써서 레벨업 도전! (실패 시 Lv.0 초기화)

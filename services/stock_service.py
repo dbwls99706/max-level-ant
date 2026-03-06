@@ -86,6 +86,7 @@ class KISAPIClient:
 
     # API Transaction IDs
     TR_ID_STOCK_PRICE = "FHKST01010100"  # 주식 현재가 조회
+    TR_ID_DAILY_PRICE = "FHKST03010100"  # 주식 기간별 시세 (일봉)
     TR_ID_VOLUME_RANK = "FHPST01710000"  # 거래량 순위 조회
     TR_ID_MARKET_INDEX = "FHPUP02100000"  # 시장 지수 조회
 

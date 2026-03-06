@@ -96,8 +96,8 @@ class GameService:
             miss_ratio = distance / GameProbability.LOTTERY["빈 상자"]["prob"]
 
             if miss_ratio < 0.05:
-                near_miss_tier = "일반"
-                near_miss_reward = 10_000
+                near_miss_tier = "고급"
+                near_miss_reward = 50_000
             elif miss_ratio < 0.15:
                 near_miss_tier = "일반"
                 near_miss_reward = 10_000
@@ -158,8 +158,9 @@ class GameService:
         if not choice_normalized:
             return error_response(ErrorCode.INVALID_CHOICE, "상승 또는 하락 중 선택해주세요.")
 
-        # 랜덤 퀴즈 선택
-        quiz = random.choice(GameProbability.HISTORICAL_STOCK_DATA)
+        # 랜덤 퀴즈 선택 (실제 주가 데이터 기반, 폴백: 하드코딩)
+        from services.quiz_data_service import get_random_quiz
+        quiz = get_random_quiz()
 
         # 투자금 차감
         user.cash = safe_subtract(user.cash, bet)
