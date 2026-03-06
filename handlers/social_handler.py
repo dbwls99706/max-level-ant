@@ -254,8 +254,10 @@ class SocialHandlerMixin(BaseHandlerMixin):
         total = status["achievements_total"]
         ach_bar = "▓" * done + "░" * (total - done)
         next_ach = status["available_achievements"][0] if status["available_achievements"] else None
-        next_ach_line = f"
-   다음: {next_ach['icon']} {next_ach['name']} (💰 {next_ach['reward']:,}원)" if next_ach else ""
+        next_ach_line = (
+            f"\n   다음: {next_ach['icon']} {next_ach['name']} (💰 {next_ach['reward']:,}원)"
+            if next_ach else ""
+        )
 
         msg = f"""📋 오늘의 미션{bonus_line}
 
@@ -299,18 +301,14 @@ class SocialHandlerMixin(BaseHandlerMixin):
 """
         # 달성 완료 업적
         if status["achievements"]:
-            msg += "✅ 달성 완료
-"
+            msg += "✅ 달성 완료\n"
             for ach in status["achievements"]:
-                msg += f"  {ach['icon']} {ach['name']}
-"
-            msg += "
-"
+                msg += f"  {ach['icon']} {ach['name']}\n"
+            msg += "\n"
 
         # 도전 중인 업적 — 진행도 힌트 포함
         if status["available_achievements"]:
-            msg += "🎯 도전 중 (보상 자동 지급)
-"
+            msg += "🎯 도전 중 (보상 자동 지급)\n"
             # 진행도를 보여줄 수 있는 업적 먼저 정렬
             def progress_hint(ach):
                 ach_id = ach.get("id", "")
@@ -347,10 +345,8 @@ class SocialHandlerMixin(BaseHandlerMixin):
             for ach in status["available_achievements"][:4]:
                 hint = progress_hint(ach)
                 hint_str = f" → {hint}" if hint else ""
-                msg += f"  ⬜ {ach['icon']} {ach['name']}{hint_str}
-"
-                msg += f"     💰 보상 {ach['reward']:,}원
-"
+                msg += f"  ⬜ {ach['icon']} {ach['name']}{hint_str}\n"
+                msg += f"     💰 보상 {ach['reward']:,}원\n"
 
         return KakaoResponse.quick_replies(
             msg,
@@ -707,21 +703,16 @@ class SocialHandlerMixin(BaseHandlerMixin):
 """
         # 달성 완료
         if result["achieved"]:
-            msg += "✅ 달성 완료
-"
+            msg += "✅ 달성 완료\n"
             for m in result["achieved"][-3:]:
-                msg += f"  {m['name']}
-"
+                msg += f"  {m['name']}\n"
             if len(result["achieved"]) > 3:
-                msg += f"  ...외 {len(result['achieved'])-3}개
-"
-            msg += "
-"
+                msg += f"  ...외 {len(result['achieved'])-3}개\n"
+            msg += "\n"
 
         # 다음 목표 — 카테고리별 가장 가까운 것 2개
         if result["pending"]:
-            msg += "🎯 다음 목표 (보상 자동 지급)
-"
+            msg += "🎯 다음 목표 (보상 자동 지급)\n"
             # 자산 마일스톤: 진행도 표시
             try:
                 from services.asset_service import AssetService
@@ -746,10 +737,8 @@ class SocialHandlerMixin(BaseHandlerMixin):
                     hint = f" (출석 {left}일 남음)" if left > 0 else " (달성 직전!)"
                 else:
                     hint = ""
-                msg += f"  ⬜ {m['name']}{hint}
-"
-                msg += f"     💰 {m['reward']:,}원
-"
+                msg += f"  ⬜ {m['name']}{hint}\n"
+                msg += f"     💰 {m['reward']:,}원\n"
 
         buttons = [
             {"label": "🏆 업적", "action": "message", "messageText": "/업적"},
