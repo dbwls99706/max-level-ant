@@ -8,7 +8,7 @@ from typing import List, Dict, Optional, Tuple, Set
 from sqlalchemy.orm import Session, joinedload
 from cachetools import TTLCache
 
-from models import User, Holding
+from models import User, Holding, ChatRoomMember
 from services.stock_service import StockService
 from config import CacheConfig, EnhanceConfig
 from utils import get_service_logger
@@ -265,6 +265,125 @@ class RankingService:
             })
 
         cls._ranking_cache[cache_key] = result
+        return result
+
+    @classmethod
+    def _get_group_member_ids(cls, db: Session, group_key: str) -> Set[str]:
+        """채팅방 멤버 kakao_id 목록 조회"""
+        rows = db.query(ChatRoomMember.kakao_id).filter(
+            ChatRoomMember.group_key == group_key
+        ).all()
+        return {row[0] for row in rows}
+
+    @classmethod
+    def get_group_ranking(cls, db: Session, group_key: str, limit: int = 10) -> List[Dict]:
+        """
+        채팅방별 수익률 랭킹 (그룹 챗봇용)
+        group_key가 비어있으면 전체 랭킹 반환
+        """
+        if not group_key:
+            return cls.get_ranking(db, limit)
+
+        cache_key = f"group_ranking_{group_key}_{limit}"
+        if cache_key in cls._ranking_cache:
+            return cls._ranking_cache[cache_key]
+
+        # 전체 랭킹 빌드 후 채팅방 멤버만 필터링
+        full_ranking_key = "ranking_full"
+        if full_ranking_key in cls._ranking_cache:
+            rankings = cls._ranking_cache[full_ranking_key]
+        else:
+            rankings = cls._build_rankings(db)
+            cls._ranking_cache[full_ranking_key] = rankings
+
+        member_ids = cls._get_group_member_ids(db, group_key)
+
+        group_rankings = [r for r in rankings if r["kakao_id"] in member_ids]
+        # 순위 재부여
+        for i, r in enumerate(group_rankings):
+            r = dict(r)  # 원본 수정 방지
+            r["rank"] = i + 1
+            group_rankings[i] = r
+
+        result = group_rankings[:limit]
+        cls._ranking_cache[cache_key] = result
+        return result
+
+    @classmethod
+    def get_my_group_rank(cls, db: Session, kakao_id: str, group_key: str) -> Optional[Dict]:
+        """
+        채팅방 내 내 순위 (그룹 챗봇용)
+        group_key가 비어있으면 전체 랭킹 기준
+        """
+        if not group_key:
+            return cls.get_my_rank(db, kakao_id)
+
+        # 전체 랭킹 빌드
+        full_ranking_key = "ranking_full"
+        if full_ranking_key not in cls._ranking_cache:
+            full_ranking = cls._build_rankings(db)
+            cls._ranking_cache[full_ranking_key] = full_ranking
+        else:
+            full_ranking = cls._ranking_cache[full_ranking_key]
+
+        member_ids = cls._get_group_member_ids(db, group_key)
+
+        # 채팅방 멤버만 필터링 후 순위 재부여
+        group_rankings = [r for r in full_ranking if r["kakao_id"] in member_ids]
+        for i, r_item in enumerate(group_rankings):
+            group_rankings[i] = dict(r_item)
+            group_rankings[i]["rank"] = i + 1
+
+        for r in group_rankings:
+            if r["kakao_id"] == kakao_id:
+                result = {
+                    "rank": r["rank"],
+                    "total": len(group_rankings),
+                    "kakao_id": kakao_id,
+                    "nickname": r["nickname"],
+                    "total_asset": r["total_asset"],
+                    "profit_rate": r["profit_rate"],
+                    "above_nickname": None,
+                    "above_profit_rate": None,
+                }
+                if r["rank"] > 1:
+                    above = group_rankings[r["rank"] - 2]
+                    result["above_nickname"] = above["nickname"]
+                    result["above_profit_rate"] = above["profit_rate"]
+                return result
+
+        # 채팅방 멤버에 없으면 전체 랭킹에서 조회
+        return cls.get_my_rank(db, kakao_id)
+
+    @classmethod
+    def get_group_enhance_ranking(cls, db: Session, group_key: str, limit: int = 10) -> List[Dict]:
+        """채팅방별 각성 랭킹 (그룹 챗봇용)"""
+        if not group_key:
+            return cls.get_enhance_ranking(db, limit)
+
+        member_ids = cls._get_group_member_ids(db, group_key)
+        if not member_ids:
+            return []
+
+        users = db.query(User).filter(
+            User.kakao_id.in_(member_ids),
+            User.enhance_level > 0
+        ).order_by(User.enhance_level.desc()).limit(limit).all()
+
+        result = []
+        for i, user in enumerate(users):
+            level = user.enhance_level or 0
+            seed = getattr(user, 'enhance_title_seed', 0) or 0
+            title_name, title_emoji = EnhanceConfig.get_title(level, seed=seed)
+            result.append({
+                "rank": i + 1,
+                "kakao_id": user.kakao_id,
+                "nickname": cls._get_display_name(user),
+                "enhance_level": level,
+                "enhance_title": title_name,
+                "enhance_emoji": title_emoji,
+            })
+
         return result
 
     @classmethod

@@ -19,8 +19,8 @@ class SocialHandlerMixin(BaseHandlerMixin):
     """소셜/경쟁 관련 핸들러 믹스인"""
 
     def handle_ranking(self) -> Dict:
-        """랭킹 조회"""
-        rankings = RankingService.get_ranking(self.db, limit=10)
+        """랭킹 조회 (그룹 챗봇: 채팅방별 랭킹)"""
+        rankings = RankingService.get_group_ranking(self.db, self.group_key, limit=10)
 
         if not rankings:
             return KakaoResponse.quick_replies(
@@ -69,7 +69,8 @@ class SocialHandlerMixin(BaseHandlerMixin):
             ranking_list += f"\n   {profit_emoji} {r['profit_rate']:+.2f}% ({amount_str}){enhance_tag}\n"
 
         # 톡방 전체 유저 수 표기
-        header = f"🏆 수익률 랭킹 (총 {total_users}명)\n"
+        scope = "이 방" if self.group_key else "전체"
+        header = f"🏆 수익률 랭킹 ({scope} {total_users}명)\n"
         msg = header + ranking_list
 
         # TOP 10 안에 있으면 축하 메시지
@@ -77,7 +78,7 @@ class SocialHandlerMixin(BaseHandlerMixin):
             msg = f"🎉 {my_rank_in_top10}위! 대단해요!\n\n" + msg
         else:
             # TOP 10 밖이면 내 순위 + 바로 윗순위 경쟁자 표시
-            my_rank = RankingService.get_my_rank(self.db, self.kakao_id)
+            my_rank = RankingService.get_my_group_rank(self.db, self.kakao_id, self.group_key)
             if my_rank:
                 msg += "\n━━━━━━━━━━━━━━━━━"
                 msg += f"\n📍 내 순위: {my_rank['rank']}위 / {my_rank['total']}명"
@@ -98,8 +99,8 @@ class SocialHandlerMixin(BaseHandlerMixin):
         )
 
     def handle_my_rank(self) -> Dict:
-        """내 순위 조회"""
-        rank_info = RankingService.get_my_rank(self.db, self.kakao_id)
+        """내 순위 조회 (그룹 챗봇: 채팅방별 순위)"""
+        rank_info = RankingService.get_my_group_rank(self.db, self.kakao_id, self.group_key)
 
         if rank_info is None:
             return KakaoResponse.quick_replies(
@@ -154,8 +155,8 @@ class SocialHandlerMixin(BaseHandlerMixin):
         return KakaoResponse.quick_replies(msg, buttons)
 
     def handle_enhance_ranking(self) -> Dict:
-        """각성 랭킹 조회"""
-        rankings = RankingService.get_enhance_ranking(self.db, limit=10)
+        """각성 랭킹 조회 (그룹 챗봇: 채팅방별)"""
+        rankings = RankingService.get_group_enhance_ranking(self.db, self.group_key, limit=10)
 
         if not rankings:
             return KakaoResponse.quick_replies(

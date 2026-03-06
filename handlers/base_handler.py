@@ -20,6 +20,7 @@ class BaseHandlerMixin:
     kakao_id: str
     utterance: str
     nickname: str
+    group_key: str
 
     # ===========================================
     # 유저 표시명

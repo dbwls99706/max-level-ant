@@ -12,12 +12,40 @@ from sqlalchemy.orm import Session
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy import exists
 
-from models import User
+from models import User, ChatRoomMember
 from config import GameConfig, EnhanceConfig, KST
 from services.common import safe_add, safe_subtract, get_user_for_update
 from utils import get_service_logger, log_attendance
 
 logger = get_service_logger()
+
+
+def register_chatroom_member(db: Session, group_key: str, kakao_id: str) -> None:
+    """채팅방 멤버 등록/갱신 (그룹 챗봇용) - 별도 세션 사용하여 메인 세션 오염 방지"""
+    if not group_key or not kakao_id:
+        return
+    from database import SessionLocal
+    separate_db = None
+    try:
+        separate_db = SessionLocal()
+        existing = separate_db.query(ChatRoomMember).filter(
+            ChatRoomMember.group_key == group_key,
+            ChatRoomMember.kakao_id == kakao_id
+        ).first()
+        if existing:
+            from models import _utcnow
+            existing.last_active = _utcnow()
+        else:
+            member = ChatRoomMember(group_key=group_key, kakao_id=kakao_id)
+            separate_db.add(member)
+        separate_db.commit()
+    except Exception:
+        if separate_db:
+            separate_db.rollback()
+        logger.debug(f"채팅방 멤버 등록 실패: group={group_key[:8]}...")
+    finally:
+        if separate_db:
+            separate_db.close()
 
 
 class UserService:

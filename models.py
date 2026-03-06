@@ -314,6 +314,30 @@ class AssetHistory(Base):
         return f"<AssetHistory(user={self.kakao_id}, date={self.record_date}, asset={self.total_asset:,})>"
 
 
+class ChatRoomMember(Base):
+    """채팅방별 유저 매핑 (그룹 챗봇용)"""
+    __tablename__ = "chatroom_members"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+
+    # 채팅방 식별키 (botGroupKey)
+    group_key = Column(String(200), nullable=False, index=True)
+
+    # 유저 ID
+    kakao_id = Column(String(100), ForeignKey("users.kakao_id"), nullable=False, index=True)
+
+    # 최근 활동 시간
+    last_active = Column(DateTime, default=_utcnow, onupdate=_utcnow)
+
+    __table_args__ = (
+        UniqueConstraint('group_key', 'kakao_id', name='unique_chatroom_member'),
+        Index('ix_chatroom_group_kakao', 'group_key', 'kakao_id'),
+    )
+
+    def __repr__(self):
+        return f"<ChatRoomMember(group={self.group_key[:8]}..., user={self.kakao_id})>"
+
+
 class StockCache(Base):
     """종목 코드/이름 영구 캐시"""
     __tablename__ = "stock_cache"
