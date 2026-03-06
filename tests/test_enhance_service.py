@@ -16,8 +16,10 @@ class TestEnhanceInfo:
         result = EnhanceService.get_enhance_info(db, test_user.kakao_id)
         assert result["success"] is True
         assert result["level"] == 0
-        assert result["title_name"] == "예비 투자자"
-        assert result["title_emoji"] == "🔰"
+        valid_names = [t[0] for t in EnhanceConfig.TITLE_NAMES[0]]
+        assert result["title_name"] in valid_names
+        valid_emojis = [t[1] for t in EnhanceConfig.TITLE_NAMES[0]]
+        assert result["title_emoji"] in valid_emojis
 
     def test_enhance_info_shows_next_cost(self, db, test_user):
         """다음 각성 비용이 표시됨"""
@@ -32,7 +34,8 @@ class TestEnhanceInfo:
 
         result = EnhanceService.get_enhance_info(db, test_user.kakao_id)
         assert result["level"] == 10
-        assert result["title_name"] == "시장 해석가"
+        valid_names = [t[0] for t in EnhanceConfig.TITLE_NAMES[10]]
+        assert result["title_name"] in valid_names
         assert result["attendance_multiplier"] == EnhanceConfig.get_attendance_multiplier(10)
         assert result["lottery_multiplier"] == EnhanceConfig.get_lottery_multiplier(10)
 
@@ -141,7 +144,8 @@ class TestEnhanceAttempt:
         assert result["enhanced"] is True
         assert result["new_level"] == 4
         assert result["title_changed"] is True
-        assert result["new_title"] == "차트 분석가"
+        valid_names = [t[0] for t in EnhanceConfig.TITLE_NAMES[4]]
+        assert result["new_title"] in valid_names
 
 
 class TestEnhanceConfig:
@@ -169,12 +173,14 @@ class TestEnhanceConfig:
     def test_get_title_level_0(self):
         """레벨 0 칭호"""
         name, emoji = EnhanceConfig.get_title(0)
-        assert name == "예비 투자자"
+        valid_names = [t[0] for t in EnhanceConfig.TITLE_NAMES[0]]
+        assert name in valid_names
 
     def test_get_title_max_level(self):
         """만렙 칭호"""
         name, emoji = EnhanceConfig.get_title(EnhanceConfig.MAX_LEVEL)
-        assert name == "투자의 신"
+        valid_names = [t[0] for t in EnhanceConfig.TITLE_NAMES[EnhanceConfig.MAX_LEVEL]]
+        assert name in valid_names
         assert emoji == "👑"
 
     def test_attendance_multiplier(self):
