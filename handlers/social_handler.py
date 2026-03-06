@@ -470,28 +470,9 @@ class SocialHandlerMixin(BaseHandlerMixin):
             )
 
         if len(parts) < 2:
-            current = user.nickname if user.nickname else f"투자자{self.kakao_id[-4:]} (미설정)"
-            msg = f"""🏷️ 닉네임 설정
-
-현재 닉네임: {current}
-
-📝 설정 방법
-/닉네임 [원하는 이름]
-
-💡 예시
-/닉네임 투자왕
-/닉네임 워렌버핏
-/닉네임 만렙개미
-
-📌 규칙
-• 2~10자 (한글, 영문, 숫자)
-• 다른 유저와 중복 불가"""
-            return KakaoResponse.quick_replies(
-                msg,
-                [
-                    {"label": "💼 포트폴리오", "action": "message", "messageText": "/포트폴리오"},
-                    {"label": "🏆 랭킹", "action": "message", "messageText": "/랭킹"}
-                ]
+            current = user.nickname if user.nickname else "없음"
+            return KakaoResponse.simple_text(
+                f"🏷️ 닉네임 설정\n\n현재 닉네임: {current}\n\n사용법: /닉네임 [새 닉네임]\n예: /닉네임 투자왕"
             )
 
         new_nickname = parts[1].strip()
