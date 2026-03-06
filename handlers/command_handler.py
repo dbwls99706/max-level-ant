@@ -7,6 +7,7 @@ from typing import Dict, Optional
 from sqlalchemy.orm import Session
 
 from services import UserService
+from services.user_service import register_chatroom_member
 from utils import KakaoResponse, get_streak_display, get_handler_logger
 from config import GameConfig, Messages
 
@@ -136,17 +137,22 @@ class CommandHandler(
         "/자산차트": "handle_asset_chart",
     }
 
-    def __init__(self, db: Session, kakao_id: str, utterance: str, nickname: str = None):
+    def __init__(self, db: Session, kakao_id: str, utterance: str, nickname: str = None, group_key: str = ""):
         self.db = db
         self.kakao_id = kakao_id
         self.utterance = utterance.strip()
         self.nickname = nickname
+        self.group_key = group_key
 
     def handle(self) -> Dict:
         """
         명령어 처리 메인 함수
         라우팅 테이블을 사용하여 적절한 핸들러 호출
         """
+        # 그룹 챗봇: 채팅방 멤버 등록
+        if self.group_key:
+            register_chatroom_member(self.db, self.group_key, self.kakao_id)
+
         cmd = self.utterance.lower()
 
         # 빈 utterance = 웰컴 블록 트리거

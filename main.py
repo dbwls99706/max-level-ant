@@ -252,6 +252,10 @@ async def kakao_skill(request: Request, db: Session = Depends(get_db)):
         # 닉네임 추출 (카카오 OpenBuilder에서 제공)
         nickname = user_info.get("properties", {}).get("nickname", "")
 
+        # 그룹 챗봇: 채팅방 식별키 추출
+        chat_info = user_request.get("chat", {})
+        group_key = chat_info.get("properties", {}).get("botGroupKey", "")
+
         # 디버그: 카카오에서 받은 유저 정보 로그 (민감 정보 마스킹)
         masked_id = f"{kakao_id[:4]}****" if len(kakao_id) > 4 else "****"
         request_id = getattr(request.state, "request_id", "unknown")
@@ -281,7 +285,7 @@ async def kakao_skill(request: Request, db: Session = Depends(get_db)):
             )
 
         # 명령어 처리
-        handler = CommandHandler(db, kakao_id, utterance, nickname)
+        handler = CommandHandler(db, kakao_id, utterance, nickname, group_key)
         response = handler.handle()
 
         return response
