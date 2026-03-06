@@ -6,7 +6,7 @@
 
 ## 1. 봇 개요 한 줄 요약
 
-**"주식왕"** — 실제 한국 주식 시세를 기반으로 가상 자금으로 투자를 연습하는 **게이미피케이션 가상 투자 시뮬레이터** 카카오톡 챗봇
+**"만렙개미"** — 실제 한국 주식 시세를 기반으로 가상 골드로 투자를 연습하며, 쪼렙 개미에서 만렙 개미로 성장하는 **게이미피케이션 가상 투자 시뮬레이터** 카카오톡 챗봇
 
 ---
 
@@ -28,7 +28,7 @@
 
 ### Q2. 기존 카카오페이증권 주식봇과 뭐가 다른가요?
 
-| 구분 | 카카오페이증권 주식봇 | 주식왕 |
+| 구분 | 카카오페이증권 주식봇 | 만렙개미 |
 |------|----------------------|--------|
 | **핵심 컨셉** | 정보 조회 도구 (AI 요약) | 게이미피케이션 투자 시뮬레이터 |
 | **사용 환경** | 팀채팅방 @멘션 방식 | 전용 챗봇 채널 (스킬 서버) |
@@ -36,7 +36,8 @@
 | **거래 방식** | 단순 모의투자 | 실시간 시세 기반 매수/매도/전량매수/전량매도, 수수료 0.1% 적용 |
 | **포트폴리오** | 없음 (개인 투자 정보 미저장) | 개인별 보유 종목, 평균 단가, 수익률, 자산 히스토리 차트 |
 | **경쟁 요소** | 팀채팅방 내 공유 수준 | 전체 수익률 랭킹, PvP 배틀 (주가 예측 대결), 주간 챌린지 |
-| **게임 요소** | 없음 | 출석 보상, 복권, 종목추첨, 시장예측, 등락예측, 업다운 |
+| **게임 요소** | 없음 | 출석 보상, 보물상자(복권), 시장예측, 업다운 |
+| **각성 시스템** | 없음 | 각성 레벨업 도전 (실패 시 초기화), Lv.10 이후 직군(트레이더/투자가/퀀트) 배정 + 전용 칭호 트리 |
 | **성장 시스템** | 없음 | 일간 미션, 주간 챌린지, 업적, 마일스톤, 연속 출석 보너스 |
 | **뉴스** | AI 기업/매출 요약 | Google News RSS 기반 실시간 종목 뉴스 |
 | **시장 정보** | 주식 지수, 종목 시세 | KOSPI/KOSDAQ 지수 + 급등주/급락주/거래량 TOP 10 |
@@ -44,7 +45,7 @@
 | **종목 추천** | 불가 | 불가 (정보 제공에 집중) |
 
 **차별화 핵심 3가지:**
-1. **"게임" ≠ "조회 도구"**: 주식봇은 정보 조회 도구이지만, 주식왕은 지속적 참여를 유도하는 게임형 서비스
+1. **"게임" ≠ "조회 도구"**: 주식봇은 정보 조회 도구이지만, 만렙개미는 지속적 참여를 유도하는 게임형 서비스
 2. **개인화된 영구 포트폴리오**: 유저별 가상 자금, 보유 종목, 거래 내역을 DB에 영구 저장하여 장기적 투자 시뮬레이션 가능
 3. **소셜 경쟁**: 수익률 랭킹, PvP 배틀, 주간 챌린지 등으로 유저 간 경쟁과 리텐션 극대화
 
@@ -67,11 +68,11 @@
 ### Q4. 데이터베이스 구조는 어떻게 되나요?
 
 **답변:**
-총 9개 테이블:
+총 10개 테이블:
 
 | 테이블 | 역할 | 주요 컬럼 |
 |--------|------|-----------|
-| `users` | 유저 정보 | kakao_id(PK), nickname, cash, 출석/미션/업적 정보 |
+| `users` | 유저 정보 | kakao_id(PK), nickname, cash, enhance_level, enhance_class, 출석/미션/업적 정보 |
 | `holdings` | 보유 주식 | kakao_id(FK), stock_code, quantity, avg_price |
 | `transactions` | 거래 내역 | trade_type(BUY/SELL), price, quantity, profit |
 | `battles` | PvP 배틀 | challenger/opponent, stock, prediction, status |
@@ -79,6 +80,7 @@
 | `user_challenges` | 유저별 챌린지 진행 | current_value, completed |
 | `milestones` | 마일스톤 달성 | milestone_type, achieved_at |
 | `asset_history` | 자산 히스토리 | record_date, total_asset, cash, stock_value |
+| `chatroom_members` | 그룹 챗봇 채팅방 멤버 | group_key, kakao_id, last_active |
 | `stock_cache` | 종목 코드/이름 캐시 | stock_code(PK), stock_name |
 
 **데이터 보존 정책:**
@@ -240,15 +242,17 @@
 
 ```
 1. /시작        → 가입 + 500만원 지급
-2. /출석        → 매일 30만원 보상 (연속 출석 보너스)
+2. /출석        → 매일 30만원 보상 (연속 출석 보너스 + 각성 레벨 배율)
 3. /시세 삼성전자 → 실시간 시세 조회
 4. /매수 삼성전자 10 → 10주 매수
 5. /포트폴리오   → 보유 현황 + 수익률
 6. /급등        → 급등주 TOP 10
 7. /뉴스 삼성전자 → 관련 뉴스
 8. /랭킹        → 수익률 TOP 10
-9. /복권        → 예측게임 체험
-10. /배틀생성 삼성전자 상승 → PvP 배틀
+9. /보물상자     → 보물상자(복권) 체험
+10. /각성       → 각성 레벨업 도전
+11. /각성랭킹    → 각성 레벨 TOP 10
+12. /배틀 삼성전자 상승 → PvP 배틀
 ```
 
 ---
@@ -266,7 +270,7 @@
   ├── 미들웨어: Rate Limit, CORS, 요청 크기 제한, Request ID
   ├── CommandHandler (명령어 라우팅)
   │   ├── TradingHandlerMixin (매수/매도/포트폴리오)
-  │   ├── GameHandlerMixin (복권/종목추첨/등락예측/시장예측/업다운)
+  │   ├── GameHandlerMixin (보물상자/시장예측/업다운/각성)
   │   ├── MarketHandlerMixin (시세/급등/급락/뉴스/검색)
   │   └── SocialHandlerMixin (랭킹/배틀/챌린지/마일스톤)
   ├── Service Layer
@@ -276,12 +280,14 @@
   │   ├── BattleService
   │   ├── RankingService
   │   ├── NewsService ←→ Google News RSS
+  │   ├── EnhanceService (각성/강화 시스템)
   │   └── ... (Mission, Challenge, Milestone, Asset)
   └── Database Layer
       └── PostgreSQL (SQLAlchemy ORM)
           ├── users, holdings, transactions
           ├── battles, weekly_challenges
           ├── milestones, asset_history
+          ├── chatroom_members
           └── stock_cache
 ```
 
