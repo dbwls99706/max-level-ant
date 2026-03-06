@@ -101,57 +101,49 @@ class SocialHandlerMixin(BaseHandlerMixin):
         )
 
     def _handle_ranking_solo(self) -> Dict:
-        """1:1 채널 랭킹 — 내 순위 + 자산 요약"""
-        rank_info = RankingService.get_my_rank(self.db, self.kakao_id)
-
-        if rank_info is None:
+        """1:1 채널 랭킹 — 내 자산/수익률 요약만 (다른 유저 데이터 없이)"""
+        user = UserService.get_user(self.db, self.kakao_id)
+        if not user:
             return KakaoResponse.quick_replies(
                 "먼저 /시작 으로 참가하세요.",
                 [{"label": "🚀 시작하기", "action": "message", "messageText": "/시작"}]
             )
 
-        rank = rank_info["rank"]
-        total = rank_info["total"]
-        profit_rate = rank_info["profit_rate"]
+        total_asset, profit_rate = RankingService.calculate_total_asset(self.db, user)
         rate_emoji = "📈" if profit_rate >= 0 else "📉"
+        profit_amount = total_asset - (user.initial_cash or 5_000_000)
+        amount_str = f"+{profit_amount:,}원" if profit_amount >= 0 else f"{profit_amount:,}원"
 
-        # 퍼센타일
-        percentile = ((total - rank + 1) / total) * 100 if total > 0 else 0
-
-        if rank == 1:
-            motivation = "👑 전체 1위! 만렙개미 최강자!"
-        elif rank <= 3:
-            motivation = f"🏆 TOP 3! 정상까지 {rank - 1}명!"
-        elif percentile >= 90:
-            motivation = f"🌟 상위 {100 - percentile:.0f}%!"
-        elif percentile >= 70:
-            motivation = f"📈 상위 {100 - percentile:.0f}%! 좋은 성적!"
-        elif percentile >= 50:
-            motivation = f"💪 상위 {100 - percentile:.0f}%! 조금만 더!"
+        # 수익률 기반 동기부여
+        if profit_rate >= 50:
+            motivation = "👑 전설적인 수익률! 만렙개미!"
+        elif profit_rate >= 20:
+            motivation = "🌟 훌륭한 투자 실력!"
+        elif profit_rate >= 5:
+            motivation = "📈 좋은 흐름이에요! 계속 가보자!"
+        elif profit_rate >= 0:
+            motivation = "💪 꾸준히 하면 수익은 따라와요!"
+        elif profit_rate >= -10:
+            motivation = "🔥 아직 기회는 있어요!"
         else:
-            motivation = f"🔥 역전의 기회는 있어요!"
+            motivation = "💎 하락장에서 버티는 것도 실력!"
 
-        rival_line = ""
-        if rank_info.get("above_nickname"):
-            gap = (rank_info.get("above_profit_rate", 0) or 0) - profit_rate
-            rival_line = "\n" + get_rival_msg(rank, rank_info["above_nickname"], gap)
+        msg = f"""🏆 내 투자 현황
 
-        msg = f"""🏆 내 랭킹
+{rate_emoji} 수익률: {profit_rate:+.2f}% ({amount_str})
+💰 총 자산: {total_asset:,}원
+💵 보유 현금: {user.cash:,}원
 
-📍 {rank}위 / 전체 {total}명
-{rate_emoji} 수익률: {profit_rate:+.2f}%
-💰 총 자산: {rank_info['total_asset']:,}원
-
-{motivation}{rival_line}
+{motivation}
 
 💡 그룹 채팅방에서 친구들과 랭킹을 겨뤄보세요!"""
 
         return KakaoResponse.quick_replies(
             msg,
             [
-                {"label": "🧬 각성 랭킹", "action": "message", "messageText": "/각성랭킹"},
                 {"label": "💼 포트폴리오", "action": "message", "messageText": "/포트폴리오"},
-                {"label": "📈 급등주", "action": "message", "messageText": "/급등"}
+                {"label": "📈 급등주", "action": "message", "messageText": "/급등"},
+                {"label": "🧬 각성", "action": "message", "messageText": "/각성"}
             ]
         )
 
