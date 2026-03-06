@@ -713,14 +713,14 @@ class GameHandlerMixin(BaseHandlerMixin):
 {next_emoji} 성공 시 → {next_name} Lv.{level + 1}"""
 
             can_afford = result["cash"] >= cost
-            if can_afford and can_enhance:
+            if not can_enhance:
+                msg += "\n\n⏰ 각성은 장 마감 후에만 가능합니다."
+            elif not can_afford:
+                msg += f"\n\n❌ 골드 부족 (보유: {result['cash']:,}원)"
+            else:
                 buttons.append(
                     {"label": f"🧬 각성하기 ({cost:,}원)", "action": "message", "messageText": "/각성 시도"}
                 )
-            elif can_afford and not can_enhance:
-                msg += "\n\n⏰ 각성은 장 마감 후에만 가능합니다."
-            else:
-                msg += f"\n\n❌ 골드 부족 (보유: {result['cash']:,}원)"
 
         buttons.extend([
             {"label": "📅 출석", "action": "message", "messageText": "/출석"},
