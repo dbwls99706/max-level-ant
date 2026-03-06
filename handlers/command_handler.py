@@ -204,14 +204,14 @@ class CommandHandler(
             welcome_msg = Messages.WELCOME.format(initial_cash=GameConfig.INITIAL_CASH)
             buttons = [
                 {"label": "📅 출석 +30만", "action": "message", "messageText": "/출석"},
-                {"label": "🎁 보물상자", "action": "message", "messageText": "/복권"},
+                {"label": "🎁 보물상자", "action": "message", "messageText": "/보물상자"},
                 {"label": "🚀 급등주 정찰", "action": "message", "messageText": "/급등"},
             ]
             return KakaoResponse.quick_replies(welcome_msg, buttons)
         else:
             buttons = [
                 {"label": "📅 출석", "action": "message", "messageText": "/출석"},
-                {"label": "🎁 보물상자", "action": "message", "messageText": "/복권"},
+                {"label": "🎁 보물상자", "action": "message", "messageText": "/보물상자"},
                 {"label": "💼 포폴", "action": "message", "messageText": "/포트폴리오"},
                 {"label": "🚀 급등주", "action": "message", "messageText": "/급등"},
                 {"label": "🧬 각성", "action": "message", "messageText": "/각성"},
@@ -291,7 +291,7 @@ class CommandHandler(
 
         buttons = [
             {"label": "📈 급등주", "action": "message", "messageText": "/급등"},
-            {"label": "🎁 보물상자", "action": "message", "messageText": "/복권"},
+            {"label": "🎁 보물상자", "action": "message", "messageText": "/보물상자"},
             {"label": "💼 포트폴리오", "action": "message", "messageText": "/포트폴리오"},
         ]
         buttons.extend(self._get_game_buttons())
@@ -301,7 +301,7 @@ class CommandHandler(
         """도움말"""
         buttons = [
             {"label": "📈 급등주", "action": "message", "messageText": "/급등"},
-            {"label": "🎁 보물상자", "action": "message", "messageText": "/복권"},
+            {"label": "🎁 보물상자", "action": "message", "messageText": "/보물상자"},
             {"label": "📅 출석", "action": "message", "messageText": "/출석"},
             {"label": "💼 포트폴리오", "action": "message", "messageText": "/포트폴리오"},
         ]

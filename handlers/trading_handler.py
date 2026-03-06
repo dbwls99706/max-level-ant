@@ -128,7 +128,7 @@ class TradingHandlerMixin(BaseHandlerMixin):
                     msg,
                     [
                         {"label": "📅 출석체크", "action": "message", "messageText": "/출석"},
-                        {"label": "🎁 보물상자", "action": "message", "messageText": "/복권"},
+                        {"label": "🎁 보물상자", "action": "message", "messageText": "/보물상자"},
                         {"label": "🎯 미션확인", "action": "message", "messageText": "/미션"}
                     ]
                 )
@@ -305,7 +305,7 @@ class TradingHandlerMixin(BaseHandlerMixin):
                     result["message"],
                     [
                         {"label": "📅 출석체크", "action": "message", "messageText": "/출석"},
-                        {"label": "🎁 보물상자", "action": "message", "messageText": "/복권"},
+                        {"label": "🎁 보물상자", "action": "message", "messageText": "/보물상자"},
                         {"label": "🎯 미션확인", "action": "message", "messageText": "/미션"}
                     ]
                 )

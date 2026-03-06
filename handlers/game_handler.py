@@ -34,7 +34,7 @@ class GameHandlerMixin(BaseHandlerMixin):
         return KakaoResponse.quick_replies(
             msg,
             [
-                {"label": "🎁 보물상자", "action": "message", "messageText": "/복권"},
+                {"label": "🎁 보물상자", "action": "message", "messageText": "/보물상자"},
                 {"label": "🧬 각성", "action": "message", "messageText": "/각성"},
                 {"label": "⚡ 5만 예언 배틀", "action": "message", "messageText": f"/시장예측 {small_bet}"},
                 {"label": "🔥 50만 대박 배틀", "action": "message", "messageText": f"/시장예측 {big_bet}"},
@@ -117,7 +117,7 @@ class GameHandlerMixin(BaseHandlerMixin):
 
         buttons = []
         if remaining > 0:
-            buttons.append({"label": f"🎁 한번 더! ({remaining}회 남음)", "action": "message", "messageText": "/복권"})
+            buttons.append({"label": f"🎁 한번 더! ({remaining}회 남음)", "action": "message", "messageText": "/보물상자"})
         if is_big_win:
             buttons.append({"label": "💼 포트폴리오", "action": "message", "messageText": "/포트폴리오"})
             buttons.append({"label": "🏆 랭킹", "action": "message", "messageText": "/랭킹"})
@@ -279,7 +279,7 @@ class GameHandlerMixin(BaseHandlerMixin):
         else:
             buttons = [
                 {"label": "⚡ 다시 예언!", "action": "message", "messageText": f"/시장예측 {bet}"},
-                {"label": "🎁 보물상자", "action": "message", "messageText": "/복권"},
+                {"label": "🎁 보물상자", "action": "message", "messageText": "/보물상자"},
                 {"label": "📈 급등주", "action": "message", "messageText": "/급등"},
             ]
 
@@ -689,7 +689,7 @@ class GameHandlerMixin(BaseHandlerMixin):
             msg += "\n\n👑 만렙 달성! 당신을 넘을 개미는 없습니다."
             buttons = [
                 {"label": "📅 출석", "action": "message", "messageText": "/출석"},
-                {"label": "🎁 보물상자", "action": "message", "messageText": "/복권"},
+                {"label": "🎁 보물상자", "action": "message", "messageText": "/보물상자"},
             ]
         else:
             cost = result["next_cost"]
