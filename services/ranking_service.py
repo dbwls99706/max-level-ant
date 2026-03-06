@@ -10,7 +10,7 @@ from cachetools import TTLCache
 
 from models import User, Holding, ChatRoomMember
 from services.stock_service import StockService
-from config import CacheConfig, EnhanceConfig
+from config import CacheConfig, EnhanceConfig, GameConfig
 from utils import get_service_logger
 
 logger = get_service_logger()
@@ -99,7 +99,7 @@ class RankingService:
                 "nickname": cls._get_display_name(user),
                 "total_asset": total_asset,
                 "profit_rate": profit_rate,
-                "profit_amount": total_asset - (user.initial_cash or 5_000_000),
+                "profit_amount": total_asset - (user.initial_cash or GameConfig.INITIAL_CASH),
                 "enhance_level": enhance_level,
                 "enhance_title": title_name,
                 "enhance_emoji": title_emoji,

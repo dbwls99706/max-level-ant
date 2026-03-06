@@ -30,10 +30,10 @@ class User(Base):
     last_nickname_change = Column(Date, nullable=True)
     
     # 보유 현금
-    cash = Column(BigInteger, default=5_000_000)
+    cash = Column(BigInteger, default=10_000_000)
 
     # 초기 자금 (수익률 계산용)
-    initial_cash = Column(BigInteger, default=5_000_000)
+    initial_cash = Column(BigInteger, default=10_000_000)
     
     # 생성일
     created_at = Column(DateTime, default=_utcnow)

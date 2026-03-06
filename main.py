@@ -392,6 +392,85 @@ async def admin_reset_db(
         return {"success": False, "error": str(e)}
 
 
+@app.post("/admin/reset-seed")
+async def admin_reset_seed(
+    request: Request,
+    authorization: Optional[str] = Header(None, alias="Authorization")
+):
+    """
+    기존 유저 시드머니 초기화 (보유주식/거래내역 정리 + 현금 리셋)
+
+    curl -X POST http://localhost:8000/admin/reset-seed \
+         -H "Content-Type: application/json" \
+         -H "Authorization: Bearer YOUR_ADMIN_TOKEN" \
+         -d '{"confirm": "RESET_SEED_MONEY"}'
+    """
+    try:
+        if not authorization:
+            raise HTTPException(status_code=401, detail="인증 토큰이 필요합니다.")
+
+        try:
+            scheme, token = authorization.split()
+            if scheme.lower() != "bearer":
+                raise ValueError("Invalid scheme")
+        except ValueError:
+            raise HTTPException(status_code=401, detail="잘못된 인증 형식입니다.")
+
+        if not secrets.compare_digest(token, SecurityConfig.ADMIN_TOKEN):
+            raise HTTPException(status_code=403, detail="권한이 없습니다.")
+
+        body = await request.json()
+        confirm = body.get("confirm", "")
+
+        if confirm != "RESET_SEED_MONEY":
+            return {
+                "success": False,
+                "message": "시드머니 초기화를 확인하려면 confirm 필드에 'RESET_SEED_MONEY'를 입력하세요."
+            }
+
+        from models import User, Holding, Transaction
+        from config import GameConfig
+
+        db = SessionLocal()
+        try:
+            # 보유 주식 전량 삭제
+            deleted_holdings = db.query(Holding).delete()
+            # 거래 내역 전량 삭제
+            deleted_transactions = db.query(Transaction).delete()
+            # 모든 유저 현금 + 초기자금 리셋
+            new_cash = GameConfig.INITIAL_CASH
+            updated_users = db.query(User).update({
+                User.cash: new_cash,
+                User.initial_cash: new_cash,
+            })
+            db.commit()
+            logger.info(
+                f"시드머니 초기화 완료: {updated_users}명 유저 → {new_cash:,}원, "
+                f"보유주식 {deleted_holdings}건 삭제, 거래내역 {deleted_transactions}건 삭제"
+            )
+            return {
+                "success": True,
+                "message": f"시드머니 초기화 완료",
+                "data": {
+                    "updated_users": updated_users,
+                    "new_seed_money": new_cash,
+                    "deleted_holdings": deleted_holdings,
+                    "deleted_transactions": deleted_transactions,
+                }
+            }
+        except Exception as e:
+            db.rollback()
+            raise e
+        finally:
+            db.close()
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"시드머니 초기화 에러: {e}", exc_info=True)
+        return {"success": False, "error": str(e)}
+
+
 # ===========================================
 # 메인 실행
 # ===========================================
