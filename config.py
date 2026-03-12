@@ -411,8 +411,8 @@ class GameProbability:
         "전설":   {"prob": 0.003, "min_reward": 500_000, "max_reward": 1_000_000},  # 0.3%
         "영웅":   {"prob": 0.025, "min_reward": 50_000,  "max_reward": 100_000},    # 2.5%
         "희귀":   {"prob": 0.070, "min_reward": 15_000,  "max_reward": 30_000},     # 7.0%
-        "고급":   {"prob": 0.120, "min_reward": 8_000,   "max_reward": 12_000},     # 12.0%
-        "일반":   {"prob": 0.470, "min_reward": 10_000,  "max_reward": 10_000},     # 47.0%
+        "고급":   {"prob": 0.120, "min_reward": 12_000,  "max_reward": 20_000},     # 12.0%
+        "일반":   {"prob": 0.470, "min_reward": 3_000,   "max_reward": 8_000},      # 47.0%
         "빈 상자":{"prob": 0.312, "min_reward": 0,       "max_reward": 0},          # 31.2%
     }
 
