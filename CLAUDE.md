@@ -74,7 +74,7 @@ stock-king-bot/
 ## Architecture & Key Patterns
 
 ### Request Flow
-1. Kakao sends POST to `/api/chat` with user message
+1. Kakao sends POST to `/skill` with user message
 2. `main.py` extracts `kakao_id`, `utterance`, `group_key` from Kakao payload
 3. Rate limiter checks (30 req/60s per user)
 4. `CommandHandler.handle()` routes command via `COMMAND_ROUTES` dict
