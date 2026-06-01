@@ -90,6 +90,11 @@ class KISAPIClient:
     TR_ID_VOLUME_RANK = "FHPST01710000"  # 거래량 순위 조회
     TR_ID_MARKET_INDEX = "FHPUP02100000"  # 시장 지수 조회
 
+    # 거래량 순위 API에서 가져올 후보 종목 수
+    # 급등/급락 산출 시 레버리지/인버스 등을 걸러내고도 충분한 후보를 확보하기 위해
+    # 최종 노출 개수(10)보다 넉넉하게 가져온다.
+    VOLUME_RANK_FETCH_SIZE = 30
+
     _access_token = None
     _token_expires_at = None
 
@@ -252,7 +257,7 @@ class KISAPIClient:
                 if data.get("rt_cd") == "0":
                     output = data.get("output", [])
                     results = []
-                    for item in output[:10]:
+                    for item in output[:cls.VOLUME_RANK_FETCH_SIZE]:
                         try:
                             results.append({
                                 "code": item.get("mksc_shrn_iscd", "") or item.get("stck_shrn_iscd", ""),
@@ -273,15 +278,26 @@ class KISAPIClient:
 
         return []
 
+    @staticmethod
+    def _is_excluded_from_ranking(name: str) -> bool:
+        """급등/급락 순위에서 제외할 종목인지 판단 (레버리지/인버스 등)"""
+        if not name:
+            return False
+        return any(kw in name for kw in KISConfig.RANKING_EXCLUDE_KEYWORDS)
+
     @classmethod
     def get_fluctuation_rank(cls, sort: str = "1") -> List[Dict]:
         """
         등락률 순위 조회 (거래량 순위 데이터를 등락률로 재정렬)
         sort: 1=상승률순, 2=하락률순
+        레버리지/인버스 등 지수 배율 상품은 제외한다 (config.KISConfig.RANKING_EXCLUDE_KEYWORDS).
         """
         items = cls.get_volume_rank("J")
         if not items:
             return []
+
+        # 레버리지/인버스 등 제외 (개별 종목 위주로 노출)
+        items = [s for s in items if not cls._is_excluded_from_ranking(s.get("name", ""))]
 
         # 등락률로 정렬
         if sort == "1":  # 상승률순

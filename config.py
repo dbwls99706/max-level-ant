@@ -338,6 +338,12 @@ class KISConfig:
     BASE_URL = os.getenv("KIS_BASE_URL", "https://openapi.koreainvestment.com:9443")
     API_TIMEOUT = 10  # API 요청 타임아웃 (초)
 
+    # 급등/급락 순위에서 제외할 종목 키워드 (레버리지/인버스 ETF 등)
+    # 이름에 아래 키워드가 포함된 종목은 급등/급락 순위에 노출하지 않는다.
+    # 레버리지/인버스 상품은 지수의 2배로 움직여 등락률 상·하위를 독식하므로,
+    # 개별 종목 위주의 급등/급락 정보를 제공하기 위해 제외한다.
+    RANKING_EXCLUDE_KEYWORDS = ("레버리지", "인버스", "2X", "2x", "곱버스")
+
     @classmethod
     def is_configured(cls) -> bool:
         return bool(cls.APP_KEY and cls.APP_SECRET)
