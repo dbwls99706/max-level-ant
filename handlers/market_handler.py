@@ -146,6 +146,7 @@ class MarketHandlerMixin(BaseHandlerMixin):
 
         buttons = [{"label": f"🔥 {s.get('name', '???')}", "action": "message", "messageText": f"/시세 {s.get('name', '')}"} for s in stocks[:3]]
         buttons.append({"label": "📉 급락주", "action": "message", "messageText": "/급락"})
+        buttons.append({"label": "📊 ETF급등", "action": "message", "messageText": "/ETF급등"})
 
         return KakaoResponse.quick_replies(msg, buttons)
 
@@ -172,6 +173,61 @@ class MarketHandlerMixin(BaseHandlerMixin):
 
         buttons = [{"label": f"💎 {s.get('name', '???')}", "action": "message", "messageText": f"/시세 {s.get('name', '')}"} for s in stocks[:3]]
         buttons.append({"label": "🚀 급등주", "action": "message", "messageText": "/급등"})
+        buttons.append({"label": "📊 ETF급락", "action": "message", "messageText": "/ETF급락"})
+
+        return KakaoResponse.quick_replies(msg, buttons)
+
+    def handle_top_etf_gainers(self) -> Dict:
+        """ETF/ETN 급등 조회"""
+        stocks = StockService.get_top_etf_gainers(limit=10)
+
+        if not stocks:
+            return KakaoResponse.quick_replies(
+                "📊 ETF 급등 데이터를 불러오는 중입니다.",
+                [
+                    {"label": "🚀 급등주", "action": "message", "messageText": "/급등"},
+                    {"label": "📉 급락주", "action": "message", "messageText": "/급락"},
+                    {"label": "💼 포트폴리오", "action": "message", "messageText": "/포트폴리오"},
+                ]
+            )
+
+        msg = "📊 오늘의 ETF 급등 TOP 10\n"
+        for i, s in enumerate(stocks, 1):
+            name = s.get("name", "???")
+            change = s.get("change", 0)
+            price = s.get("price", 0)
+            msg += f"\n{i}. {name} 📈{change:+.1f}% ({price:,}원)"
+
+        buttons = [{"label": f"🔥 {s.get('name', '???')}", "action": "message", "messageText": f"/시세 {s.get('name', '')}"} for s in stocks[:3]]
+        buttons.append({"label": "📊 ETF급락", "action": "message", "messageText": "/ETF급락"})
+        buttons.append({"label": "🚀 급등주", "action": "message", "messageText": "/급등"})
+
+        return KakaoResponse.quick_replies(msg, buttons)
+
+    def handle_top_etf_losers(self) -> Dict:
+        """ETF/ETN 급락 조회"""
+        stocks = StockService.get_top_etf_losers(limit=10)
+
+        if not stocks:
+            return KakaoResponse.quick_replies(
+                "📊 ETF 급락 데이터를 불러오는 중입니다.",
+                [
+                    {"label": "🚀 급등주", "action": "message", "messageText": "/급등"},
+                    {"label": "📉 급락주", "action": "message", "messageText": "/급락"},
+                    {"label": "💼 포트폴리오", "action": "message", "messageText": "/포트폴리오"},
+                ]
+            )
+
+        msg = "📊 오늘의 ETF 급락 TOP 10\n"
+        for i, s in enumerate(stocks, 1):
+            name = s.get("name", "???")
+            change = s.get("change", 0)
+            price = s.get("price", 0)
+            msg += f"\n{i}. {name} 🔻{change:+.1f}% ({price:,}원)"
+
+        buttons = [{"label": f"💎 {s.get('name', '???')}", "action": "message", "messageText": f"/시세 {s.get('name', '')}"} for s in stocks[:3]]
+        buttons.append({"label": "📊 ETF급등", "action": "message", "messageText": "/ETF급등"})
+        buttons.append({"label": "📉 급락주", "action": "message", "messageText": "/급락"})
 
         return KakaoResponse.quick_replies(msg, buttons)
 

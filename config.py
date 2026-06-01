@@ -339,10 +339,20 @@ class KISConfig:
     API_TIMEOUT = 10  # API 요청 타임아웃 (초)
 
     # 급등/급락 순위에서 제외할 종목 키워드 (레버리지/인버스 ETF 등)
-    # 이름에 아래 키워드가 포함된 종목은 급등/급락 순위에 노출하지 않는다.
-    # 레버리지/인버스 상품은 지수의 2배로 움직여 등락률 상·하위를 독식하므로,
-    # 개별 종목 위주의 급등/급락 정보를 제공하기 위해 제외한다.
+    # 이름에 아래 키워드가 포함된 종목은 개별 종목 급등/급락 순위에 노출하지 않는다.
+    # 레버리지/인버스 상품은 지수의 2배로 움직여 등락률 상·하위를 독식하므로 제외한다.
     RANKING_EXCLUDE_KEYWORDS = ("레버리지", "인버스", "2X", "2x", "곱버스")
+
+    # ETF/ETN 식별용 브랜드 접두사
+    # 종목명이 아래 브랜드로 시작하면 ETF로 분류한다 (예: "KODEX 200", "TIGER 미국S&P500").
+    # 개별 종목 급등/급락에서는 제외하고, ETF 전용 급등/급락(/ETF급등 등)에서만 노출한다.
+    # ETN은 종목명에 "ETN"이 포함되는 특성으로 별도 판별한다.
+    ETF_BRAND_PREFIXES = (
+        "KODEX", "TIGER", "RISE", "KBSTAR", "SOL", "ACE", "KINDEX",
+        "PLUS", "ARIRANG", "HANARO", "KOSEF", "TIMEFOLIO", "FOCUS",
+        "TREX", "KIWOOM", "히어로즈", "WOORI", "BNK", "1Q", "VITA",
+        "마이다스", "파워", "마이티", "KCGI", "WON",
+    )
 
     @classmethod
     def is_configured(cls) -> bool:
