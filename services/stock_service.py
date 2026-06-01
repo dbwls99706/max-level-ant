@@ -280,24 +280,44 @@ class KISAPIClient:
 
     @staticmethod
     def _is_excluded_from_ranking(name: str) -> bool:
-        """급등/급락 순위에서 제외할 종목인지 판단 (레버리지/인버스 등)"""
+        """레버리지/인버스 등 지수 배율 상품인지 판단 (개별 종목 순위에서 제외)"""
         if not name:
             return False
         return any(kw in name for kw in KISConfig.RANKING_EXCLUDE_KEYWORDS)
 
+    @staticmethod
+    def _is_etf_or_etn(name: str) -> bool:
+        """ETF/ETN 종목인지 판단 (브랜드 접두사 또는 ETN 표기로 식별)"""
+        if not name:
+            return False
+        upper = name.upper()
+        if "ETN" in upper:
+            return True
+        return any(upper.startswith(prefix.upper()) for prefix in KISConfig.ETF_BRAND_PREFIXES)
+
     @classmethod
-    def get_fluctuation_rank(cls, sort: str = "1") -> List[Dict]:
+    def get_fluctuation_rank(cls, sort: str = "1", category: str = "stock") -> List[Dict]:
         """
         등락률 순위 조회 (거래량 순위 데이터를 등락률로 재정렬)
         sort: 1=상승률순, 2=하락률순
-        레버리지/인버스 등 지수 배율 상품은 제외한다 (config.KISConfig.RANKING_EXCLUDE_KEYWORDS).
+        category:
+            - "stock": 개별 종목만 (ETF/ETN, 레버리지/인버스 제외)
+            - "etf": ETF/ETN만
         """
         items = cls.get_volume_rank("J")
         if not items:
             return []
 
-        # 레버리지/인버스 등 제외 (개별 종목 위주로 노출)
-        items = [s for s in items if not cls._is_excluded_from_ranking(s.get("name", ""))]
+        if category == "etf":
+            # ETF/ETN만 노출
+            items = [s for s in items if cls._is_etf_or_etn(s.get("name", ""))]
+        else:
+            # 개별 종목만: ETF/ETN, 레버리지/인버스 제외
+            items = [
+                s for s in items
+                if not cls._is_etf_or_etn(s.get("name", ""))
+                and not cls._is_excluded_from_ranking(s.get("name", ""))
+            ]
 
         # 등락률로 정렬
         if sort == "1":  # 상승률순
@@ -674,9 +694,29 @@ class StockService:
 
     @classmethod
     def get_top_losers(cls, limit: int = 10) -> List[Dict]:
-        """급락주 (하락률 상위)"""
+        """급락주 (하락률 상위, 개별 종목)"""
         limit = cls._cap_limit(limit, default=10)
         stocks = KISAPIClient.get_fluctuation_rank(sort="2")[:limit]
+        # 캐시에 저장
+        for s in stocks:
+            cls._cache_stock(s.get("code"), s.get("name"))
+        return stocks
+
+    @classmethod
+    def get_top_etf_gainers(cls, limit: int = 10) -> List[Dict]:
+        """ETF/ETN 급등 (상승률 상위)"""
+        limit = cls._cap_limit(limit, default=10)
+        stocks = KISAPIClient.get_fluctuation_rank(sort="1", category="etf")[:limit]
+        # 캐시에 저장
+        for s in stocks:
+            cls._cache_stock(s.get("code"), s.get("name"))
+        return stocks
+
+    @classmethod
+    def get_top_etf_losers(cls, limit: int = 10) -> List[Dict]:
+        """ETF/ETN 급락 (하락률 상위)"""
+        limit = cls._cap_limit(limit, default=10)
+        stocks = KISAPIClient.get_fluctuation_rank(sort="2", category="etf")[:limit]
         # 캐시에 저장
         for s in stocks:
             cls._cache_stock(s.get("code"), s.get("name"))

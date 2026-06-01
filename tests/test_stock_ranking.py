@@ -81,3 +81,79 @@ def test_exclude_keywords_configurable():
     """제외 키워드는 config(KISConfig.RANKING_EXCLUDE_KEYWORDS)에서 관리된다"""
     assert "레버리지" in KISConfig.RANKING_EXCLUDE_KEYWORDS
     assert "인버스" in KISConfig.RANKING_EXCLUDE_KEYWORDS
+
+
+# ===========================================
+# ETF/ETN 분리 (개별 종목 vs ETF 순위)
+# ===========================================
+
+# 일반 ETF(레버리지 아님) + ETN + 개별 종목 혼합
+SAMPLE_MIXED_RANK = [
+    {"code": "069500", "name": "KODEX 200", "price": 35000, "change": 2.5, "volume": 2000},
+    {"code": "102110", "name": "TIGER 200", "price": 36000, "change": -3.0, "volume": 1900},
+    {"code": "385720", "name": "RISE 2차전지", "price": 12000, "change": 4.0, "volume": 1800},
+    {"code": "490450", "name": "SOL 미국배당", "price": 11000, "change": -1.5, "volume": 1700},
+    {"code": "530031", "name": "삼성 레버리지 WTI원유 선물 ETN", "price": 5000, "change": 7.0, "volume": 1600},
+    {"code": "005930", "name": "삼성전자", "price": 70000, "change": 3.2, "volume": 800},
+    {"code": "000660", "name": "SK하이닉스", "price": 150000, "change": -4.1, "volume": 700},
+    {"code": "035720", "name": "카카오", "price": 50000, "change": 1.0, "volume": 600},
+]
+
+
+def test_is_etf_or_etn_detection():
+    """ETF 브랜드 접두사 및 ETN 표기를 인식한다"""
+    assert KISAPIClient._is_etf_or_etn("KODEX 200") is True
+    assert KISAPIClient._is_etf_or_etn("TIGER 미국S&P500") is True
+    assert KISAPIClient._is_etf_or_etn("RISE 2차전지") is True
+    assert KISAPIClient._is_etf_or_etn("SOL 미국배당") is True
+    assert KISAPIClient._is_etf_or_etn("삼성 레버리지 WTI원유 선물 ETN") is True
+    # 개별 종목은 ETF가 아니다
+    assert KISAPIClient._is_etf_or_etn("삼성전자") is False
+    assert KISAPIClient._is_etf_or_etn("SK하이닉스") is False
+    assert KISAPIClient._is_etf_or_etn("") is False
+
+
+def test_stock_category_excludes_etf():
+    """개별 종목 급등주는 일반 ETF/ETN도 모두 제외한다"""
+    with patch.object(KISAPIClient, "get_volume_rank", return_value=list(SAMPLE_MIXED_RANK)):
+        result = KISAPIClient.get_fluctuation_rank(sort="1", category="stock")
+
+    names = [s["name"] for s in result]
+    # 개별 종목만 남고 상승률 순으로 정렬된다 (ETF/ETN 전부 제외)
+    assert names == ["삼성전자", "카카오", "SK하이닉스"]  # +3.2, +1.0, -4.1
+    assert all(not KISAPIClient._is_etf_or_etn(n) for n in names)
+
+
+def test_etf_category_only_etf():
+    """ETF 급등은 ETF/ETN만 노출하고 상승률 순으로 정렬한다"""
+    with patch.object(KISAPIClient, "get_volume_rank", return_value=list(SAMPLE_MIXED_RANK)):
+        result = KISAPIClient.get_fluctuation_rank(sort="1", category="etf")
+
+    names = [s["name"] for s in result]
+    # ETF/ETN만 포함, 개별 종목 제외
+    assert "삼성전자" not in names
+    assert "SK하이닉스" not in names
+    assert all(KISAPIClient._is_etf_or_etn(n) for n in names)
+    # 상승률 1위는 ETN(+7.0)
+    assert result[0]["name"] == "삼성 레버리지 WTI원유 선물 ETN"
+    changes = [s["change"] for s in result]
+    assert changes == sorted(changes, reverse=True)
+
+
+def test_etf_category_losers_sorted():
+    """ETF 급락은 하락률 순으로 정렬한다"""
+    with patch.object(KISAPIClient, "get_volume_rank", return_value=list(SAMPLE_MIXED_RANK)):
+        result = KISAPIClient.get_fluctuation_rank(sort="2", category="etf")
+
+    changes = [s["change"] for s in result]
+    assert changes == sorted(changes)
+    # 가장 많이 하락한 ETF는 TIGER 200(-3.0)
+    assert result[0]["name"] == "TIGER 200"
+
+
+def test_etf_prefixes_configurable():
+    """ETF 브랜드 접두사는 config(KISConfig.ETF_BRAND_PREFIXES)에서 관리된다"""
+    assert "KODEX" in KISConfig.ETF_BRAND_PREFIXES
+    assert "TIGER" in KISConfig.ETF_BRAND_PREFIXES
+    assert "RISE" in KISConfig.ETF_BRAND_PREFIXES
+    assert "SOL" in KISConfig.ETF_BRAND_PREFIXES
