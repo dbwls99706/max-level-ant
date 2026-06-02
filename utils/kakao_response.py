@@ -150,52 +150,50 @@ class KakaoResponse:
             }
         }
     
-    @staticmethod
-    def carousel(cards: List[Dict], card_type: str = "basicCard") -> Dict:
-        """
-        캐러셀 (여러 카드 슬라이드)
-        
-        card_type: "basicCard", "commerceCard", "listCard"
-        """
-        return {
-            "version": "2.0",
-            "template": {
-                "outputs": [
-                    {
-                        "carousel": {
-                            "type": card_type,
-                            "items": cards
-                        }
-                    }
-                ]
-            }
-        }
-    
+    # 버튼 레이아웃 vertical 최대 노출 개수 (카카오 그룹 챗봇 가이드 표 기준)
+    MAX_VERTICAL_BUTTONS = 5
+
     @staticmethod
     def quick_replies(
         text: str,
         replies: List[Dict]
     ) -> Dict:
         """
-        빠른 응답 버튼 포함 텍스트
-        
+        빠른 응답(하단 메뉴 버튼) 포함 텍스트.
+
+        ⚠️ 카카오 그룹(팀채팅) 챗봇은 quickReplies 컴포넌트를 지원하지 않으므로,
+        본문은 simpleText 말풍선으로, 버튼은 별도 textCard 말풍선의
+        buttonLayout="vertical"(최대 5개)로 노출한다.
+
         replies 예시:
         [
             {"label": "출석", "action": "message", "messageText": "/출석"},
             {"label": "시세", "action": "message", "messageText": "/시세 삼성전자"}
         ]
         """
+        outputs: List[Dict] = [
+            {
+                "simpleText": {
+                    "text": text
+                }
+            }
+        ]
+
+        if replies:
+            # vertical 레이아웃은 최대 5개까지만 노출되므로 초과분은 잘라낸다
+            buttons = list(replies)[: KakaoResponse.MAX_VERTICAL_BUTTONS]
+            outputs.append({
+                "textCard": {
+                    "description": "👇 빠른 메뉴",
+                    "buttons": buttons,
+                    "buttonLayout": "vertical"
+                }
+            })
+
         return {
             "version": "2.0",
             "template": {
-                "outputs": [
-                    {
-                        "simpleText": {
-                            "text": text
-                        }
-                    }
-                ],
-                "quickReplies": replies
+                "outputs": outputs
             }
         }
     
