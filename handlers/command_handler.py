@@ -310,14 +310,24 @@ class CommandHandler(
         return KakaoResponse.quick_replies(msg, buttons)
 
     def handle_help(self) -> Dict:
-        """도움말"""
-        buttons = [
-            {"label": "📈 급등주", "action": "message", "messageText": "/급등"},
-            {"label": "🎁 보물상자", "action": "message", "messageText": "/보물상자"},
-            {"label": "📅 출석", "action": "message", "messageText": "/출석"},
-            {"label": "💼 포트폴리오", "action": "message", "messageText": "/포트폴리오"},
+        """도움말 — 기능별 카드 캐러셀
+
+        긴 simpleText가 카카오에서 잘리던 문제를 해결하기 위해 카테고리별
+        basicCard 캐러셀로 보여준다. 각 카드 버튼은 해당 기능으로 바로
+        진입시켜 사용 흐름이 끊기지 않게 한다.
+        """
+        cards = [
+            {
+                "title": card["title"],
+                "description": card["description"],
+                "buttons": [
+                    KakaoResponse.button_message(b["label"], b["messageText"])
+                    for b in card["buttons"]
+                ],
+            }
+            for card in Messages.HELP_CARDS
         ]
-        return KakaoResponse.quick_replies(Messages.HELP, buttons)
+        return KakaoResponse.carousel(cards, card_type="basicCard")
 
     def handle_welcome(self) -> Dict:
         """웰컴 블록 응답 - 채팅방 진입 시 빈 utterance로 트리거됨"""
