@@ -182,11 +182,11 @@ class KakaoResponse:
         if replies:
             # vertical 레이아웃은 최대 5개까지만 노출되므로 초과분은 잘라낸다
             buttons = list(replies)[: KakaoResponse.MAX_VERTICAL_BUTTONS]
-            # textCard는 title/description 중 최소 하나가 필요하므로
-            # 빈 박스처럼 보이도록 공백 한 칸만 넣는다 (메뉴 버튼만 노출)
+            # textCard는 title/description 중 최소 하나가 필요하다.
+            # 버튼 묶음 위에 한 줄짜리 안내 문구를 붙인다.
             outputs.append({
                 "textCard": {
-                    "description": " ",
+                    "description": "👇 빠른 메뉴",
                     "buttons": buttons,
                     "buttonLayout": "vertical"
                 }
