@@ -51,10 +51,6 @@ class CommandHandler(
         "/도움말": "handle_help",
         "/help": "handle_help",
         "/ㄷㅇㅁ": "handle_help",
-        "/도움말주식": "handle_help_stock",
-        "/도움말자산": "handle_help_asset",
-        "/도움말게임": "handle_help_game",
-        "/도움말소셜": "handle_help_social",
 
         # 거래 관련
         "/시세": "handle_price",
@@ -314,50 +310,24 @@ class CommandHandler(
         return KakaoResponse.text_with_buttons(msg, buttons)
 
     def handle_help(self) -> Dict:
-        """도움말 - 분야 선택(화면을 가득 채우지 않도록 카테고리로 분할)"""
-        buttons = [
-            {"label": "📊 주식", "action": "message", "messageText": "/도움말주식"},
-            {"label": "💼 자산", "action": "message", "messageText": "/도움말자산"},
-            {"label": "🧬 게임·각성", "action": "message", "messageText": "/도움말게임"},
-            {"label": "⚔️ 소셜", "action": "message", "messageText": "/도움말소셜"},
-        ]
-        return KakaoResponse.text_with_buttons(Messages.HELP, buttons)
+        """도움말 — 기능별 카드 캐러셀
 
-    def handle_help_stock(self) -> Dict:
-        """도움말 - 주식 투자"""
-        buttons = [
-            {"label": "📈 급등주", "action": "message", "messageText": "/급등"},
-            {"label": "🔥 인기 종목", "action": "message", "messageText": "/인기"},
-            {"label": "📖 도움말", "action": "message", "messageText": "/도움말"},
+        긴 simpleText가 카카오에서 잘리던 문제를 해결하기 위해 카테고리별
+        basicCard 캐러셀로 보여준다. 각 카드 버튼은 해당 기능으로 바로
+        진입시켜 사용 흐름이 끊기지 않게 한다.
+        """
+        cards = [
+            {
+                "title": card["title"],
+                "description": card["description"],
+                "buttons": [
+                    KakaoResponse.button_message(b["label"], b["messageText"])
+                    for b in card["buttons"]
+                ],
+            }
+            for card in Messages.HELP_CARDS
         ]
-        return KakaoResponse.text_with_buttons(Messages.HELP_STOCK, buttons)
-
-    def handle_help_asset(self) -> Dict:
-        """도움말 - 내 자산"""
-        buttons = [
-            {"label": "💼 포트폴리오", "action": "message", "messageText": "/포트폴리오"},
-            {"label": "🏆 랭킹", "action": "message", "messageText": "/랭킹"},
-            {"label": "📖 도움말", "action": "message", "messageText": "/도움말"},
-        ]
-        return KakaoResponse.text_with_buttons(Messages.HELP_ASSET, buttons)
-
-    def handle_help_game(self) -> Dict:
-        """도움말 - 각성·게임"""
-        buttons = [
-            {"label": "🎁 보물상자", "action": "message", "messageText": "/보물상자"},
-            {"label": "🧬 각성", "action": "message", "messageText": "/각성"},
-            {"label": "📖 도움말", "action": "message", "messageText": "/도움말"},
-        ]
-        return KakaoResponse.text_with_buttons(Messages.HELP_GAME, buttons)
-
-    def handle_help_social(self) -> Dict:
-        """도움말 - 소셜"""
-        buttons = [
-            {"label": "⚔️ 배틀", "action": "message", "messageText": "/배틀"},
-            {"label": "🎯 미션", "action": "message", "messageText": "/미션"},
-            {"label": "📖 도움말", "action": "message", "messageText": "/도움말"},
-        ]
-        return KakaoResponse.text_with_buttons(Messages.HELP_SOCIAL, buttons)
+        return KakaoResponse.carousel(cards, card_type="basicCard")
 
     def handle_welcome(self) -> Dict:
         """웰컴 블록 응답 - 채팅방 진입 시 빈 utterance로 트리거됨"""
