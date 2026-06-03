@@ -20,7 +20,7 @@ class TradingHandlerMixin(BaseHandlerMixin):
         parts = self.utterance.split(maxsplit=1)
 
         if len(parts) < 2:
-            return KakaoResponse.quick_replies(
+            return KakaoResponse.text_with_buttons(
                 "📊 어떤 종목을 볼까요?",
                 [
                     self._popular_stock_btn(),
@@ -46,7 +46,7 @@ class TradingHandlerMixin(BaseHandlerMixin):
             similar = StockService.search_similar_stocks(query, limit=5)
             if similar:
                 buttons = [{"label": f"📊 {s['name']}", "action": "message", "messageText": f"/시세 {s['name']}"} for s in similar]
-                return KakaoResponse.quick_replies(
+                return KakaoResponse.text_with_buttons(
                     f"'{query}' 종목을 못 찾았어요 😅\n혹시 이 종목들 중에 있나요?",
                     buttons
                 )
@@ -62,7 +62,7 @@ class TradingHandlerMixin(BaseHandlerMixin):
             volume=stock_info["volume"]
         )
 
-        return KakaoResponse.quick_replies(
+        return KakaoResponse.text_with_buttons(
             msg,
             [
                 {"label": "1주 매수", "action": "message", "messageText": f"/매수 {stock_info['name']} 1"},
@@ -79,7 +79,7 @@ class TradingHandlerMixin(BaseHandlerMixin):
         if len(parts) < 3:
             top = self._get_top_popular_stock()
             buy_btn = {"label": f"📈 {top} 1주", "action": "message", "messageText": f"/매수 {top} 1"} if top else {"label": "📊 인기종목", "action": "message", "messageText": "/인기"}
-            return KakaoResponse.quick_replies(
+            return KakaoResponse.text_with_buttons(
                 "사용법: /매수 [종목명] [수량]\n예: /매수 삼성전자 10",
                 [
                     buy_btn,
@@ -92,7 +92,7 @@ class TradingHandlerMixin(BaseHandlerMixin):
             quantity = int(parts[-1])
             stock_query = " ".join(parts[1:-1])
         except ValueError:
-            return KakaoResponse.quick_replies(
+            return KakaoResponse.text_with_buttons(
                 "수량은 숫자로 입력해주세요.\n예: /매수 삼성전자 10",
                 [
                     {"label": "📈 1주 매수", "action": "message", "messageText": f"/매수 {parts[1]} 1"},
@@ -101,7 +101,7 @@ class TradingHandlerMixin(BaseHandlerMixin):
             )
 
         if not stock_query:
-            return KakaoResponse.quick_replies(
+            return KakaoResponse.text_with_buttons(
                 "종목명을 입력해주세요.\n예: /매수 삼성전자 10",
                 [
                     {"label": "🚀 급등주", "action": "message", "messageText": "/급등"},
@@ -124,7 +124,7 @@ class TradingHandlerMixin(BaseHandlerMixin):
                     cash=data["cash"],
                     shortage=data["shortage"]
                 )
-                return KakaoResponse.quick_replies(
+                return KakaoResponse.text_with_buttons(
                     msg,
                     [
                         {"label": "📅 출석체크", "action": "message", "messageText": "/출석"},
@@ -133,7 +133,7 @@ class TradingHandlerMixin(BaseHandlerMixin):
                     ]
                 )
             else:
-                return KakaoResponse.quick_replies(
+                return KakaoResponse.text_with_buttons(
                     result["message"],
                     [
                         {"label": f"📊 {stock_query} 시세", "action": "message", "messageText": f"/시세 {stock_query}"},
@@ -164,7 +164,7 @@ class TradingHandlerMixin(BaseHandlerMixin):
         for ms in new_milestones:
             msg += f"\n\n🎖️ 마일스톤 달성: {ms['name']}!\n💰 +{ms['reward']:,}원 자동 지급!"
 
-        return KakaoResponse.quick_replies(
+        return KakaoResponse.text_with_buttons(
             msg,
             [
                 {"label": "🔄 추가매수", "action": "message", "messageText": f"/시세 {data['name']}"},
@@ -178,7 +178,7 @@ class TradingHandlerMixin(BaseHandlerMixin):
         parts = self.utterance.split()
 
         if len(parts) < 3:
-            return KakaoResponse.quick_replies(
+            return KakaoResponse.text_with_buttons(
                 "사용법: /매도 [종목명] [수량]\n예: /매도 삼성전자 10",
                 [
                     {"label": "💼 포트폴리오", "action": "message", "messageText": "/포트폴리오"},
@@ -190,7 +190,7 @@ class TradingHandlerMixin(BaseHandlerMixin):
             quantity = int(parts[-1])
             stock_query = " ".join(parts[1:-1])
         except ValueError:
-            return KakaoResponse.quick_replies(
+            return KakaoResponse.text_with_buttons(
                 "수량은 숫자로 입력해주세요.\n예: /매도 삼성전자 10",
                 [
                     {"label": f"📉 {parts[1]} 전량", "action": "message", "messageText": f"/전량매도 {parts[1]}"},
@@ -199,7 +199,7 @@ class TradingHandlerMixin(BaseHandlerMixin):
             )
 
         if not stock_query:
-            return KakaoResponse.quick_replies(
+            return KakaoResponse.text_with_buttons(
                 "종목명을 입력해주세요.\n예: /매도 삼성전자 10",
                 [
                     {"label": "💼 포트폴리오", "action": "message", "messageText": "/포트폴리오"}
@@ -220,7 +220,7 @@ class TradingHandlerMixin(BaseHandlerMixin):
                     requested=data["requested"],
                     holding=data["holding"]
                 )
-                return KakaoResponse.quick_replies(
+                return KakaoResponse.text_with_buttons(
                     msg,
                     [
                         {"label": f"📉 {stock_query} 전량", "action": "message", "messageText": f"/전량매도 {stock_query}"},
@@ -228,7 +228,7 @@ class TradingHandlerMixin(BaseHandlerMixin):
                     ]
                 )
             else:
-                return KakaoResponse.quick_replies(
+                return KakaoResponse.text_with_buttons(
                     result["message"],
                     [
                         {"label": "💼 포트폴리오", "action": "message", "messageText": "/포트폴리오"},
@@ -268,7 +268,7 @@ class TradingHandlerMixin(BaseHandlerMixin):
         for ms in new_milestones:
             msg += f"\n\n🎖️ 마일스톤 달성: {ms['name']}!\n💰 +{ms['reward']:,}원 자동 지급!"
 
-        return KakaoResponse.quick_replies(
+        return KakaoResponse.text_with_buttons(
             msg,
             [
                 {"label": "🚀 급등주", "action": "message", "messageText": "/급등"},
@@ -282,7 +282,7 @@ class TradingHandlerMixin(BaseHandlerMixin):
         parts = self.utterance.split()
 
         if len(parts) < 2:
-            return KakaoResponse.quick_replies(
+            return KakaoResponse.text_with_buttons(
                 "사용법: /전량매수 [종목명]\n예: /전량매수 삼성전자",
                 [
                     self._popular_stock_btn("💰", "/전량매수"),
@@ -301,7 +301,7 @@ class TradingHandlerMixin(BaseHandlerMixin):
                 return response
 
             if "잔고" in result["message"]:
-                return KakaoResponse.quick_replies(
+                return KakaoResponse.text_with_buttons(
                     result["message"],
                     [
                         {"label": "📅 출석체크", "action": "message", "messageText": "/출석"},
@@ -309,7 +309,7 @@ class TradingHandlerMixin(BaseHandlerMixin):
                         {"label": "🎯 미션확인", "action": "message", "messageText": "/미션"}
                     ]
                 )
-            return KakaoResponse.quick_replies(
+            return KakaoResponse.text_with_buttons(
                 result["message"],
                 [
                     {"label": "📊 시세 조회", "action": "message", "messageText": "/시세"},
@@ -327,7 +327,7 @@ class TradingHandlerMixin(BaseHandlerMixin):
             cash=data["cash"]
         )
 
-        return KakaoResponse.quick_replies(
+        return KakaoResponse.text_with_buttons(
             msg,
             [
                 {"label": "💼 포트폴리오", "action": "message", "messageText": "/포트폴리오"},
@@ -340,7 +340,7 @@ class TradingHandlerMixin(BaseHandlerMixin):
         parts = self.utterance.split()
 
         if len(parts) < 2:
-            return KakaoResponse.quick_replies(
+            return KakaoResponse.text_with_buttons(
                 "사용법: /전량매도 [종목명]\n예: /전량매도 삼성전자",
                 [
                     {"label": "💼 포트폴리오", "action": "message", "messageText": "/포트폴리오"},
@@ -357,7 +357,7 @@ class TradingHandlerMixin(BaseHandlerMixin):
             if is_closed:
                 return response
 
-            return KakaoResponse.quick_replies(
+            return KakaoResponse.text_with_buttons(
                 result["message"],
                 [
                     {"label": "💼 포트폴리오", "action": "message", "messageText": "/포트폴리오"},
@@ -384,7 +384,7 @@ class TradingHandlerMixin(BaseHandlerMixin):
             cash=data["cash"]
         )
 
-        return KakaoResponse.quick_replies(
+        return KakaoResponse.text_with_buttons(
             msg,
             [
                 {"label": "🚀 급등주", "action": "message", "messageText": "/급등"},
@@ -398,7 +398,7 @@ class TradingHandlerMixin(BaseHandlerMixin):
         cash = UserService.get_balance(self.db, self.kakao_id)
 
         if cash is None:
-            return KakaoResponse.quick_replies(
+            return KakaoResponse.text_with_buttons(
                 "먼저 /시작 으로 게임을 시작해주세요.",
                 [{"label": "🎮 게임 시작", "action": "message", "messageText": "/시작"}]
             )
@@ -411,14 +411,14 @@ class TradingHandlerMixin(BaseHandlerMixin):
         ]
         buttons.extend(self._get_game_buttons())
 
-        return KakaoResponse.quick_replies(msg, buttons)
+        return KakaoResponse.text_with_buttons(msg, buttons)
 
     def handle_portfolio(self) -> Dict:
         """포트폴리오 조회"""
         portfolio = TradeService.get_portfolio(self.db, self.kakao_id)
 
         if portfolio is None:
-            return KakaoResponse.quick_replies(
+            return KakaoResponse.text_with_buttons(
                 "먼저 /시작 으로 게임을 시작해주세요.",
                 [{"label": "🎮 게임 시작", "action": "message", "messageText": "/시작"}]
             )
@@ -487,13 +487,13 @@ class TradingHandlerMixin(BaseHandlerMixin):
 
         buttons.extend(self._get_game_buttons())
 
-        return KakaoResponse.quick_replies(msg, buttons)
+        return KakaoResponse.text_with_buttons(msg, buttons)
 
     def handle_transactions(self) -> Dict:
         """거래 내역 조회"""
         user = UserService.get_user(self.db, self.kakao_id)
         if not user:
-            return KakaoResponse.quick_replies(
+            return KakaoResponse.text_with_buttons(
                 "먼저 게임을 시작해주세요!",
                 [{"label": "🎮 시작하기", "action": "message", "messageText": "/시작"}]
             )
@@ -501,7 +501,7 @@ class TradingHandlerMixin(BaseHandlerMixin):
         transactions = TradeService.get_transactions(self.db, self.kakao_id, limit=10)
 
         if not transactions:
-            return KakaoResponse.quick_replies(
+            return KakaoResponse.text_with_buttons(
                 "거래 내역이 없습니다.\n주식을 매수해보세요!",
                 [
                     {"label": "🚀 급등주", "action": "message", "messageText": "/급등"},
@@ -524,7 +524,7 @@ class TradingHandlerMixin(BaseHandlerMixin):
 
             msg += f"\n   {time_str}\n"
 
-        return KakaoResponse.quick_replies(
+        return KakaoResponse.text_with_buttons(
             msg,
             [
                 {"label": "💼 포트폴리오", "action": "message", "messageText": "/포트폴리오"},

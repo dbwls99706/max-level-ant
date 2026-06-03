@@ -19,7 +19,7 @@ class MarketHandlerMixin(BaseHandlerMixin):
         parts = self.utterance.split(maxsplit=1)
 
         if len(parts) < 2:
-            return KakaoResponse.quick_replies(
+            return KakaoResponse.text_with_buttons(
                 "🔍 어떤 종목을 찾으시나요?",
                 [
                     {"label": "🔍 반도체", "action": "message", "messageText": "/검색 반도체"},
@@ -32,7 +32,7 @@ class MarketHandlerMixin(BaseHandlerMixin):
         results = StockService.search_stocks(query, limit=5)
 
         if not results:
-            return KakaoResponse.quick_replies(
+            return KakaoResponse.text_with_buttons(
                 f"'{query}' 관련 종목을 찾을 수 없습니다.",
                 [
                     {"label": "🚀 급등주", "action": "message", "messageText": "/급등"},
@@ -61,14 +61,14 @@ class MarketHandlerMixin(BaseHandlerMixin):
         buttons.append({"label": "🚀 급등주", "action": "message", "messageText": "/급등"})
         buttons.extend(self._get_game_buttons())
 
-        return KakaoResponse.quick_replies(msg, buttons)
+        return KakaoResponse.text_with_buttons(msg, buttons)
 
     def handle_top_trading_value(self) -> Dict:
         """인기종목 (거래대금 상위)"""
         stocks = StockService.get_top_trading_value(limit=5)
 
         if not stocks:
-            return KakaoResponse.quick_replies(
+            return KakaoResponse.text_with_buttons(
                 "📊 인기종목 데이터를 불러오는 중입니다.",
                 [
                     {"label": "🚀 급등주", "action": "message", "messageText": "/급등"},
@@ -93,14 +93,14 @@ class MarketHandlerMixin(BaseHandlerMixin):
         buttons = [{"label": f"📊 {s.get('name', '???')}", "action": "message", "messageText": f"/시세 {s.get('name', '')}"} for s in stocks[:4]]
         buttons.append({"label": "🚀 급등주", "action": "message", "messageText": "/급등"})
 
-        return KakaoResponse.quick_replies(msg, buttons)
+        return KakaoResponse.text_with_buttons(msg, buttons)
 
     def handle_top_volume(self) -> Dict:
         """거래량 상위 종목"""
         stocks = StockService.get_top_volume(limit=5)
 
         if not stocks:
-            return KakaoResponse.quick_replies(
+            return KakaoResponse.text_with_buttons(
                 "📊 거래량 데이터를 불러오는 중입니다.",
                 [
                     {"label": "🚀 급등주", "action": "message", "messageText": "/급등"},
@@ -121,14 +121,14 @@ class MarketHandlerMixin(BaseHandlerMixin):
         buttons = [{"label": f"📊 {s.get('name', '???')}", "action": "message", "messageText": f"/시세 {s.get('name', '')}"} for s in stocks[:4]]
         buttons.append({"label": "🚀 급등주", "action": "message", "messageText": "/급등"})
 
-        return KakaoResponse.quick_replies(msg, buttons)
+        return KakaoResponse.text_with_buttons(msg, buttons)
 
     def handle_top_gainers(self) -> Dict:
         """급등주 조회"""
         stocks = StockService.get_top_gainers(limit=10)
 
         if not stocks:
-            return KakaoResponse.quick_replies(
+            return KakaoResponse.text_with_buttons(
                 "📊 급등주 데이터를 불러오는 중입니다.",
                 [
                     self._popular_stock_btn(),
@@ -148,14 +148,14 @@ class MarketHandlerMixin(BaseHandlerMixin):
         buttons.append({"label": "📉 급락주", "action": "message", "messageText": "/급락"})
         buttons.append({"label": "📊 ETF급등", "action": "message", "messageText": "/ETF급등"})
 
-        return KakaoResponse.quick_replies(msg, buttons)
+        return KakaoResponse.text_with_buttons(msg, buttons)
 
     def handle_top_losers(self) -> Dict:
         """급락주 조회"""
         stocks = StockService.get_top_losers(limit=10)
 
         if not stocks:
-            return KakaoResponse.quick_replies(
+            return KakaoResponse.text_with_buttons(
                 "📊 급락주 데이터를 불러오는 중입니다.",
                 [
                     self._popular_stock_btn("💎"),
@@ -175,14 +175,14 @@ class MarketHandlerMixin(BaseHandlerMixin):
         buttons.append({"label": "🚀 급등주", "action": "message", "messageText": "/급등"})
         buttons.append({"label": "📊 ETF급락", "action": "message", "messageText": "/ETF급락"})
 
-        return KakaoResponse.quick_replies(msg, buttons)
+        return KakaoResponse.text_with_buttons(msg, buttons)
 
     def handle_top_etf_gainers(self) -> Dict:
         """ETF/ETN 급등 조회"""
         stocks = StockService.get_top_etf_gainers(limit=10)
 
         if not stocks:
-            return KakaoResponse.quick_replies(
+            return KakaoResponse.text_with_buttons(
                 "📊 ETF 급등 데이터를 불러오는 중입니다.",
                 [
                     {"label": "🚀 급등주", "action": "message", "messageText": "/급등"},
@@ -202,14 +202,14 @@ class MarketHandlerMixin(BaseHandlerMixin):
         buttons.append({"label": "📊 ETF급락", "action": "message", "messageText": "/ETF급락"})
         buttons.append({"label": "🚀 급등주", "action": "message", "messageText": "/급등"})
 
-        return KakaoResponse.quick_replies(msg, buttons)
+        return KakaoResponse.text_with_buttons(msg, buttons)
 
     def handle_top_etf_losers(self) -> Dict:
         """ETF/ETN 급락 조회"""
         stocks = StockService.get_top_etf_losers(limit=10)
 
         if not stocks:
-            return KakaoResponse.quick_replies(
+            return KakaoResponse.text_with_buttons(
                 "📊 ETF 급락 데이터를 불러오는 중입니다.",
                 [
                     {"label": "🚀 급등주", "action": "message", "messageText": "/급등"},
@@ -229,14 +229,14 @@ class MarketHandlerMixin(BaseHandlerMixin):
         buttons.append({"label": "📊 ETF급등", "action": "message", "messageText": "/ETF급등"})
         buttons.append({"label": "📉 급락주", "action": "message", "messageText": "/급락"})
 
-        return KakaoResponse.quick_replies(msg, buttons)
+        return KakaoResponse.text_with_buttons(msg, buttons)
 
     def handle_market_overview(self) -> Dict:
         """시장 현황 조회"""
         market = StockService.get_market_overview()
 
         if not market:
-            return KakaoResponse.quick_replies(
+            return KakaoResponse.text_with_buttons(
                 "📊 시장 데이터를 불러오는 중입니다.",
                 [
                     {"label": "🚀 급등주", "action": "message", "messageText": "/급등"},
@@ -263,7 +263,7 @@ class MarketHandlerMixin(BaseHandlerMixin):
             msg += "\n💹 KOSDAQ"
             msg += f"\n   {price:,.2f} ({change:+.2f}%) {emoji}\n"
 
-        return KakaoResponse.quick_replies(
+        return KakaoResponse.text_with_buttons(
             msg,
             [
                 {"label": "🚀 급등주", "action": "message", "messageText": "/급등"},
@@ -296,7 +296,7 @@ class MarketHandlerMixin(BaseHandlerMixin):
             ]
 
         if not news:
-            return KakaoResponse.quick_replies(
+            return KakaoResponse.text_with_buttons(
                 "📰 뉴스를 불러오지 못했습니다.",
                 [
                     {"label": "🚀 급등주", "action": "message", "messageText": "/급등"},
@@ -312,4 +312,4 @@ class MarketHandlerMixin(BaseHandlerMixin):
             msg += f"\n{i}. {t}"
 
         buttons.extend(self._get_game_buttons())
-        return KakaoResponse.quick_replies(msg, buttons)
+        return KakaoResponse.text_with_buttons(msg, buttons)
