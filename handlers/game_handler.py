@@ -31,7 +31,7 @@ class GameHandlerMixin(BaseHandlerMixin):
 
         small_bet = GameConfig.DEFAULT_BET
         big_bet = GameConfig.BIG_BET
-        return KakaoResponse.quick_replies(
+        return KakaoResponse.text_with_buttons(
             msg,
             [
                 {"label": "🎁 보물상자", "action": "message", "messageText": "/보물상자"},
@@ -48,7 +48,7 @@ class GameHandlerMixin(BaseHandlerMixin):
 
         if not result["success"]:
             bet = GameConfig.DEFAULT_BET
-            return KakaoResponse.quick_replies(
+            return KakaoResponse.text_with_buttons(
                 result["message"],
                 [
                     {"label": "⚡ 예언 배틀", "action": "message", "messageText": f"/시장예측 {bet}"},
@@ -125,7 +125,7 @@ class GameHandlerMixin(BaseHandlerMixin):
             buttons.append({"label": "⚡ 예언 배틀", "action": "message", "messageText": f"/시장예측 {GameConfig.DEFAULT_BET}"})
             buttons.append({"label": "📈 급등주", "action": "message", "messageText": "/급등"})
 
-        return KakaoResponse.quick_replies(msg, buttons)
+        return KakaoResponse.text_with_buttons(msg, buttons)
 
     # ==========================================
     # 시장예측 (역사 퀴즈)
@@ -136,7 +136,7 @@ class GameHandlerMixin(BaseHandlerMixin):
         parts = self.utterance.split()
 
         if len(parts) < 2:
-            return KakaoResponse.quick_replies(
+            return KakaoResponse.text_with_buttons(
                 "⚡ 과거 주가 예언 배틀!\n\n"
                 "실제 역사 주가 종목이 출제됩니다.\n"
                 "📈 상승? 📉 하락? 맞추면 골드 2배 💰\n"
@@ -153,7 +153,7 @@ class GameHandlerMixin(BaseHandlerMixin):
         try:
             bet = int(parts[1].replace(",", ""))
         except ValueError:
-            return KakaoResponse.quick_replies(
+            return KakaoResponse.text_with_buttons(
                 "골드 금액을 숫자로 입력해주세요.\n예: /시장예측 100000",
                 [
                     {"label": "⚡ 5만 예언!", "action": "message", "messageText": "/시장예측 50000"},
@@ -186,7 +186,7 @@ class GameHandlerMixin(BaseHandlerMixin):
             import random
             quiz = random.choice(GameProbability.HISTORICAL_STOCK_DATA)
 
-            return KakaoResponse.quick_replies(
+            return KakaoResponse.text_with_buttons(
                 f"⚡ 예언 배틀 시작!\n\n"
                 f"📊 종목: {quiz['stock_name']}\n"
                 f"📅 기간: {quiz['period']}\n\n"
@@ -283,7 +283,7 @@ class GameHandlerMixin(BaseHandlerMixin):
                 {"label": "📈 급등주", "action": "message", "messageText": "/급등"},
             ]
 
-        return KakaoResponse.quick_replies(msg, buttons)
+        return KakaoResponse.text_with_buttons(msg, buttons)
 
     def _play_quiz_with_specific(self, bet: int, choice: str, quiz: dict) -> Dict:
         """특정 퀴즈로 직접 판정 (버튼에서 퀴즈가 지정된 경우)"""
@@ -370,7 +370,7 @@ class GameHandlerMixin(BaseHandlerMixin):
             if status.get("active"):
                 return self._updown_status_response(status)
 
-            return KakaoResponse.quick_replies(
+            return KakaoResponse.text_with_buttons(
                 "🔢 업다운 — 숫자 예측 게임!\n\n"
                 "1~100 숫자가 나오면\n"
                 "다음 숫자가 높을지 낮을지 예측!\n\n"
@@ -394,7 +394,7 @@ class GameHandlerMixin(BaseHandlerMixin):
         try:
             bet = int(parts[1].replace(",", ""))
         except ValueError:
-            return KakaoResponse.quick_replies(
+            return KakaoResponse.text_with_buttons(
                 "투자금은 숫자로 입력해주세요.\n예: /업다운 50000",
                 [
                     {"label": "🔢 5만원", "action": "message", "messageText": "/업다운 50000"},
@@ -440,7 +440,7 @@ class GameHandlerMixin(BaseHandlerMixin):
         if result["can_down"]:
             buttons.append({"label": f"📉 하락 (x{down_mult})", "action": "message", "messageText": "/업다운 하락"})
 
-        return KakaoResponse.quick_replies(msg, buttons)
+        return KakaoResponse.text_with_buttons(msg, buttons)
 
     def _handle_updown_round(self, choice: str) -> Dict:
         """업다운 라운드 진행"""
@@ -506,7 +506,7 @@ class GameHandlerMixin(BaseHandlerMixin):
                 buttons.append({"label": f"📉 하락 (x{down_mult})", "action": "message", "messageText": "/업다운 하락"})
             buttons.append({"label": f"💰 정산 ({potential:,}원)", "action": "message", "messageText": "/업다운정산"})
 
-            return KakaoResponse.quick_replies(msg, buttons)
+            return KakaoResponse.text_with_buttons(msg, buttons)
         else:
             # 실패
             if abs(next_num - prev) <= 3:
@@ -527,7 +527,7 @@ class GameHandlerMixin(BaseHandlerMixin):
 💸 골드 손실: -{result['bet']:,}원
 💰 현재 골드: {result['cash']:,}원"""
 
-            return KakaoResponse.quick_replies(
+            return KakaoResponse.text_with_buttons(
                 msg,
                 [
                     {"label": "🔢 다시 도전!", "action": "message", "messageText": f"/업다운 {result['bet']}"},
@@ -589,7 +589,7 @@ class GameHandlerMixin(BaseHandlerMixin):
             {"label": "📈 급등주", "action": "message", "messageText": "/급등"}
         ])
 
-        return KakaoResponse.quick_replies(msg, buttons)
+        return KakaoResponse.text_with_buttons(msg, buttons)
 
     def _updown_status_response(self, status: Dict) -> Dict:
         """업다운 진행 상태 응답"""
@@ -616,11 +616,11 @@ class GameHandlerMixin(BaseHandlerMixin):
         if status["round"] >= 2:
             buttons.append({"label": f"💰 정산 ({potential:,}원)", "action": "message", "messageText": "/업다운정산"})
 
-        return KakaoResponse.quick_replies(msg, buttons)
+        return KakaoResponse.text_with_buttons(msg, buttons)
 
     def _updown_active_game_response(self, result: Dict) -> Dict:
         """이미 진행중인 업다운 게임 알림"""
-        return KakaoResponse.quick_replies(
+        return KakaoResponse.text_with_buttons(
             result["message"],
             [
                 {"label": "📈 상승", "action": "message", "messageText": "/업다운 상승"},
@@ -725,7 +725,7 @@ class GameHandlerMixin(BaseHandlerMixin):
             {"label": "🎮 예측 게임", "action": "message", "messageText": "/예측"},
         ])
 
-        return KakaoResponse.quick_replies(msg, buttons)
+        return KakaoResponse.text_with_buttons(msg, buttons)
 
     def _do_enhance(self) -> Dict:
         """실제 각성 실행 (장 마감 후만 가능)"""
@@ -855,7 +855,7 @@ class GameHandlerMixin(BaseHandlerMixin):
 
         buttons.append({"label": "📈 급등주", "action": "message", "messageText": "/급등"})
 
-        return KakaoResponse.quick_replies(msg, buttons)
+        return KakaoResponse.text_with_buttons(msg, buttons)
 
     @staticmethod
     def _generate_quiz_lesson(quiz: dict) -> str:

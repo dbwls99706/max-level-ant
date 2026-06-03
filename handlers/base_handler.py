@@ -294,7 +294,7 @@ class BaseHandlerMixin:
         """장 마감 시 공통 응답 (예측게임 유도)"""
         if message is None:
             message = "📢 현재 장이 열려있지 않아요!\n\n📈 장 마감 시간에는 예측게임을 즐겨보세요!"
-        return KakaoResponse.quick_replies(
+        return KakaoResponse.text_with_buttons(
             message,
             [
                 {"label": "🎁 보물상자", "action": "message", "messageText": "/보물상자"},
@@ -316,7 +316,7 @@ class BaseHandlerMixin:
 
     def _game_failure_response(self, message: str) -> Dict:
         """게임 실패/에러 시 공통 응답 (현금 부족, 시스템 에러 등)"""
-        return KakaoResponse.quick_replies(
+        return KakaoResponse.text_with_buttons(
             message,
             [
                 {"label": "📅 출석체크", "action": "message", "messageText": "/출석"},

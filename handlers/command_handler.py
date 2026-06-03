@@ -223,7 +223,7 @@ class CommandHandler(
                 {"label": "🎁 보물상자", "action": "message", "messageText": "/보물상자"},
                 {"label": "🚀 급등주 정찰", "action": "message", "messageText": "/급등"},
             ]
-            return KakaoResponse.quick_replies(welcome_msg, buttons)
+            return KakaoResponse.text_with_buttons(welcome_msg, buttons)
         else:
             buttons = [
                 {"label": "📅 출석", "action": "message", "messageText": "/출석"},
@@ -234,14 +234,14 @@ class CommandHandler(
                 {"label": "🏆 랭킹", "action": "message", "messageText": "/랭킹"},
             ]
             name = self._display_name()
-            return KakaoResponse.quick_replies(f"{name}, 다시 오셨군요! 바로 시작 👇", buttons)
+            return KakaoResponse.text_with_buttons(f"{name}, 다시 오셨군요! 바로 시작 👇", buttons)
 
     def handle_attendance(self) -> Dict:
         """출석 체크"""
         success, reward, streak, cash, enhance_level = UserService.check_attendance(self.db, self.kakao_id)
 
         if not success and reward == 0 and streak == 0:
-            return KakaoResponse.quick_replies(
+            return KakaoResponse.text_with_buttons(
                 "먼저 /시작 으로 게임을 시작해주세요.",
                 [{"label": "🎮 게임 시작", "action": "message", "messageText": "/시작"}]
             )
@@ -311,7 +311,7 @@ class CommandHandler(
             {"label": "💼 포트폴리오", "action": "message", "messageText": "/포트폴리오"},
         ]
         buttons.extend(self._get_game_buttons())
-        return KakaoResponse.quick_replies(msg, buttons)
+        return KakaoResponse.text_with_buttons(msg, buttons)
 
     def handle_help(self) -> Dict:
         """도움말 - 분야 선택(화면을 가득 채우지 않도록 카테고리로 분할)"""
@@ -321,7 +321,7 @@ class CommandHandler(
             {"label": "🧬 게임·각성", "action": "message", "messageText": "/도움말게임"},
             {"label": "⚔️ 소셜", "action": "message", "messageText": "/도움말소셜"},
         ]
-        return KakaoResponse.quick_replies(Messages.HELP, buttons)
+        return KakaoResponse.text_with_buttons(Messages.HELP, buttons)
 
     def handle_help_stock(self) -> Dict:
         """도움말 - 주식 투자"""
@@ -330,7 +330,7 @@ class CommandHandler(
             {"label": "🔥 인기 종목", "action": "message", "messageText": "/인기"},
             {"label": "📖 도움말", "action": "message", "messageText": "/도움말"},
         ]
-        return KakaoResponse.quick_replies(Messages.HELP_STOCK, buttons)
+        return KakaoResponse.text_with_buttons(Messages.HELP_STOCK, buttons)
 
     def handle_help_asset(self) -> Dict:
         """도움말 - 내 자산"""
@@ -339,7 +339,7 @@ class CommandHandler(
             {"label": "🏆 랭킹", "action": "message", "messageText": "/랭킹"},
             {"label": "📖 도움말", "action": "message", "messageText": "/도움말"},
         ]
-        return KakaoResponse.quick_replies(Messages.HELP_ASSET, buttons)
+        return KakaoResponse.text_with_buttons(Messages.HELP_ASSET, buttons)
 
     def handle_help_game(self) -> Dict:
         """도움말 - 각성·게임"""
@@ -348,7 +348,7 @@ class CommandHandler(
             {"label": "🧬 각성", "action": "message", "messageText": "/각성"},
             {"label": "📖 도움말", "action": "message", "messageText": "/도움말"},
         ]
-        return KakaoResponse.quick_replies(Messages.HELP_GAME, buttons)
+        return KakaoResponse.text_with_buttons(Messages.HELP_GAME, buttons)
 
     def handle_help_social(self) -> Dict:
         """도움말 - 소셜"""
@@ -357,11 +357,11 @@ class CommandHandler(
             {"label": "🎯 미션", "action": "message", "messageText": "/미션"},
             {"label": "📖 도움말", "action": "message", "messageText": "/도움말"},
         ]
-        return KakaoResponse.quick_replies(Messages.HELP_SOCIAL, buttons)
+        return KakaoResponse.text_with_buttons(Messages.HELP_SOCIAL, buttons)
 
     def handle_welcome(self) -> Dict:
         """웰컴 블록 응답 - 채팅방 진입 시 빈 utterance로 트리거됨"""
-        return KakaoResponse.quick_replies(
+        return KakaoResponse.text_with_buttons(
             "🐜 만렙개미에 오신 것을 환영합니다!\n쪼렙 개미에서 만렙 개미로 성장하세요!",
             [
                 {"label": "🚀 시작하기", "action": "message", "messageText": "/시작"},
@@ -372,7 +372,7 @@ class CommandHandler(
     def handle_unknown(self) -> Dict:
         """알 수 없는 명령어 / 폴백 응답"""
         logger.debug(f"알 수 없는 명령어: {self.utterance}")
-        return KakaoResponse.quick_replies(
+        return KakaoResponse.text_with_buttons(
             Messages.UNKNOWN_COMMAND,
             [
                 {"label": "🚀 시작하기", "action": "message", "messageText": "/시작"},
