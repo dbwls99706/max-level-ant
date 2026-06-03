@@ -693,7 +693,6 @@ class GameHandlerMixin(BaseHandlerMixin):
             ]
         else:
             cost = result["next_cost"]
-            rate = result["next_success_rate"]
             next_name = result.get("next_title_name", title_name)
             next_emoji = result.get("next_title_emoji", title_emoji)
 
@@ -707,7 +706,6 @@ class GameHandlerMixin(BaseHandlerMixin):
 
 📋 다음 각성 정보:
 🪙 비용: {cost:,}원
-🎯 성공률: {rate}%
 {risk}
 
 {next_emoji} 성공 시 → {next_name} Lv.{level + 1}"""
@@ -744,7 +742,6 @@ class GameHandlerMixin(BaseHandlerMixin):
         old_lv = result["old_level"]
         new_lv = result["new_level"]
         cost = result["cost"]
-        rate = result["success_rate"]
 
         if result["enhanced"]:
             # 성공 — 레벨별 고유 연출
@@ -796,7 +793,6 @@ class GameHandlerMixin(BaseHandlerMixin):
 {header} {name}!
 
 {new_emoji} {new_name} Lv.{old_lv} → Lv.{new_lv}
-🎯 성공률 {rate}%에서 성공!
 💬 {flavor}{evolution_msg}
 
 📅 출석 보너스: +{att_bonus}%
