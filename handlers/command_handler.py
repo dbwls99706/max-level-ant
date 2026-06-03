@@ -51,6 +51,10 @@ class CommandHandler(
         "/도움말": "handle_help",
         "/help": "handle_help",
         "/ㄷㅇㅁ": "handle_help",
+        "/도움말주식": "handle_help_stock",
+        "/도움말자산": "handle_help_asset",
+        "/도움말게임": "handle_help_game",
+        "/도움말소셜": "handle_help_social",
 
         # 거래 관련
         "/시세": "handle_price",
@@ -310,14 +314,50 @@ class CommandHandler(
         return KakaoResponse.quick_replies(msg, buttons)
 
     def handle_help(self) -> Dict:
-        """도움말"""
+        """도움말 - 분야 선택(화면을 가득 채우지 않도록 카테고리로 분할)"""
         buttons = [
-            {"label": "📈 급등주", "action": "message", "messageText": "/급등"},
-            {"label": "🎁 보물상자", "action": "message", "messageText": "/보물상자"},
-            {"label": "📅 출석", "action": "message", "messageText": "/출석"},
-            {"label": "💼 포트폴리오", "action": "message", "messageText": "/포트폴리오"},
+            {"label": "📊 주식", "action": "message", "messageText": "/도움말주식"},
+            {"label": "💼 자산", "action": "message", "messageText": "/도움말자산"},
+            {"label": "🧬 게임·각성", "action": "message", "messageText": "/도움말게임"},
+            {"label": "⚔️ 소셜", "action": "message", "messageText": "/도움말소셜"},
         ]
         return KakaoResponse.quick_replies(Messages.HELP, buttons)
+
+    def handle_help_stock(self) -> Dict:
+        """도움말 - 주식 투자"""
+        buttons = [
+            {"label": "📈 급등주", "action": "message", "messageText": "/급등"},
+            {"label": "🔥 인기 종목", "action": "message", "messageText": "/인기"},
+            {"label": "📖 도움말", "action": "message", "messageText": "/도움말"},
+        ]
+        return KakaoResponse.quick_replies(Messages.HELP_STOCK, buttons)
+
+    def handle_help_asset(self) -> Dict:
+        """도움말 - 내 자산"""
+        buttons = [
+            {"label": "💼 포트폴리오", "action": "message", "messageText": "/포트폴리오"},
+            {"label": "🏆 랭킹", "action": "message", "messageText": "/랭킹"},
+            {"label": "📖 도움말", "action": "message", "messageText": "/도움말"},
+        ]
+        return KakaoResponse.quick_replies(Messages.HELP_ASSET, buttons)
+
+    def handle_help_game(self) -> Dict:
+        """도움말 - 각성·게임"""
+        buttons = [
+            {"label": "🎁 보물상자", "action": "message", "messageText": "/보물상자"},
+            {"label": "🧬 각성", "action": "message", "messageText": "/각성"},
+            {"label": "📖 도움말", "action": "message", "messageText": "/도움말"},
+        ]
+        return KakaoResponse.quick_replies(Messages.HELP_GAME, buttons)
+
+    def handle_help_social(self) -> Dict:
+        """도움말 - 소셜"""
+        buttons = [
+            {"label": "⚔️ 배틀", "action": "message", "messageText": "/배틀"},
+            {"label": "🎯 미션", "action": "message", "messageText": "/미션"},
+            {"label": "📖 도움말", "action": "message", "messageText": "/도움말"},
+        ]
+        return KakaoResponse.quick_replies(Messages.HELP_SOCIAL, buttons)
 
     def handle_welcome(self) -> Dict:
         """웰컴 블록 응답 - 채팅방 진입 시 빈 utterance로 트리거됨"""
