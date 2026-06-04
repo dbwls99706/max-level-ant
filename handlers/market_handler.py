@@ -125,7 +125,7 @@ class MarketHandlerMixin(BaseHandlerMixin):
 
     def handle_top_gainers(self) -> Dict:
         """급등주 조회"""
-        stocks = StockService.get_top_gainers(limit=10)
+        stocks = StockService.get_top_gainers(limit=5)
 
         if not stocks:
             return KakaoResponse.text_with_buttons(
@@ -137,7 +137,7 @@ class MarketHandlerMixin(BaseHandlerMixin):
                 ]
             )
 
-        msg = "🚀 오늘의 급등주 TOP 10\n"
+        msg = "🚀 오늘의 급등주 TOP 5\n"
         for i, s in enumerate(stocks, 1):
             name = s.get("name", "???")
             change = s.get("change", 0)
@@ -152,7 +152,7 @@ class MarketHandlerMixin(BaseHandlerMixin):
 
     def handle_top_losers(self) -> Dict:
         """급락주 조회"""
-        stocks = StockService.get_top_losers(limit=10)
+        stocks = StockService.get_top_losers(limit=5)
 
         if not stocks:
             return KakaoResponse.text_with_buttons(
@@ -164,7 +164,7 @@ class MarketHandlerMixin(BaseHandlerMixin):
                 ]
             )
 
-        msg = "📉 오늘의 급락주 TOP 10 (저점매수 기회?)\n"
+        msg = "📉 오늘의 급락주 TOP 5 (저점매수 기회?)\n"
         for i, s in enumerate(stocks, 1):
             name = s.get("name", "???")
             change = s.get("change", 0)
@@ -179,7 +179,7 @@ class MarketHandlerMixin(BaseHandlerMixin):
 
     def handle_top_etf_gainers(self) -> Dict:
         """ETF/ETN 급등 조회"""
-        stocks = StockService.get_top_etf_gainers(limit=10)
+        stocks = StockService.get_top_etf_gainers(limit=5)
 
         if not stocks:
             return KakaoResponse.text_with_buttons(
@@ -191,7 +191,7 @@ class MarketHandlerMixin(BaseHandlerMixin):
                 ]
             )
 
-        msg = "📊 오늘의 ETF 급등 TOP 10\n"
+        msg = "📊 오늘의 ETF 급등 TOP 5\n"
         for i, s in enumerate(stocks, 1):
             name = s.get("name", "???")
             change = s.get("change", 0)
@@ -206,7 +206,7 @@ class MarketHandlerMixin(BaseHandlerMixin):
 
     def handle_top_etf_losers(self) -> Dict:
         """ETF/ETN 급락 조회"""
-        stocks = StockService.get_top_etf_losers(limit=10)
+        stocks = StockService.get_top_etf_losers(limit=5)
 
         if not stocks:
             return KakaoResponse.text_with_buttons(
@@ -218,7 +218,7 @@ class MarketHandlerMixin(BaseHandlerMixin):
                 ]
             )
 
-        msg = "📊 오늘의 ETF 급락 TOP 10\n"
+        msg = "📊 오늘의 ETF 급락 TOP 5\n"
         for i, s in enumerate(stocks, 1):
             name = s.get("name", "???")
             change = s.get("change", 0)
