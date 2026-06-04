@@ -84,27 +84,6 @@ class KakaoResponse:
         }
     
     @staticmethod
-    def carousel(cards: List[Dict], card_type: str = "basicCard") -> Dict:
-        """
-        캐러셀 (여러 카드 슬라이드)
-
-        card_type: "basicCard", "commerceCard", "listCard"
-        """
-        return {
-            "version": "2.0",
-            "template": {
-                "outputs": [
-                    {
-                        "carousel": {
-                            "type": card_type,
-                            "items": cards
-                        }
-                    }
-                ]
-            }
-        }
-
-    @staticmethod
     def text_card(
         title: str,
         description: str,
