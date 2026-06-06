@@ -231,7 +231,7 @@ class SocialHandlerMixin(BaseHandlerMixin):
                 ]
             )
 
-        ranking_list = ""
+        rank_items = []
         my_rank = None
 
         for r in rankings:
@@ -248,15 +248,18 @@ class SocialHandlerMixin(BaseHandlerMixin):
             name = r['nickname']
             if is_me:
                 my_rank = r["rank"]
-                ranking_list += f"\n{medal} @{name} ⭐나"
+                item = f"{medal} @{name} ⭐나"
             else:
-                ranking_list += f"\n{medal} @{name}"
-            ranking_list += f"\n   {r['enhance_emoji']} {r['enhance_title']} Lv.{r['enhance_level']}\n"
-
-        msg = f"🧬 각성 랭킹 (이 방)\n{ranking_list}"
+                item = f"{medal} @{name}"
+            item += f"\n   {r['enhance_emoji']} {r['enhance_title']} Lv.{r['enhance_level']}"
+            rank_items.append(item)
 
         if my_rank:
-            msg = f"🎉 각성 랭킹 {my_rank}위! 개미계 강자!\n\n" + msg
+            header = f"🎉 각성 랭킹 {my_rank}위! 개미계 강자!\n\n🧬 각성 랭킹 (이 방)"
+        else:
+            header = "🧬 각성 랭킹 (이 방)"
+
+        msg = KakaoResponse.fit_items(header, rank_items, more_fmt="…외 {n}명 더")
 
         return KakaoResponse.text_with_buttons(
             msg,
