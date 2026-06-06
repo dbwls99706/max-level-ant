@@ -425,23 +425,23 @@ class TradingHandlerMixin(BaseHandlerMixin):
 
         buttons = []
         if portfolio["holdings"]:
-            holdings_text = ""
-
             # 최고/최저 수익률 종목 찾기
             best_stock = max(portfolio["holdings"], key=lambda x: x["profit_rate"])
             worst_stock = min(portfolio["holdings"], key=lambda x: x["profit_rate"])
 
+            holding_items = []
             for h in portfolio["holdings"]:
                 emoji = "🔺" if h["profit_rate"] >= 0 else "🔻"
                 # 최고 수익률 종목 하이라이트
                 if h["name"] == best_stock["name"] and h["profit_rate"] > 0:
-                    holdings_text += f"\n🏆 {h['name']} {h['quantity']:,}주 ★베스트"
+                    line = f"🏆 {h['name']} {h['quantity']:,}주 ★베스트"
                 # 최저 수익률 종목 하이라이트 (손실 중일 때만)
                 elif h["name"] == worst_stock["name"] and h["profit_rate"] < -5:
-                    holdings_text += f"\n⚠️ {h['name']} {h['quantity']:,}주 ★주의"
+                    line = f"⚠️ {h['name']} {h['quantity']:,}주 ★주의"
                 else:
-                    holdings_text += f"\n{h['name']} {h['quantity']:,}주"
-                holdings_text += f"\n  {h['current_price']:,}원 ({h['profit_rate']:+.1f}%) {emoji}\n"
+                    line = f"{h['name']} {h['quantity']:,}주"
+                line += f"\n  {h['current_price']:,}원 ({h['profit_rate']:+.1f}%) {emoji}"
+                holding_items.append(line)
                 if len(buttons) < 4:
                     buttons.append({
                         "label": f"💸 {h['name']} 전량매도",
@@ -449,7 +449,7 @@ class TradingHandlerMixin(BaseHandlerMixin):
                         "messageText": f"/전량매도 {h['name']}"
                     })
         else:
-            holdings_text = "\n아직 보유 주식이 없어요!"
+            holding_items = ["아직 보유 주식이 없어요!"]
             buttons = [
                 self._popular_stock_btn(),
                 {"label": "🚀 급등주", "action": "message", "messageText": "/급등"},
@@ -473,14 +473,12 @@ class TradingHandlerMixin(BaseHandlerMixin):
         else:
             start_compare = f"📉 시작금 대비: {profit_from_start:,}원"
 
-        msg = f"""💼 내 포트폴리오
-
-{tier}
-💵 현금: {portfolio['cash']:,}원
-{holdings_text}
-{profit_bar}
-💰 총자산: {total_display}
-{start_compare}"""
+        # 헤더·푸터(총자산 요약)는 항상 유지하고, 보유종목만 카드 한도에 맞춰 노출
+        header = f"💼 내 포트폴리오\n\n{tier}\n💵 현금: {portfolio['cash']:,}원"
+        footer = f"{profit_bar}\n💰 총자산: {total_display}\n{start_compare}"
+        msg = KakaoResponse.fit_items(
+            header, holding_items, footer, more_fmt="…외 {n}종목 더"
+        )
 
         if not buttons:
             buttons = [{"label": "📊 인기종목", "action": "message", "messageText": "/인기"}]
@@ -509,20 +507,23 @@ class TradingHandlerMixin(BaseHandlerMixin):
                 ]
             )
 
-        msg = "📜 최근 거래 내역\n"
+        tx_items = []
         for t in transactions:
             emoji = "📈" if t.trade_type == "BUY" else "📉"
             trade_type_str = "매수" if t.trade_type == "BUY" else "매도"
             time_str = t.created_at.strftime("%m/%d %H:%M")
 
-            msg += f"\n{emoji} [{trade_type_str}] {t.stock_name}"
-            msg += f"\n   {t.quantity:,}주 × {t.price:,}원"
+            block = f"{emoji} [{trade_type_str}] {t.stock_name}"
+            block += f"\n   {t.quantity:,}주 × {t.price:,}원"
 
             if t.trade_type == "SELL" and t.profit is not None:
                 profit_emoji = "🔺" if t.profit >= 0 else "🔻"
-                msg += f"\n   수익: {t.profit:+,}원 ({t.profit_rate:+.2f}%) {profit_emoji}"
+                block += f"\n   수익: {t.profit:+,}원 ({t.profit_rate:+.2f}%) {profit_emoji}"
 
-            msg += f"\n   {time_str}\n"
+            block += f"\n   {time_str}"
+            tx_items.append(block)
+
+        msg = KakaoResponse.fit_items("📜 최근 거래 내역", tx_items, more_fmt="…외 {n}건 더")
 
         return KakaoResponse.text_with_buttons(
             msg,

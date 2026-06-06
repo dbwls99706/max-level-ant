@@ -152,31 +152,74 @@ class KakaoResponse:
     
     # 버튼 레이아웃 vertical 최대 노출 개수 (카카오 그룹 챗봇 가이드 기준)
     MAX_VERTICAL_BUTTONS = 5
-    # 카드 description 안전 한도. 이보다 길면 본문을 simpleText로 분리해 잘림을 방지한다.
+    # 카드 description 안전 한도. 본문은 항상 이 한도 안에서 '단일 카드'로만 노출한다.
+    # (한도를 넘으면 simpleText로 쪼개지 않고, 줄 단위로 잘라 생략 표시를 붙인다.)
     CARD_DESC_LIMIT = 230
 
     @staticmethod
-    def _split_for_card(text: str, limit: int) -> tuple:
+    def _fit_card(text: str, limit: int) -> str:
         """
-        본문을 (앞부분, 카드에 담을 뒷부분)으로 나눈다.
-        가능한 한 줄 단위로 끊어 카드 뒷부분이 limit 이하가 되도록 한다.
+        본문을 카드 한 장(limit) 안에 들어오도록 줄 단위로 자른다.
+        잘리면 끝에 생략 표시를 붙인다. 본문은 절대 다른 말풍선으로 분리하지 않는다.
         """
         if len(text) <= limit:
-            return "", text
+            return text
+        marker = "\n…(생략)"
+        budget = max(0, limit - len(marker))
         lines = text.split("\n")
-        i = len(lines)
-        tail = ""
-        while i > 0:
-            candidate = "\n".join(lines[i - 1:])
-            if len(candidate) <= limit:
-                tail = candidate
-                i -= 1
-            else:
+        kept: List[str] = []
+        used = 0
+        for ln in lines:
+            add = len(ln) + (1 if kept else 0)
+            if used + add > budget:
                 break
-        head = "\n".join(lines[:i])
-        if not tail:  # 줄바꿈 없는 초장문 한 줄
-            head, tail = text[:-limit], text[-limit:]
-        return head, tail
+            kept.append(ln)
+            used += add
+        fitted = "\n".join(kept)
+        if not fitted:  # 첫 줄이 한도보다 긴 경우 강제로 자른다
+            fitted = text[:budget]
+        return fitted + marker
+
+    @staticmethod
+    def fit_items(
+        header: str,
+        items: List[str],
+        footer: str = "",
+        limit: Optional[int] = None,
+        more_fmt: str = "…외 {n}개 더",
+    ) -> str:
+        """
+        헤더 + (한도 안에 들어가는 만큼의 항목) + (생략 시 '…외 N개 더') + 푸터를
+        하나의 카드 본문 문자열로 조립한다.
+
+        - header/footer 는 항상 유지된다(예: 총자산·내 순위 같은 요약은 잘리지 않음).
+        - 중간 items 만 카드 한도(CARD_DESC_LIMIT)에 맞춰 앞에서부터 담는다.
+        - 결과는 한도 이하가 되도록 맞춘다(초과해도 _fit_card가 한 번 더 방어).
+        """
+        if limit is None:
+            limit = KakaoResponse.CARD_DESC_LIMIT
+
+        def join(parts: List[str]) -> str:
+            return "\n".join(p for p in parts if p)
+
+        tail = [footer] if footer else []
+
+        full = join([header] + items + tail)
+        if len(full) <= limit:
+            return full
+
+        # 생략 표시가 차지할 공간을 미리 예약하고 앞에서부터 담는다
+        reserve = len(more_fmt.format(n=len(items)))
+        kept: List[str] = []
+        for it in items:
+            candidate = join([header] + kept + [it] + tail)
+            if len(candidate) + reserve > limit:
+                break
+            kept.append(it)
+
+        dropped = len(items) - len(kept)
+        more = [more_fmt.format(n=dropped)] if dropped > 0 else []
+        return join([header] + kept + more + tail)
 
     @staticmethod
     def text_with_buttons(
@@ -188,8 +231,9 @@ class KakaoResponse:
 
         ⚠️ 카카오 그룹(팀채팅) 챗봇은 quickReplies 컴포넌트를 지원하지 않으므로,
         본문과 버튼을 하나의 textCard(buttonLayout="vertical", 최대 5개)로 합쳐
-        노출한다. 단, 본문이 카드 한도(CARD_DESC_LIMIT)보다 길면 앞부분은
-        simpleText로 분리하고 뒷부분만 카드에 담아 잘림을 방지한다.
+        노출한다. 본문은 항상 '단일 카드'로만 보내며, 카드 한도(CARD_DESC_LIMIT)를
+        넘으면 줄 단위로 잘라 생략 표시를 붙인다(본문을 별도 말풍선으로 쪼개지 않음).
+        길이가 가변적인 목록은 핸들러에서 fit_items()로 미리 줄여 보내는 것을 권장한다.
 
         buttons 예시:
         [
@@ -205,25 +249,20 @@ class KakaoResponse:
 
         # vertical 레이아웃은 최대 5개까지만 노출되므로 초과분은 잘라낸다
         card_buttons = list(buttons)[: KakaoResponse.MAX_VERTICAL_BUTTONS]
-        head, card_text = KakaoResponse._split_for_card(
-            text, KakaoResponse.CARD_DESC_LIMIT
-        )
-
-        outputs: List[Dict] = []
-        if head:
-            outputs.append({"simpleText": {"text": head}})
-        outputs.append({
-            "textCard": {
-                "description": card_text or " ",
-                "buttons": card_buttons,
-                "buttonLayout": "vertical"
-            }
-        })
+        card_text = KakaoResponse._fit_card(text, KakaoResponse.CARD_DESC_LIMIT)
 
         return {
             "version": "2.0",
             "template": {
-                "outputs": outputs
+                "outputs": [
+                    {
+                        "textCard": {
+                            "description": card_text or " ",
+                            "buttons": card_buttons,
+                            "buttonLayout": "vertical"
+                        }
+                    }
+                ]
             }
         }
     

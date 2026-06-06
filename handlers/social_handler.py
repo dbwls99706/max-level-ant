@@ -35,7 +35,7 @@ class SocialHandlerMixin(BaseHandlerMixin):
                 ]
             )
 
-        ranking_list = ""
+        rank_items = []
         my_rank_in_top10 = None
         total_users = len(rankings)
 
@@ -67,29 +67,35 @@ class SocialHandlerMixin(BaseHandlerMixin):
             name = r['nickname']
             if is_me:
                 my_rank_in_top10 = r["rank"]
-                ranking_list += f"\n{medal} @{name} ⭐나"
+                item = f"{medal} @{name} ⭐나"
             else:
-                ranking_list += f"\n{medal} @{name}"
-            ranking_list += f"\n   {profit_emoji} {r['profit_rate']:+.2f}% ({amount_str}){enhance_tag}\n"
+                item = f"{medal} @{name}"
+            item += f"\n   {profit_emoji} {r['profit_rate']:+.2f}% ({amount_str}){enhance_tag}"
+            rank_items.append(item)
 
-        header = f"🏆 수익률 랭킹 (이 방 {total_users}명)\n"
-        msg = header + ranking_list
-
-        # TOP 10 안에 있으면 축하 메시지
+        # TOP 10 안에 있으면 축하 메시지를 헤더에 덧붙인다
         if my_rank_in_top10:
-            msg = f"🎉 {my_rank_in_top10}위! 대단해요!\n\n" + msg
+            header = (
+                f"🎉 {my_rank_in_top10}위! 대단해요!\n\n"
+                f"🏆 수익률 랭킹 (이 방 {total_users}명)"
+            )
+            footer = ""
         else:
-            # TOP 10 밖이면 내 순위 + 바로 윗순위 경쟁자 표시
+            header = f"🏆 수익률 랭킹 (이 방 {total_users}명)"
+            # TOP 10 밖이면 내 순위 + 바로 윗순위 경쟁자를 푸터로 항상 노출
+            footer = ""
             my_rank = RankingService.get_my_group_rank(self.db, self.kakao_id, self.group_key)
             if my_rank:
-                msg += "\n━━━━━━━━━━━━━━━━━"
-                msg += f"\n📍 내 순위: {my_rank['rank']}위 / {my_rank['total']}명"
-                msg += f"\n   📊 {my_rank['profit_rate']:+.2f}%"
+                footer = "━━━━━━━━━━━━━━━━━"
+                footer += f"\n📍 내 순위: {my_rank['rank']}위 / {my_rank['total']}명"
+                footer += f"\n   📊 {my_rank['profit_rate']:+.2f}%"
                 if my_rank.get("above_nickname"):
                     gap = (my_rank.get("above_profit_rate", 0) or 0) - my_rank["profit_rate"]
                     rival = get_rival_msg(my_rank["rank"], my_rank["above_nickname"], gap)
                     if rival:
-                        msg += f"\n{rival}"
+                        footer += f"\n{rival}"
+
+        msg = KakaoResponse.fit_items(header, rank_items, footer, more_fmt="…외 {n}명 더")
 
         return KakaoResponse.text_with_buttons(
             msg,
@@ -388,58 +394,56 @@ class SocialHandlerMixin(BaseHandlerMixin):
         total = status["achievements_total"]
         gauge = "▓" * done + "░" * (total - done)
 
-        msg = f"""🏆 업적 — {done}/{total}개 달성
-[{gauge}]
+        # 진행도 힌트 (도전 중 업적에 표시)
+        def progress_hint(ach):
+            ach_id = ach.get("id", "")
+            if ach_id == "trades_10":
+                left = max(0, 10 - total_trades)
+                return f"거래 {left}회 남음!" if left > 0 else None
+            elif ach_id == "trades_50":
+                left = max(0, 50 - total_trades)
+                return f"거래 {left}회 남음!" if left > 0 else None
+            elif ach_id == "trades_100":
+                left = max(0, 100 - total_trades)
+                return f"거래 {left}회 남음!" if left > 0 else None
+            elif ach_id == "profit_1m":
+                pct = int(min(100, total_profit / 1_000_000 * 100))
+                return f"수익 {pct}% 달성" if pct > 0 else None
+            elif ach_id == "profit_10m":
+                pct = int(min(100, total_profit / 10_000_000 * 100))
+                return f"수익 {pct}% 달성" if pct > 0 else None
+            elif ach_id == "profit_100m":
+                pct = int(min(100, total_profit / 100_000_000 * 100))
+                return f"수익 {pct}% 달성" if pct > 0 else None
+            elif ach_id == "first_trade":
+                return "첫 거래만 하면 달성!"
+            elif ach_id == "first_profit":
+                return "첫 수익 실현만 하면 달성!"
+            elif ach_id == "streak_7":
+                streak = getattr(user, "attendance_streak", 0) or 0
+                left = max(0, 7 - streak)
+                return f"연속 출석 {left}일 남음!" if left > 0 else None
+            elif ach_id == "millionaire":
+                return "총 자산 1억 달성!"
+            return None
 
-"""
-        # 달성 완료 업적
-        if status["achievements"]:
-            msg += "✅ 달성 완료\n"
-            for ach in status["achievements"]:
-                msg += f"  {ach['icon']} {ach['name']}\n"
-            msg += "\n"
-
-        # 도전 중인 업적 — 진행도 힌트 포함
+        # 진행도 + 도전 중(액션 유도)은 헤더에 담아 항상 노출
+        header = f"🏆 업적 — {done}/{total}개 달성\n[{gauge}]"
         if status["available_achievements"]:
-            msg += "🎯 도전 중 (보상 자동 지급)\n"
-            # 진행도를 보여줄 수 있는 업적 먼저 정렬
-            def progress_hint(ach):
-                ach_id = ach.get("id", "")
-                if ach_id == "trades_10":
-                    left = max(0, 10 - total_trades)
-                    return f"거래 {left}회 남음!" if left > 0 else None
-                elif ach_id == "trades_50":
-                    left = max(0, 50 - total_trades)
-                    return f"거래 {left}회 남음!" if left > 0 else None
-                elif ach_id == "trades_100":
-                    left = max(0, 100 - total_trades)
-                    return f"거래 {left}회 남음!" if left > 0 else None
-                elif ach_id == "profit_1m":
-                    pct = int(min(100, total_profit / 1_000_000 * 100))
-                    return f"수익 {pct}% 달성" if pct > 0 else None
-                elif ach_id == "profit_10m":
-                    pct = int(min(100, total_profit / 10_000_000 * 100))
-                    return f"수익 {pct}% 달성" if pct > 0 else None
-                elif ach_id == "profit_100m":
-                    pct = int(min(100, total_profit / 100_000_000 * 100))
-                    return f"수익 {pct}% 달성" if pct > 0 else None
-                elif ach_id == "first_trade":
-                    return "첫 거래만 하면 달성!"
-                elif ach_id == "first_profit":
-                    return "첫 수익 실현만 하면 달성!"
-                elif ach_id == "streak_7":
-                    streak = getattr(user, "attendance_streak", 0) or 0
-                    left = max(0, 7 - streak)
-                    return f"연속 출석 {left}일 남음!" if left > 0 else None
-                elif ach_id == "millionaire":
-                    return "총 자산 1억 달성!"
-                return None
-
+            header += "\n\n🎯 도전 중 (보상 자동 지급)"
             for ach in status["available_achievements"][:4]:
                 hint = progress_hint(ach)
                 hint_str = f" → {hint}" if hint else ""
-                msg += f"  ⬜ {ach['icon']} {ach['name']}{hint_str}\n"
-                msg += f"     💰 보상 {ach['reward']:,}원\n"
+                header += f"\n  ⬜ {ach['icon']} {ach['name']}{hint_str}"
+                header += f"\n     💰 보상 {ach['reward']:,}원"
+
+        # 달성 완료(히스토리)는 카드 여유분만큼만 노출 (첫 항목에 섹션 라벨)
+        done_items = []
+        for i, ach in enumerate(status["achievements"]):
+            prefix = "✅ 달성 완료\n" if i == 0 else ""
+            done_items.append(f"{prefix}  {ach['icon']} {ach['name']}")
+
+        msg = KakaoResponse.fit_items(header, done_items, more_fmt="…외 {n}개")
 
         return KakaoResponse.text_with_buttons(
             msg,
@@ -694,12 +698,13 @@ class SocialHandlerMixin(BaseHandlerMixin):
                 ]
             )
 
-        msg = f"⚔️ 대기 중인 배틀 ({len(battles)}건)\n도전장이 날아왔다!\n"
         buttons = []
-        for b in battles[:5]:
+        battle_items = []
+        for b in battles:
             pred_emoji = "📈" if b["prediction"] == "상승" else "📉"
-            msg += f"\n🆔 #{b['id']} | {b['challenger']}의 도전!"
-            msg += f"\n   {b['stock_name']} {pred_emoji}{b['prediction']} | 💰 상금 {b['bet_amount'] * 2:,}원\n"
+            block = f"🆔 #{b['id']} | {b['challenger']}의 도전!"
+            block += f"\n   {b['stock_name']} {pred_emoji}{b['prediction']} | 💰 상금 {b['bet_amount'] * 2:,}원"
+            battle_items.append(block)
 
             if len(buttons) < 3:
                 buttons.append({
@@ -707,6 +712,9 @@ class SocialHandlerMixin(BaseHandlerMixin):
                     "action": "message",
                     "messageText": f"/배틀참가 {b['id']}"
                 })
+
+        header = f"⚔️ 대기 중인 배틀 ({len(battles)}건)\n도전장이 날아왔다!"
+        msg = KakaoResponse.fit_items(header, battle_items, more_fmt="…외 {n}건 더")
 
         buttons.append({"label": "⚔️ 새 배틀", "action": "message", "messageText": "/배틀"})
 
@@ -790,23 +798,10 @@ class SocialHandlerMixin(BaseHandlerMixin):
         achieved_cnt = len(result["achieved"])
         total_cnt = achieved_cnt + len(result["pending"])
 
-        msg = f"""🎖️ 마일스톤 — {achieved_cnt}/{total_cnt}개 달성
-(달성 시 보상 자동 지급!)
+        header = f"🎖️ 마일스톤 — {achieved_cnt}/{total_cnt}개 달성\n(달성 시 보상 자동 지급!)"
 
-"""
-        # 달성 완료
-        if result["achieved"]:
-            msg += "✅ 달성 완료\n"
-            for m in result["achieved"][-3:]:
-                msg += f"  {m['name']}\n"
-            if len(result["achieved"]) > 3:
-                msg += f"  ...외 {len(result['achieved'])-3}개\n"
-            msg += "\n"
-
-        # 다음 목표 — 카테고리별 가장 가까운 것 2개
+        # 다음 목표(액션 유도)는 헤더에 담아 항상 노출 — 카테고리별 진행도 표시
         if result["pending"]:
-            msg += "🎯 다음 목표 (보상 자동 지급)\n"
-            # 자산 마일스톤: 진행도 표시
             try:
                 from services.asset_service import AssetService
                 total_asset = AssetService.get_total_asset(self.db, self.kakao_id)
@@ -814,6 +809,7 @@ class SocialHandlerMixin(BaseHandlerMixin):
                 total_asset = 0
             total_trades = getattr(user, "total_trades", 0) or 0
 
+            header += "\n\n🎯 다음 목표 (보상 자동 지급)"
             for m in result["pending"][:3]:
                 cat = m.get("category", "")
                 threshold = m.get("threshold", 0)
@@ -830,8 +826,16 @@ class SocialHandlerMixin(BaseHandlerMixin):
                     hint = f" (출석 {left}일 남음)" if left > 0 else " (달성 직전!)"
                 else:
                     hint = ""
-                msg += f"  ⬜ {m['name']}{hint}\n"
-                msg += f"     💰 {m['reward']:,}원\n"
+                header += f"\n  ⬜ {m['name']}{hint}"
+                header += f"\n     💰 {m['reward']:,}원"
+
+        # 달성 완료(히스토리)는 카드 여유분만큼만 (첫 항목에 섹션 라벨)
+        achieved_items = []
+        for i, m in enumerate(result["achieved"]):
+            prefix = "✅ 달성 완료\n" if i == 0 else ""
+            achieved_items.append(f"{prefix}  {m['name']}")
+
+        msg = KakaoResponse.fit_items(header, achieved_items, more_fmt="…외 {n}개")
 
         buttons = [
             {"label": "🏆 업적", "action": "message", "messageText": "/업적"},
