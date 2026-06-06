@@ -115,17 +115,19 @@ class KakaoResponse:
     def list_card(
         header: str,
         items: List[Dict],
-        buttons: Optional[List[Dict]] = None
+        buttons: Optional[List[Dict]] = None,
+        list_layout: Optional[str] = None
     ) -> Dict:
         """
-        리스트 카드 응답
-        
+        리스트 카드 응답 (팀채팅 챗봇 지원 컴포넌트)
+
+        list_layout: "ranking" 지정 시 팀채팅 랭킹 전용 레이아웃으로 노출.
         items 예시:
         [
             {
                 "title": "항목1",
                 "description": "설명",
-                "imageUrl": "https://...",  # 선택
+                "imageUrl": "https://...",  # 선택 (팀채팅 listCard는 이미지 불필요)
                 "action": "message",
                 "messageText": "/명령어"
             }
@@ -135,10 +137,13 @@ class KakaoResponse:
             "header": {"title": header},
             "items": items
         }
-        
+
+        if list_layout:
+            card["listLayout"] = list_layout
+
         if buttons:
             card["buttons"] = buttons
-        
+
         return {
             "version": "2.0",
             "template": {
