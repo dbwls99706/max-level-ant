@@ -18,6 +18,23 @@ from .base_handler import BaseHandlerMixin
 class SocialHandlerMixin(BaseHandlerMixin):
     """소셜/경쟁 관련 핸들러 믹스인"""
 
+    def _ranking_list_card(self, title: str, items: list, buttons: list) -> Dict:
+        """랭킹을 listCard로 노출.
+
+        - 항목은 카카오 listCard 한도(최대 5개), 버튼은 최대 2개로 맞춘다.
+        - 항목이 2개 미만이면 listCard가 어색하므로 텍스트 카드로 폴백한다.
+        """
+        items = items[:5]
+        buttons = (buttons or [])[:2]
+        if len(items) < 2:
+            lines = [
+                f"{it['title']}\n  {it.get('description', '')}".rstrip()
+                for it in items
+            ]
+            body = title + ("\n\n" + "\n".join(lines) if lines else "")
+            return KakaoResponse.text_with_buttons(body, buttons)
+        return KakaoResponse.list_card(title, items, buttons)
+
     def handle_ranking(self) -> Dict:
         """랭킹 조회 (그룹 챗봇: 채팅방별 랭킹, 1:1: 내 순위만)"""
         # 1:1 채널에서는 내 순위만 표시
@@ -35,11 +52,11 @@ class SocialHandlerMixin(BaseHandlerMixin):
                 ]
             )
 
-        rank_items = []
-        my_rank_in_top10 = None
         total_users = len(rankings)
+        my_rank_in_top = None
+        items = []
 
-        for r in rankings:
+        for r in rankings[:5]:   # listCard는 항목 최대 5개
             if r["rank"] == 1:
                 medal = "🥇"
             elif r["rank"] == 2:
@@ -53,58 +70,44 @@ class SocialHandlerMixin(BaseHandlerMixin):
             profit_amount = r.get("profit_amount", 0)
             amount_str = f"+{profit_amount:,}원" if profit_amount >= 0 else f"{profit_amount:,}원"
 
-            # 각성 칭호 표시 (칭호명 + 레벨)
+            # 각성 칭호 (한 줄에 압축)
             enhance_lv = r.get("enhance_level", 0)
-            enhance_emoji = r.get("enhance_emoji", "")
-            enhance_title = r.get("enhance_title", "")
-            if enhance_lv > 0:
-                enhance_tag = f"\n       {enhance_emoji} {enhance_title} Lv.{enhance_lv}"
-            else:
-                enhance_tag = ""
-
-            # 본인 하이라이트
-            is_me = r.get("kakao_id") == self.kakao_id
-            name = r['nickname']
-            if is_me:
-                my_rank_in_top10 = r["rank"]
-                item = f"{medal} @{name} ⭐나"
-            else:
-                item = f"{medal} @{name}"
-            item += f"\n   {profit_emoji} {r['profit_rate']:+.2f}% ({amount_str}){enhance_tag}"
-            rank_items.append(item)
-
-        # TOP 10 안에 있으면 축하 메시지를 헤더에 덧붙인다
-        if my_rank_in_top10:
-            header = (
-                f"🎉 {my_rank_in_top10}위! 대단해요!\n\n"
-                f"🏆 수익률 랭킹 (이 방 {total_users}명)"
+            enhance_tag = (
+                f" · {r.get('enhance_emoji', '')}Lv.{enhance_lv}" if enhance_lv > 0 else ""
             )
-            footer = ""
+
+            is_me = r.get("kakao_id") == self.kakao_id
+            name = r["nickname"]
+            if is_me:
+                my_rank_in_top = r["rank"]
+            items.append({
+                "title": f"{medal} @{name}" + (" ⭐나" if is_me else ""),
+                "description": f"{profit_emoji} {r['profit_rate']:+.2f}% ({amount_str}){enhance_tag}",
+            })
+
+        if my_rank_in_top:
+            title = f"🏆 수익률 랭킹 · {my_rank_in_top}위! (이 방 {total_users}명)"
         else:
-            header = f"🏆 수익률 랭킹 (이 방 {total_users}명)"
-            # TOP 10 밖이면 내 순위 + 바로 윗순위 경쟁자를 푸터로 항상 노출
-            footer = ""
+            title = f"🏆 수익률 랭킹 (이 방 {total_users}명)"
+            # TOP5 밖이면 마지막 항목을 '내 순위'로 노출 (상위 4 + 나)
             my_rank = RankingService.get_my_group_rank(self.db, self.kakao_id, self.group_key)
             if my_rank:
-                footer = "━━━━━━━━━━━━━━━━━"
-                footer += f"\n📍 내 순위: {my_rank['rank']}위 / {my_rank['total']}명"
-                footer += f"\n   📊 {my_rank['profit_rate']:+.2f}%"
+                desc = f"📊 {my_rank['profit_rate']:+.2f}%"
                 if my_rank.get("above_nickname"):
                     gap = (my_rank.get("above_profit_rate", 0) or 0) - my_rank["profit_rate"]
                     rival = get_rival_msg(my_rank["rank"], my_rank["above_nickname"], gap)
                     if rival:
-                        footer += f"\n{rival}"
+                        desc += f" · {rival}"
+                items = items[:4] + [{
+                    "title": f"📍 내 순위 {my_rank['rank']}위 / {my_rank['total']}명",
+                    "description": desc,
+                }]
 
-        msg = KakaoResponse.fit_items(header, rank_items, footer, more_fmt="…외 {n}명 더")
-
-        return KakaoResponse.text_with_buttons(
-            msg,
-            [
-                {"label": "📍 내 순위", "action": "message", "messageText": "/내순위"},
-                {"label": "🧬 각성 랭킹", "action": "message", "messageText": "/각성랭킹"},
-                {"label": "📈 급등주", "action": "message", "messageText": "/급등"}
-            ]
-        )
+        buttons = [
+            {"label": "🧬 각성 랭킹", "action": "message", "messageText": "/각성랭킹"},
+            {"label": "📈 급등주", "action": "message", "messageText": "/급등"},
+        ]
+        return self._ranking_list_card(title, items, buttons)
 
     def _handle_ranking_solo(self) -> Dict:
         """1:1 채널 랭킹 — 내 자산/수익률 요약만 (다른 유저 데이터 없이)"""
@@ -231,10 +234,10 @@ class SocialHandlerMixin(BaseHandlerMixin):
                 ]
             )
 
-        rank_items = []
         my_rank = None
+        items = []
 
-        for r in rankings:
+        for r in rankings[:5]:   # listCard는 항목 최대 5개
             if r["rank"] == 1:
                 medal = "🥇"
             elif r["rank"] == 2:
@@ -245,30 +248,24 @@ class SocialHandlerMixin(BaseHandlerMixin):
                 medal = f"{r['rank']}위"
 
             is_me = r.get("kakao_id") == self.kakao_id
-            name = r['nickname']
+            name = r["nickname"]
             if is_me:
                 my_rank = r["rank"]
-                item = f"{medal} @{name} ⭐나"
-            else:
-                item = f"{medal} @{name}"
-            item += f"\n   {r['enhance_emoji']} {r['enhance_title']} Lv.{r['enhance_level']}"
-            rank_items.append(item)
+            items.append({
+                "title": f"{medal} @{name}" + (" ⭐나" if is_me else ""),
+                "description": f"{r['enhance_emoji']} {r['enhance_title']} Lv.{r['enhance_level']}",
+            })
 
         if my_rank:
-            header = f"🎉 각성 랭킹 {my_rank}위! 개미계 강자!\n\n🧬 각성 랭킹 (이 방)"
+            title = f"🧬 각성 랭킹 · {my_rank}위! (이 방)"
         else:
-            header = "🧬 각성 랭킹 (이 방)"
+            title = "🧬 각성 랭킹 (이 방)"
 
-        msg = KakaoResponse.fit_items(header, rank_items, more_fmt="…외 {n}명 더")
-
-        return KakaoResponse.text_with_buttons(
-            msg,
-            [
-                {"label": "🏆 랭킹", "action": "message", "messageText": "/랭킹"},
-                {"label": "🧬 각성", "action": "message", "messageText": "/각성"},
-                {"label": "📍 내 순위", "action": "message", "messageText": "/내순위"}
-            ]
-        )
+        buttons = [
+            {"label": "🏆 수익률 랭킹", "action": "message", "messageText": "/랭킹"},
+            {"label": "🧬 각성", "action": "message", "messageText": "/각성"},
+        ]
+        return self._ranking_list_card(title, items, buttons)
 
     def _handle_enhance_ranking_solo(self) -> Dict:
         """1:1 채널 각성 랭킹 — 내 각성 정보만"""
