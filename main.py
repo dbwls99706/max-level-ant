@@ -450,7 +450,7 @@ async def admin_reset_seed(
             )
             return {
                 "success": True,
-                "message": f"시드머니 초기화 완료",
+                "message": "시드머니 초기화 완료",
                 "data": {
                     "updated_users": updated_users,
                     "new_seed_money": new_cash,
