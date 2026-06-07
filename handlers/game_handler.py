@@ -657,7 +657,6 @@ class GameHandlerMixin(BaseHandlerMixin):
         title_emoji = result["title_emoji"]
         att_mult = result["attendance_multiplier"]
         lot_mult = result["lottery_multiplier"]
-        enhance_class = result.get("enhance_class", 0)
         class_name = result.get("class_name")
         class_emoji = result.get("class_emoji", "")
 
