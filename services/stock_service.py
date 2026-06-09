@@ -10,6 +10,7 @@ from typing import Optional, Dict, List
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from cachetools import TTLCache
 import threading
+import time
 import requests
 from requests.exceptions import RequestException, Timeout
 from sqlalchemy.exc import SQLAlchemyError
@@ -79,6 +80,39 @@ class CircuitBreaker:
 
 # 전역 서킷 브레이커 인스턴스
 _circuit_breaker = CircuitBreaker()
+
+
+# ===========================================
+# KIS 유량 제한기 (초당 거래건수 초과 방지)
+# ===========================================
+class _KISThrottle:
+    """
+    KIS REST 유량(초당 거래건수) 초과로 인한 HTTP 500(EGW00201)을 예방하기 위한
+    프로세스 내 호출 간격 제한기.
+
+    배포 환경이 단일 프로세스(WEB_CONCURRENCY=1)이므로, 모든 KIS 호출을
+    최소 간격으로 직렬화하면 앱키 기준 초당 호출 수를 안전 한도 이내로 유지할 수 있다.
+    급등/급락(순위 API)은 통과하는데 종목별 현재가(inquire-price)만 자주·병렬로
+    호출돼 한도를 넘던 증상을 완화한다.
+    """
+
+    def __init__(self, min_interval: float):
+        self._min_interval = min_interval
+        self._lock = threading.Lock()
+        self._last = 0.0
+
+    def wait(self):
+        """직전 호출과 최소 간격을 보장 (필요 시 대기)"""
+        with self._lock:
+            now = time.monotonic()
+            delta = now - self._last
+            if delta < self._min_interval:
+                time.sleep(self._min_interval - delta)
+            self._last = time.monotonic()
+
+
+# 전역 KIS 유량 제한기 (초당 ~1/min_interval 건)
+_kis_throttle = _KISThrottle(KISConfig.MIN_CALL_INTERVAL)
 
 
 class KISAPIClient:
@@ -212,6 +246,7 @@ class KISAPIClient:
                 "FID_INPUT_ISCD": stock_code
             }
 
+            _kis_throttle.wait()  # 초당 거래건수 초과 방지
             resp = requests.get(url, headers=headers, params=params, timeout=KISConfig.API_TIMEOUT)
 
             if resp.status_code == 200:
@@ -294,6 +329,7 @@ class KISAPIClient:
                 "FID_INPUT_DATE_1": "",
             }
 
+            _kis_throttle.wait()  # 초당 거래건수 초과 방지
             resp = requests.get(url, headers=headers, params=params, timeout=KISConfig.API_TIMEOUT)
 
             if resp.status_code == 200:
@@ -388,6 +424,7 @@ class KISAPIClient:
                 "FID_INPUT_ISCD": index_code
             }
 
+            _kis_throttle.wait()  # 초당 거래건수 초과 방지
             resp = requests.get(url, headers=headers, params=params, timeout=KISConfig.API_TIMEOUT)
 
             if resp.status_code == 200:
