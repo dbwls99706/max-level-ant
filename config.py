@@ -339,6 +339,11 @@ class KISConfig:
     BASE_URL = os.getenv("KIS_BASE_URL", "https://openapi.koreainvestment.com:9443")
     API_TIMEOUT = 10  # API 요청 타임아웃 (초)
 
+    # KIS 유량 제한(초당 거래건수) 회피용 호출 간 최소 간격(초).
+    # 단일 프로세스 기준 모든 KIS 호출을 직렬화해 초당 호출 수를 제한한다.
+    # 0.1 → 초당 최대 ~10건. 필요 시 환경변수로 조정 가능.
+    MIN_CALL_INTERVAL = float(os.getenv("KIS_MIN_CALL_INTERVAL", "0.1"))
+
     # 급등/급락 순위에서 제외할 종목 키워드 (레버리지/인버스 ETF 등)
     # 이름에 아래 키워드가 포함된 종목은 개별 종목 급등/급락 순위에 노출하지 않는다.
     # 레버리지/인버스 상품은 지수의 2배로 움직여 등락률 상·하위를 독식하므로 제외한다.
