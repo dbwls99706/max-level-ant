@@ -239,8 +239,18 @@ class KISAPIClient:
                     )
                     _circuit_breaker.record_failure()
             else:
+                # KIS는 HTTP 500에도 본문(msg_cd/msg1)에 실패 사유를 담아준다.
+                # (예: EGW00201 초당 거래건수 초과, 권한/헤더 문제 등)
+                msg_cd = msg1 = None
+                try:
+                    body = resp.json()
+                    msg_cd = body.get("msg_cd")
+                    msg1 = body.get("msg1")
+                except ValueError:
+                    msg1 = (resp.text or "")[:200]
                 logger.warning(
-                    f"KIS 시세 조회 HTTP 에러 ({stock_code}): status={resp.status_code}"
+                    f"KIS 시세 조회 HTTP 에러 ({stock_code}): "
+                    f"status={resp.status_code} msg_cd={msg_cd} msg={msg1}"
                 )
                 _circuit_breaker.record_failure()
 
