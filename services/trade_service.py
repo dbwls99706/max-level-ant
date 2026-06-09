@@ -93,6 +93,14 @@ class TradeService:
                     StockService._cache_stock(holding.stock_code, holding.stock_name)
 
         if not stock_info:
+            # 종목명은 인식되지만 시세 API가 일시적으로 응답하지 않는 경우와
+            # 정말로 종목을 찾지 못한 경우를 구분해 안내한다.
+            if StockService.search_stock(stock_query):
+                name = StockService.search_stock(stock_query)["name"]
+                return None, error_response(
+                    ErrorCode.PRICE_UNAVAILABLE,
+                    Messages.STOCK_PRICE_UNAVAILABLE.format(name=name)
+                )
             return None, error_response(
                 ErrorCode.STOCK_NOT_FOUND,
                 f"'{stock_query}' 종목을 찾을 수 없습니다."
@@ -309,6 +317,12 @@ class TradeService:
             # 2. 포트폴리오에 없으면 일반 검색
             stock_info = StockService.get_price(stock_query)
             if not stock_info:
+                resolved = StockService.search_stock(stock_query)
+                if resolved:
+                    return error_response(
+                        ErrorCode.PRICE_UNAVAILABLE,
+                        Messages.STOCK_PRICE_UNAVAILABLE.format(name=resolved["name"])
+                    )
                 return error_response(
                     ErrorCode.STOCK_NOT_FOUND,
                     f"'{stock_query}' 종목을 찾을 수 없습니다."

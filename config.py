@@ -26,6 +26,7 @@ class ErrorCode:
     INSUFFICIENT_CASH = "INSUFFICIENT_CASH"
     INSUFFICIENT_STOCK = "INSUFFICIENT_STOCK"
     STOCK_NOT_FOUND = "STOCK_NOT_FOUND"
+    PRICE_UNAVAILABLE = "PRICE_UNAVAILABLE"
     NOT_FOUND = "NOT_FOUND"
     INVALID_INPUT = "INVALID_INPUT"
     INVALID_QUANTITY = "INVALID_QUANTITY"
@@ -994,6 +995,12 @@ class Messages:
 📊 거래량: {volume:,}주"""
 
     STOCK_NOT_FOUND = "❌ '{query}' 종목을 찾을 수 없습니다."
+
+    # 종목은 정상 인식했지만 KIS 시세 API가 일시적으로 응답하지 않을 때
+    STOCK_PRICE_UNAVAILABLE = (
+        "📡 '{name}' 시세를 잠시 불러올 수 없어요.\n"
+        "잠시 후 다시 시도해주세요. (종목명은 정상입니다)"
+    )
 
     BUY_SUCCESS = """✅ 매수 완료!
 
