@@ -337,15 +337,6 @@ class KISConfig:
     APP_KEY = os.getenv("KIS_APP_KEY", "")
     APP_SECRET = os.getenv("KIS_APP_SECRET", "")
     BASE_URL = os.getenv("KIS_BASE_URL", "https://openapi.koreainvestment.com:9443")
-
-    # 현재가/지수 등 "종목별 시세 조회" 전용 도메인.
-    # 모의투자 앱키는 실전 시세 도메인 호출이 차단되므로(EGW02004),
-    # 모의 키를 쓸 때는 이 값을 모의 도메인으로 지정해 현재가 조회만 분리한다.
-    #   - 실전 도메인: https://openapi.koreainvestment.com:9443
-    #   - 모의 도메인: https://openapivts.koreainvestment.com:29443
-    # 미지정 시 BASE_URL과 동일(기존 동작 유지).
-    QUOTE_BASE_URL = os.getenv("KIS_QUOTE_BASE_URL") or BASE_URL
-
     API_TIMEOUT = 10  # API 요청 타임아웃 (초)
 
     # KIS 유량 제한(초당 거래건수) 회피용 호출 간 최소 간격(초).

@@ -129,79 +129,63 @@ class KISAPIClient:
     # 최종 노출 개수(10)보다 넉넉하게 가져온다.
     VOLUME_RANK_FETCH_SIZE = 30
 
-    # 도메인(실전/모의)별 토큰 캐시. 토큰은 발급 도메인에서만 유효하므로
-    # base_url을 키로 토큰을 분리 보관한다. {base_url: {"token":..., "expires_at":...}}
-    _tokens: Dict[str, Dict] = {}
-    _token_lock = threading.Lock()
+    _access_token = None
+    _token_expires_at = None
 
     @classmethod
-    def get_access_token(cls, base_url: Optional[str] = None) -> Optional[str]:
-        """OAuth 접근 토큰 발급 (도메인별 캐시, 24시간 유효)"""
+    def get_access_token(cls) -> Optional[str]:
+        """OAuth 접근 토큰 발급 (24시간 유효)"""
         if not KISConfig.is_configured():
             logger.warning("KIS API 설정이 없습니다. 환경변수를 확인하세요.")
             return None
-
-        base_url = base_url or KISConfig.BASE_URL
 
         # 서킷 브레이커 확인
         if _circuit_breaker.is_open():
             logger.warning("KIS API 서킷 브레이커 열림 - 토큰 발급 스킵")
             return None
 
-        # 토큰이 아직 유효하면 재사용 (도메인별)
-        cached = cls._tokens.get(base_url)
-        if cached and cached.get("token") and cached.get("expires_at"):
-            if datetime.now(timezone.utc) < cached["expires_at"]:
-                return cached["token"]
+        # 토큰이 아직 유효하면 재사용
+        if cls._access_token and cls._token_expires_at:
+            if datetime.now(timezone.utc) < cls._token_expires_at:
+                return cls._access_token
 
-        with cls._token_lock:
-            # lock 획득 후 재확인 (동시 발급 방지)
-            cached = cls._tokens.get(base_url)
-            if cached and cached.get("token") and cached.get("expires_at"):
-                if datetime.now(timezone.utc) < cached["expires_at"]:
-                    return cached["token"]
+        try:
+            url = f"{KISConfig.BASE_URL}/oauth2/tokenP"
+            headers = {"Content-Type": "application/json"}
+            body = {
+                "grant_type": "client_credentials",
+                "appkey": KISConfig.APP_KEY,
+                "appsecret": KISConfig.APP_SECRET
+            }
 
-            try:
-                url = f"{base_url}/oauth2/tokenP"
-                headers = {"Content-Type": "application/json"}
-                body = {
-                    "grant_type": "client_credentials",
-                    "appkey": KISConfig.APP_KEY,
-                    "appsecret": KISConfig.APP_SECRET
-                }
+            resp = requests.post(url, headers=headers, json=body, timeout=KISConfig.API_TIMEOUT)
 
-                _kis_throttle.wait()  # 토큰발급도 초당 1건 제한 대상
-                resp = requests.post(url, headers=headers, json=body, timeout=KISConfig.API_TIMEOUT)
-
-                if resp.status_code == 200:
-                    data = resp.json()
-                    token = data.get("access_token")
-                    cls._tokens[base_url] = {
-                        "token": token,
-                        # 토큰 만료시간 설정 (23시간 - 여유 1시간)
-                        "expires_at": datetime.now(timezone.utc) + timedelta(hours=23),
-                    }
-                    logger.info(f"KIS API 토큰 발급 성공 ({base_url})")
-                    _circuit_breaker.record_success()
-                    return token
-                else:
-                    logger.error(f"KIS 토큰 발급 실패 ({base_url}): {resp.status_code}")
-                    _circuit_breaker.record_failure()
-                    return None
-
-            except Timeout:
-                logger.error("KIS 토큰 발급 타임아웃")
+            if resp.status_code == 200:
+                data = resp.json()
+                cls._access_token = data.get("access_token")
+                # 토큰 만료시간 설정 (23시간 - 여유 1시간)
+                cls._token_expires_at = datetime.now(timezone.utc) + timedelta(hours=23)
+                logger.info("KIS API 토큰 발급 성공")
+                _circuit_breaker.record_success()
+                return cls._access_token
+            else:
+                logger.error(f"KIS 토큰 발급 실패: {resp.status_code}")
                 _circuit_breaker.record_failure()
                 return None
-            except RequestException as e:
-                logger.error(f"KIS 토큰 발급 네트워크 에러: {e}")
-                _circuit_breaker.record_failure()
-                return None
+
+        except Timeout:
+            logger.error("KIS 토큰 발급 타임아웃")
+            _circuit_breaker.record_failure()
+            return None
+        except RequestException as e:
+            logger.error(f"KIS 토큰 발급 네트워크 에러: {e}")
+            _circuit_breaker.record_failure()
+            return None
 
     @classmethod
-    def _get_headers(cls, tr_id: str, base_url: Optional[str] = None) -> Optional[Dict]:
-        """API 요청 헤더 생성 (도메인별 토큰 사용)"""
-        token = cls.get_access_token(base_url)
+    def _get_headers(cls, tr_id: str) -> Optional[Dict]:
+        """API 요청 헤더 생성"""
+        token = cls.get_access_token()
         if not token:
             return None
 
@@ -251,14 +235,12 @@ class KISAPIClient:
             logger.debug(f"KIS API 서킷 브레이커 열림 - 시세 조회 스킵 ({stock_code})")
             return None
 
-        # 현재가 조회는 시세 전용 도메인 사용 (모의 키는 모의 도메인에서만 허용)
-        base_url = KISConfig.QUOTE_BASE_URL
-        headers = cls._get_headers(cls.TR_ID_STOCK_PRICE, base_url)
+        headers = cls._get_headers(cls.TR_ID_STOCK_PRICE)
         if not headers:
             return None
 
         try:
-            url = f"{base_url}/uapi/domestic-stock/v1/quotations/inquire-price"
+            url = f"{KISConfig.BASE_URL}/uapi/domestic-stock/v1/quotations/inquire-price"
             params = {
                 "FID_COND_MRKT_DIV_CODE": "J",  # 주식
                 "FID_INPUT_ISCD": stock_code
@@ -431,14 +413,12 @@ class KISAPIClient:
         시장 지수 조회 (KOSPI: 0001, KOSDAQ: 1001)
         tr_id: FHPUP02100000
         """
-        # 지수 시세도 시세 전용 도메인 사용
-        base_url = KISConfig.QUOTE_BASE_URL
-        headers = cls._get_headers(cls.TR_ID_MARKET_INDEX, base_url)
+        headers = cls._get_headers(cls.TR_ID_MARKET_INDEX)
         if not headers:
             return None
 
         try:
-            url = f"{base_url}/uapi/domestic-stock/v1/quotations/inquire-index-price"
+            url = f"{KISConfig.BASE_URL}/uapi/domestic-stock/v1/quotations/inquire-index-price"
             params = {
                 "FID_COND_MRKT_DIV_CODE": "U",
                 "FID_INPUT_ISCD": index_code
