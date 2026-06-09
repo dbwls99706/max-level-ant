@@ -163,6 +163,33 @@ class KISAPIClient:
             "tr_id": tr_id,
         }
 
+    @staticmethod
+    def _safe_int(value, default: int = 0) -> int:
+        """KIS 응답 필드를 안전하게 정수로 변환 (콤마/소수점/빈값 허용)"""
+        if value is None:
+            return default
+        s = str(value).strip().replace(",", "")
+        if not s:
+            return default
+        try:
+            # "70500.00" 같은 소수 표기도 허용
+            return int(float(s))
+        except (ValueError, TypeError):
+            return default
+
+    @staticmethod
+    def _safe_float(value, default: float = 0.0) -> float:
+        """KIS 응답 필드를 안전하게 실수로 변환"""
+        if value is None:
+            return default
+        s = str(value).strip().replace(",", "")
+        if not s:
+            return default
+        try:
+            return float(s)
+        except (ValueError, TypeError):
+            return default
+
     @classmethod
     def get_stock_price(cls, stock_code: str) -> Optional[Dict]:
         """
@@ -191,24 +218,31 @@ class KISAPIClient:
                 data = resp.json()
                 if data.get("rt_cd") == "0":  # 성공
                     output = data.get("output", {})
-                    # 필드값이 None이거나 빈 문자열인 경우 안전하게 변환
-                    price_str = output.get("stck_prpr") or "0"
-                    change_str = output.get("prdy_ctrt") or "0"
+                    # 필드값이 None/빈값/콤마/소수점이어도 안전하게 변환
+                    # (한 필드 파싱 실패로 전체 시세가 버려지지 않도록 방어)
                     result = {
                         "code": stock_code,
                         "name": output.get("hts_kor_isnm") or stock_code,
-                        "price": int(price_str) if str(price_str).lstrip('-').isdigit() else 0,
-                        "change": float(change_str) if change_str else 0.0,
-                        "open": int(output.get("stck_oprc") or 0),
-                        "high": int(output.get("stck_hgpr") or 0),
-                        "low": int(output.get("stck_lwpr") or 0),
-                        "volume": int(output.get("acml_vol") or 0),
+                        "price": cls._safe_int(output.get("stck_prpr")),
+                        "change": cls._safe_float(output.get("prdy_ctrt")),
+                        "open": cls._safe_int(output.get("stck_oprc")),
+                        "high": cls._safe_int(output.get("stck_hgpr")),
+                        "low": cls._safe_int(output.get("stck_lwpr")),
+                        "volume": cls._safe_int(output.get("acml_vol")),
                     }
                     _circuit_breaker.record_success()
                     return result
                 else:
-                    logger.warning(f"KIS API 에러: {data.get('msg1')}")
+                    logger.warning(
+                        f"KIS 시세 조회 응답 에러 ({stock_code}): "
+                        f"rt_cd={data.get('rt_cd')} msg={data.get('msg1')}"
+                    )
                     _circuit_breaker.record_failure()
+            else:
+                logger.warning(
+                    f"KIS 시세 조회 HTTP 에러 ({stock_code}): status={resp.status_code}"
+                )
+                _circuit_breaker.record_failure()
 
         except Timeout:
             logger.warning(f"주식 시세 조회 타임아웃 ({stock_code})")
@@ -658,6 +692,9 @@ class StockService:
             cls._price_cache[code] = result
             return result
 
+        # 종목은 인식했으나 KIS 시세 API가 응답하지 않은 경우
+        # (종목명 오타가 아니라 시세 조회 실패임을 로그로 명확히 남긴다)
+        logger.warning(f"시세 조회 실패: 종목 인식 OK이나 KIS 응답 없음 ({name}/{code})")
         return None
 
     @classmethod

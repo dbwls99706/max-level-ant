@@ -70,15 +70,29 @@ class TestBuyStock:
         assert result["error_code"] == ErrorCode.INSUFFICIENT_BALANCE
 
     def test_buy_stock_not_found(self, db, test_user):
-        """존재하지 않는 종목 매수"""
+        """존재하지 않는 종목 매수 (시세 조회·종목 검색 모두 실패)"""
         with patch("services.trade_service.StockService") as MockSS, \
              patch("services.trade_service.is_trading_available", return_value=True):
             MockSS.get_price.return_value = None
+            MockSS.search_stock.return_value = None  # 종목 자체가 인식 불가
 
             result = TradeService.buy_stock(db, test_user.kakao_id, "없는종목", 10)
 
         assert result["success"] is False
         assert result["error_code"] == ErrorCode.STOCK_NOT_FOUND
+
+    def test_buy_stock_price_unavailable(self, db, test_user):
+        """종목명은 인식되지만 KIS 시세 API가 일시적으로 응답하지 않는 경우"""
+        with patch("services.trade_service.StockService") as MockSS, \
+             patch("services.trade_service.is_trading_available", return_value=True):
+            MockSS.get_price.return_value = None  # 시세 조회 실패
+            MockSS.search_stock.return_value = {"code": "005930", "name": "삼성전자"}
+
+            result = TradeService.buy_stock(db, test_user.kakao_id, "삼성전자", 10)
+
+        assert result["success"] is False
+        # 오타로 오해시키지 않고 "시세 일시 불가"로 구분되어야 한다
+        assert result["error_code"] == ErrorCode.PRICE_UNAVAILABLE
 
     def test_buy_stock_invalid_quantity_zero(self, db, test_user):
         """0주 매수 거부"""

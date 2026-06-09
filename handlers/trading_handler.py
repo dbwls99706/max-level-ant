@@ -43,6 +43,18 @@ class TradingHandlerMixin(BaseHandlerMixin):
                     StockService._cache_stock(holding.stock_code, holding.stock_name)
 
         if not stock_info:
+            # 종목명은 인식되는데 KIS 시세 API가 일시적으로 응답하지 않는 경우:
+            # 오타로 오해하게 만드는 "못 찾았어요" 대신 시세 일시 불가 안내를 보낸다.
+            resolved = StockService.search_stock(query)
+            if resolved:
+                return KakaoResponse.text_with_buttons(
+                    Messages.STOCK_PRICE_UNAVAILABLE.format(name=resolved["name"]),
+                    [
+                        {"label": "🔄 다시 시도", "action": "message", "messageText": f"/시세 {resolved['name']}"},
+                        {"label": "🚀 급등주", "action": "message", "messageText": "/급등"}
+                    ]
+                )
+
             similar = StockService.search_similar_stocks(query, limit=5)
             if similar:
                 buttons = [{"label": f"📊 {s['name']}", "action": "message", "messageText": f"/시세 {s['name']}"} for s in similar]
