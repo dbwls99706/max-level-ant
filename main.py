@@ -2,6 +2,7 @@
 만렙개미 카카오톡 챗봇 - 메인 서버
 """
 import os
+import re
 import uuid
 import secrets
 import time
@@ -95,6 +96,9 @@ rate_limiter = RateLimiter(
     max_requests=SecurityConfig.RATE_LIMIT_MAX_REQUESTS,
     window_seconds=SecurityConfig.RATE_LIMIT_WINDOW_SECONDS
 )
+
+# 카카오 유저 ID 허용 패턴 (ASCII 영숫자 + 하이픈/언더스코어)
+KAKAO_ID_PATTERN = re.compile(r'[A-Za-z0-9_-]+')
 
 
 # ===========================================
@@ -192,14 +196,21 @@ async def request_id_middleware(request: Request, call_next: Callable) -> Respon
 async def request_size_limit_middleware(request: Request, call_next: Callable) -> Response:
     """
     요청 본문 크기 제한 (DoS 방지)
-    최대 10KB 허용
+    - 최대 10KB 허용
+    - POST에 Content-Length가 없으면(chunked 등) 411로 거부해 헤더 검사 우회 방지
     """
-    content_length = request.headers.get("content-length")
-    if content_length and content_length.isdigit() and int(content_length) > SecurityConfig.MAX_REQUEST_SIZE:
-        return JSONResponse(
-            status_code=413,
-            content={"error": "요청 크기가 너무 큽니다.", "max_size": SecurityConfig.MAX_REQUEST_SIZE}
-        )
+    if request.method == "POST":
+        content_length = request.headers.get("content-length")
+        if content_length is None:
+            return JSONResponse(
+                status_code=411,
+                content={"error": "Content-Length 헤더가 필요합니다."}
+            )
+        if not content_length.isdigit() or int(content_length) > SecurityConfig.MAX_REQUEST_SIZE:
+            return JSONResponse(
+                status_code=413,
+                content={"error": "요청 크기가 너무 큽니다.", "max_size": SecurityConfig.MAX_REQUEST_SIZE}
+            )
     return await call_next(request)
 
 
@@ -265,8 +276,9 @@ async def kakao_skill(request: Request, db: Session = Depends(get_db)):
         if not kakao_id or len(kakao_id) > 100:
             return KakaoResponse.simple_text("유저 정보를 확인할 수 없습니다.")
 
-        # 악의적인 ID 패턴 차단 (SQL-like, 특수문자)
-        if not kakao_id.replace("-", "").replace("_", "").isalnum():
+        # 악의적인 ID 패턴 차단 (ASCII 영숫자/하이픈/언더스코어만 허용)
+        # isalnum()은 유니코드 문자에도 True를 반환하므로 명시적 패턴 검사 사용
+        if not KAKAO_ID_PATTERN.fullmatch(kakao_id):
             logger.warning(f"의심스러운 kakao_id 감지: {repr(kakao_id[:20])}")
             return KakaoResponse.simple_text("유저 정보를 확인할 수 없습니다.")
 

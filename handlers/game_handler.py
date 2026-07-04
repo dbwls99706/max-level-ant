@@ -163,67 +163,28 @@ class GameHandlerMixin(BaseHandlerMixin):
 
         # 선택지가 없으면 퀴즈 출제 (상승/하락 선택 유도)
         if len(parts) < 3:
-            from services.common import (
-                check_market_closed_for_game, get_user_with_error, validate_bet
-            )
-            from config import GameProbability
-
-            # 장 마감 여부 사전 확인
-            can_play, market_error = check_market_closed_for_game("🔮")
-            if not can_play:
-                return self._market_closed_response(market_error["message"])
-
-            # 유저 조회 및 잔액 사전 확인
-            user, user_error = get_user_with_error(self.db, self.kakao_id)
-            if user_error:
-                return self._game_failure_response(user_error["message"])
-
-            is_valid, bet_error = validate_bet(bet, user.cash)
-            if not is_valid:
-                return self._game_failure_response(bet_error)
-
-            # 퀴즈 출제
-            import random
-            quiz = random.choice(GameProbability.HISTORICAL_STOCK_DATA)
-
-            return KakaoResponse.text_with_buttons(
-                f"⚡ 예언 배틀 시작!\n\n"
-                f"📊 종목: {quiz['stock_name']}\n"
-                f"📅 기간: {quiz['period']}\n\n"
-                f"💡 당시 이슈: {quiz['description']}\n\n"
-                f"이 상황에서 주가는 올랐을까, 내렸을까?\n"
-                f"💰 맞추면 {bet * 2:,}원 / 💸 틀리면 전멸!",
-                [
-                    {"label": "📈 상승!", "action": "message",
-                     "messageText": f"/시장예측 {bet} 상승 {quiz['stock_name']}|{quiz['period']}"},
-                    {"label": "📉 하락!", "action": "message",
-                     "messageText": f"/시장예측 {bet} 하락 {quiz['stock_name']}|{quiz['period']}"},
-                ]
-            )
+            result = GameService.issue_stock_quiz(self.db, self.kakao_id, bet)
+            if not result["success"]:
+                from config import ErrorCode
+                if result.get("error_code") == ErrorCode.MARKET_CLOSED:
+                    return self._market_closed_response(result["message"])
+                return self._game_failure_response(result["message"])
+            return self._quiz_issued_response(result)
 
         # 선택지가 있으면 정답 확인
+        # (판정은 서버가 출제해 저장한 퀴즈로만 — 메시지로 퀴즈를 지정할 수 없음)
         choice = parts[2].strip()
-
-        # 특정 퀴즈 지정 여부 확인 (버튼에서 온 경우)
-        specific_quiz = None
-        if len(parts) >= 4:
-            quiz_key = " ".join(parts[3:])
-            if "|" in quiz_key:
-                stock_name, period = quiz_key.split("|", 1)
-                from config import GameProbability
-                for q in GameProbability.HISTORICAL_STOCK_DATA:
-                    if q["stock_name"] == stock_name and q["period"] == period:
-                        specific_quiz = q
-                        break
-
-        if specific_quiz:
-            # 특정 퀴즈로 직접 판정
-            result = self._play_quiz_with_specific(bet, choice, specific_quiz)
-        else:
-            # 랜덤 퀴즈
-            result = GameService.play_stock_quiz(self.db, self.kakao_id, bet, choice)
+        result = GameService.answer_stock_quiz(self.db, self.kakao_id, choice)
 
         if not result["success"]:
+            from config import ErrorCode
+            # 출제된 퀴즈가 없으면 새로 출제해서 안내
+            if result.get("error_code") == ErrorCode.INVALID_STATE:
+                issued = GameService.issue_stock_quiz(self.db, self.kakao_id, bet)
+                if issued["success"]:
+                    return self._quiz_issued_response(issued)
+            if result.get("error_code") == ErrorCode.MARKET_CLOSED:
+                return self._market_closed_response(result["message"])
             return self._game_failure_response(result["message"])
 
         quiz = result["quiz"]
@@ -285,75 +246,29 @@ class GameHandlerMixin(BaseHandlerMixin):
 
         return KakaoResponse.text_with_buttons(msg, buttons)
 
-    def _play_quiz_with_specific(self, bet: int, choice: str, quiz: dict) -> Dict:
-        """특정 퀴즈로 직접 판정 (버튼에서 퀴즈가 지정된 경우)"""
-        from services.common import (
-            get_user_with_error_for_update, validate_bet,
-            check_market_closed_for_game, error_response,
-            safe_add, safe_subtract, safe_multiply
+    def _quiz_issued_response(self, result: Dict) -> Dict:
+        """시장예측 퀴즈 출제 응답 (정답 힌트인 당시 이슈는 결과에서만 공개)"""
+        quiz = result["quiz"]
+        bet = result["bet"]
+
+        header = "⚡ 예언 배틀 시작!"
+        if result.get("reissued"):
+            header = "⚡ 진행 중인 예언 배틀이 있어요!\n(먼저 이 퀴즈에 답해주세요)"
+
+        return KakaoResponse.text_with_buttons(
+            f"{header}\n\n"
+            f"📊 종목: {quiz['stock_name']}\n"
+            f"📅 기간: {quiz['period']}\n\n"
+            f"이 기간 주가는 올랐을까, 내렸을까?\n"
+            f"💡 당시 이슈는 결과 발표 때 공개!\n"
+            f"💰 맞추면 {bet * 2:,}원 / 💸 틀리면 전멸!",
+            [
+                {"label": "📈 상승!", "action": "message",
+                 "messageText": f"/시장예측 {bet} 상승"},
+                {"label": "📉 하락!", "action": "message",
+                 "messageText": f"/시장예측 {bet} 하락"},
+            ]
         )
-        from config import GameProbability, ErrorCode
-        from utils import log_game
-
-        can_play, market_error = check_market_closed_for_game("🔮")
-        if not can_play:
-            return market_error
-
-        user, error = get_user_with_error_for_update(self.db, self.kakao_id)
-        if error:
-            return error
-
-        is_valid, bet_error = validate_bet(bet, user.cash)
-        if not is_valid:
-            return error_response(ErrorCode.INVALID_BET, bet_error)
-
-        choice_normalized = choice.strip()
-        if choice_normalized not in ["상승", "하락"]:
-            if choice_normalized in ["상", "up", "오름"]:
-                choice_normalized = "상승"
-            elif choice_normalized in ["하", "down", "내림"]:
-                choice_normalized = "하락"
-            else:
-                return error_response(ErrorCode.INVALID_CHOICE, "상승 또는 하락 중 선택해주세요.")
-
-        user.cash = safe_subtract(user.cash, bet)
-        won = (choice_normalized == quiz["answer"])
-
-        if won:
-            multiplier = GameProbability.STOCK_QUIZ_MULTIPLIER
-            winnings = safe_multiply(bet, multiplier)
-        else:
-            multiplier = 0
-            winnings = 0
-
-        user.cash = safe_add(user.cash, winnings)
-
-        from sqlalchemy.exc import SQLAlchemyError
-        try:
-            self.db.commit()
-        except SQLAlchemyError:
-            self.db.rollback()
-            return error_response(ErrorCode.DB_ERROR, "데이터베이스 오류가 발생했습니다.")
-
-        log_game(
-            kakao_id=self.kakao_id, game_type="STOCK_QUIZ",
-            bet=bet, result=f"{quiz['answer']}({'WIN' if won else 'LOSE'})",
-            winnings=winnings, profit=winnings - bet, cash_after=user.cash,
-            extra=f"stock={quiz['stock_name']} period={quiz['period']} choice={choice_normalized}"
-        )
-
-        return {
-            "success": True,
-            "quiz": quiz,
-            "choice": choice_normalized,
-            "answer": quiz["answer"],
-            "won": won,
-            "bet": bet,
-            "multiplier": multiplier,
-            "winnings": winnings,
-            "profit": winnings - bet,
-            "cash": user.cash
-        }
 
     # ==========================================
     # 업다운 (멀티라운드)

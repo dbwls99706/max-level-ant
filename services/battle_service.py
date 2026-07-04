@@ -9,7 +9,7 @@ from typing import Dict, List, Optional
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import SQLAlchemyError
 
-from models import Battle, User
+from models import Battle, User, _utcnow
 from services.stock_service import StockService
 from services.common import (
     get_user_with_error_for_update,
@@ -212,7 +212,7 @@ class BattleService:
             battle.opponent_id = opponent_id
             battle.opponent_prediction = opponent_pred
             battle.start_price = stock_info["price"]
-            battle.started_at = datetime.now(timezone.utc)
+            battle.started_at = _utcnow()  # 프로젝트 컨벤션: naive UTC 저장
             battle.status = BattleStatus.ACTIVE
 
             db.commit()
@@ -316,7 +316,7 @@ class BattleService:
         # 트랜잭션: 결과 처리
         try:
             battle.end_price = current_price
-            battle.ended_at = datetime.now(timezone.utc)
+            battle.ended_at = _utcnow()  # 프로젝트 컨벤션: naive UTC 저장
 
             if actual_direction == "DRAW":
                 # 무승부 - 투자금 반환

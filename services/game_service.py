@@ -3,9 +3,10 @@
 - 복권, 시장예측(역사 퀴즈), 업다운(멀티라운드)
 - 장 마감 시간에만 플레이 가능 (복권 제외)
 """
+import json
 import random
 from datetime import datetime
-from typing import Dict
+from typing import Dict, Optional
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import SQLAlchemyError
 
@@ -87,7 +88,7 @@ class GameService:
 
         tier_text, tier_msg = tier_display.get(tier, ("📦 빈 상자", "다음엔 꼭 뜰 거예요..."))
 
-        # Near-miss 판정: 빈 상자일 때 일반 등급 경계에 얼마나 가까웠는지
+        # Near-miss 판정: 빈 상자일 때 바로 위 등급(일반) 경계에 얼마나 가까웠는지
         near_miss_tier = None
         near_miss_reward = 0
         if tier == "빈 상자":
@@ -95,12 +96,10 @@ class GameService:
             distance = roll - boundary
             miss_ratio = distance / GameProbability.LOTTERY["빈 상자"]["prob"]
 
-            if miss_ratio < 0.05:
-                near_miss_tier = "고급"
-                near_miss_reward = 50_000
-            elif miss_ratio < 0.15:
+            # 경계 바로 아래 등급은 "일반" — 실제 인접 등급/보상으로 안내
+            if miss_ratio < 0.15:
                 near_miss_tier = "일반"
-                near_miss_reward = 10_000
+                near_miss_reward = GameProbability.LOTTERY["일반"]["max_reward"]
 
         user.cash = safe_add(user.cash, reward)
 
@@ -136,11 +135,12 @@ class GameService:
     # ==========================================
 
     @classmethod
-    def play_stock_quiz(cls, db: Session, kakao_id: str, bet: int, choice: str) -> Dict:
+    def issue_stock_quiz(cls, db: Session, kakao_id: str, bet: int) -> Dict:
         """
-        시장예측 (역사 퀴즈)
-        - 실제 한국 주식 역사 데이터로 상승/하락 맞추기
-        - 맞추면 x2 배율
+        시장예측 퀴즈 출제
+        - 서버가 랜덤 퀴즈를 뽑아 유저에 저장 (판정은 answer_stock_quiz에서 저장된 퀴즈로만)
+        - 이미 출제된 퀴즈가 있으면 같은 퀴즈를 다시 안내 (퀴즈 골라잡기 방지)
+        - 베팅 금액은 출제 시점에 고정
         """
         can_play, market_error = check_market_closed_for_game("🔮")
         if not can_play:
@@ -150,17 +150,77 @@ class GameService:
         if error:
             return error
 
+        # 진행 중인 퀴즈가 있으면 재출제하지 않고 그대로 반환
+        pending = cls._load_pending_quiz(user)
+        if pending:
+            return {
+                "success": True,
+                "quiz": pending,
+                "bet": user.pending_quiz_bet,
+                "reissued": True,
+                "cash": user.cash,
+            }
+
         is_valid, bet_error = validate_bet(bet, user.cash)
         if not is_valid:
             return error_response(ErrorCode.INVALID_BET, bet_error)
+
+        # 랜덤 퀴즈 선택 (실제 주가 데이터 기반, 폴백: 하드코딩)
+        from services.quiz_data_service import get_random_quiz
+        quiz = get_random_quiz()
+
+        user.pending_quiz = json.dumps(quiz, ensure_ascii=False)
+        user.pending_quiz_bet = bet
+
+        try:
+            db.commit()
+        except SQLAlchemyError as e:
+            db.rollback()
+            logger.error(f"시장예측 출제 DB 커밋 실패: {e}")
+            return error_response(ErrorCode.DB_ERROR, "데이터베이스 오류가 발생했습니다.")
+
+        return {
+            "success": True,
+            "quiz": quiz,
+            "bet": bet,
+            "reissued": False,
+            "cash": user.cash,
+        }
+
+    @classmethod
+    def answer_stock_quiz(cls, db: Session, kakao_id: str, choice: str) -> Dict:
+        """
+        시장예측 퀴즈 판정
+        - 서버가 출제해 저장한 퀴즈로만 판정 (유저가 퀴즈를 지정할 수 없음)
+        - 판정 후 출제 상태 초기화 (1회용)
+        """
+        can_play, market_error = check_market_closed_for_game("🔮")
+        if not can_play:
+            return market_error
+
+        user, error = get_user_with_error_for_update(db, kakao_id)
+        if error:
+            return error
 
         choice_normalized = cls._normalize_quiz_choice(choice)
         if not choice_normalized:
             return error_response(ErrorCode.INVALID_CHOICE, "상승 또는 하락 중 선택해주세요.")
 
-        # 랜덤 퀴즈 선택 (실제 주가 데이터 기반, 폴백: 하드코딩)
-        from services.quiz_data_service import get_random_quiz
-        quiz = get_random_quiz()
+        quiz = cls._load_pending_quiz(user)
+        if not quiz:
+            return error_response(
+                ErrorCode.INVALID_STATE,
+                "출제된 퀴즈가 없어요. /시장예측 [금액] 으로 먼저 퀴즈를 받아주세요!"
+            )
+
+        bet = user.pending_quiz_bet or 0
+        is_valid, bet_error = validate_bet(bet, user.cash)
+        if not is_valid:
+            # 출제 후 잔고가 줄어 베팅 불가 — 출제 상태를 비우고 다시 받도록 안내
+            user.pending_quiz = None
+            user.pending_quiz_bet = 0
+            db.commit()
+            return error_response(ErrorCode.INVALID_BET, bet_error)
 
         # 투자금 차감
         user.cash = safe_subtract(user.cash, bet)
@@ -176,6 +236,10 @@ class GameService:
             winnings = 0
 
         user.cash = safe_add(user.cash, winnings)
+
+        # 출제 상태 초기화 (판정과 같은 트랜잭션에서 원자적으로)
+        user.pending_quiz = None
+        user.pending_quiz_bet = 0
 
         try:
             db.commit()
@@ -204,6 +268,20 @@ class GameService:
             "cash": user.cash
         }
 
+    @staticmethod
+    def _load_pending_quiz(user) -> Optional[Dict]:
+        """유저에 저장된 출제 퀴즈 로드 (손상 시 None)"""
+        if not user.pending_quiz:
+            return None
+        try:
+            quiz = json.loads(user.pending_quiz)
+        except (json.JSONDecodeError, TypeError):
+            logger.warning(f"출제 퀴즈 파싱 실패: {user.kakao_id}")
+            return None
+        if not isinstance(quiz, dict) or quiz.get("answer") not in ("상승", "하락"):
+            return None
+        return quiz
+
     @classmethod
     def _normalize_quiz_choice(cls, choice: str) -> str:
         """시장예측 선택 정규화"""
@@ -217,6 +295,28 @@ class GameService:
     # ==========================================
     # 업다운 — 멀티라운드
     # ==========================================
+
+    @classmethod
+    def _round_fee_rate(cls, round_num: int) -> float:
+        """해당 라운드의 배율 유지율 (수수료 적용)"""
+        for (start_r, end_r), rate in GameProbability.UPDOWN_ROUND_FEE.items():
+            if start_r <= round_num <= end_r:
+                return rate
+        return 1.0
+
+    @classmethod
+    def _preview_multipliers(cls, number: int, round_num: int):
+        """
+        다음 선택지 배율 미리 계산 (라운드 수수료 반영)
+        Returns: (up_mult, down_mult, up_count, down_count)
+        """
+        up_count = 100 - number
+        down_count = number - 1
+        total = up_count + down_count
+        fee_rate = cls._round_fee_rate(round_num)
+        up_mult = round((total / up_count) * fee_rate, 2) if up_count > 0 else 99.0
+        down_mult = round((total / down_count) * fee_rate, 2) if down_count > 0 else 99.0
+        return up_mult, down_mult, up_count, down_count
 
     @classmethod
     def start_updown(cls, db: Session, kakao_id: str, bet: int) -> Dict:
@@ -270,12 +370,8 @@ class GameService:
             logger.error(f"업다운 시작 DB 커밋 실패: {e}")
             return error_response(ErrorCode.DB_ERROR, "데이터베이스 오류가 발생했습니다.")
 
-        # 다음 라운드 배율 미리 계산
-        up_count = 100 - first_number
-        down_count = first_number - 1
-        total = up_count + down_count  # 99 - (1 for excluding current)
-        up_mult = round(total / up_count, 2) if up_count > 0 else 99.0
-        down_mult = round(total / down_count, 2) if down_count > 0 else 99.0
+        # 다음 라운드 배율 미리 계산 (라운드 수수료 반영)
+        up_mult, down_mult, up_count, down_count = cls._preview_multipliers(first_number, 1)
 
         log_game(
             kakao_id=kakao_id, game_type="UPDOWN_START",
@@ -350,11 +446,7 @@ class GameService:
 
         # 라운드 수수료 적용 (정보 우위 상쇄)
         current_round = user.updown_round
-        fee_rate = 1.0
-        for (start_r, end_r), rate in GameProbability.UPDOWN_ROUND_FEE.items():
-            if start_r <= current_round <= end_r:
-                fee_rate = rate
-                break
+        fee_rate = cls._round_fee_rate(current_round)
         round_multiplier = round(raw_multiplier * fee_rate, 2)
 
         if won:
@@ -364,12 +456,9 @@ class GameService:
             user.updown_round += 1
             user.updown_multiplier = new_multiplier
 
-            # 다음 라운드 배율 미리 계산
-            next_up_count = 100 - next_number
-            next_down_count = next_number - 1
-            next_total = next_up_count + next_down_count
-            next_up_mult = round(next_total / next_up_count, 2) if next_up_count > 0 else 99.0
-            next_down_mult = round(next_total / next_down_count, 2) if next_down_count > 0 else 99.0
+            # 다음 라운드 배율 미리 계산 (다음 라운드 수수료 반영 — 표시와 실제 지급 일치)
+            next_up_mult, next_down_mult, next_up_count, next_down_count = \
+                cls._preview_multipliers(next_number, user.updown_round)
 
             try:
                 db.commit()
@@ -510,11 +599,8 @@ class GameService:
             return {"success": True, "active": False}
 
         current = user.updown_current_number
-        up_count = 100 - current
-        down_count = current - 1
-        total = up_count + down_count
-        up_mult = round(total / up_count, 2) if up_count > 0 else 99.0
-        down_mult = round(total / down_count, 2) if down_count > 0 else 99.0
+        up_mult, down_mult, up_count, down_count = \
+            cls._preview_multipliers(current, user.updown_round)
 
         return {
             "success": True,

@@ -5,7 +5,7 @@
 - 트랜잭션 안전성
 """
 from datetime import datetime, timedelta
-from typing import Dict, List, Set
+from typing import Dict, List, Optional, Set, Tuple
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import SQLAlchemyError
 
@@ -25,6 +25,41 @@ class AssetService:
     def _prefetch_stock_prices(cls, stock_codes: Set[str]) -> Dict[str, int]:
         """여러 종목 시세 배치 조회 (병렬 처리)"""
         return StockService.batch_get_prices(stock_codes)
+
+    @classmethod
+    def _compute_assets(cls, db: Session, user: User) -> Tuple[int, int, int]:
+        """
+        유저의 현금/주식평가액/총자산 계산 (N+1 최적화)
+        Returns: (cash, stock_value, total_asset)
+        """
+        holdings = db.query(Holding).filter(
+            Holding.kakao_id == user.kakao_id,
+            Holding.quantity > 0
+        ).all()
+
+        stock_codes: Set[str] = {h.stock_code for h in holdings}
+        stock_prices = cls._prefetch_stock_prices(stock_codes)
+
+        stock_value = 0
+        for h in holdings:
+            # 현재가 조회 실패 시 평균 매수가 사용
+            price = stock_prices.get(h.stock_code) or h.avg_price
+            stock_value = safe_add(stock_value, price * h.quantity)
+
+        return user.cash, stock_value, safe_add(user.cash, stock_value)
+
+    @classmethod
+    def get_total_asset(cls, db: Session, kakao_id: str) -> Optional[int]:
+        """
+        총 자산 조회 (현금 + 보유 주식 평가액)
+        마일스톤/챌린지 판정용
+        """
+        user = db.query(User).filter(User.kakao_id == kakao_id).first()
+        if not user:
+            return None
+
+        _, _, total_asset = cls._compute_assets(db, user)
+        return total_asset
 
     @classmethod
     def record_daily_asset(cls, db: Session, kakao_id: str) -> Dict:
@@ -47,29 +82,8 @@ class AssetService:
         if not user:
             return {"success": False, "message": "유저 없음"}
 
-        # 보유 종목 조회
-        holdings = db.query(Holding).filter(
-            Holding.kakao_id == kakao_id,
-            Holding.quantity > 0
-        ).all()
-
-        # N+1 최적화: 모든 종목 코드 수집 후 배치 조회
-        stock_codes: Set[str] = {h.stock_code for h in holdings}
-        stock_prices = cls._prefetch_stock_prices(stock_codes)
-
-        # 총 자산 계산
-        cash = user.cash
-        stock_value = 0
-
-        for h in holdings:
-            price = stock_prices.get(h.stock_code)
-            if price:
-                stock_value = safe_add(stock_value, price * h.quantity)
-            else:
-                # 현재가 조회 실패 시 평균 매수가 사용
-                stock_value = safe_add(stock_value, h.avg_price * h.quantity)
-
-        total_asset = safe_add(cash, stock_value)
+        # 총 자산 계산 (N+1 최적화)
+        cash, stock_value, total_asset = cls._compute_assets(db, user)
 
         # 기록 저장
         try:

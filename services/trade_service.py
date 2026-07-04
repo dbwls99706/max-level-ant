@@ -60,6 +60,28 @@ class TradeService:
         return None
 
     @staticmethod
+    def _safe_get_total_asset(db: Session, kakao_id: str) -> Optional[int]:
+        """총 자산 계산 (실패 시 None, 세션 오염 방지 롤백)"""
+        try:
+            from services.asset_service import AssetService
+            return AssetService.get_total_asset(db, kakao_id)
+        except Exception as e:
+            db.rollback()
+            logger.warning(f"총 자산 계산 실패 ({kakao_id}): {e}")
+            return None
+
+    @staticmethod
+    def _update_trade_challenges(db: Session, kakao_id: str, total_asset: Optional[int]) -> None:
+        """거래 이벤트 기반 주간 챌린지 진행도 갱신 (실패해도 거래에는 영향 없음)"""
+        try:
+            from services.challenge_service import ChallengeService
+            ChallengeService.update_challenge_progress(db, kakao_id, "TRADE_COUNT")
+            ChallengeService.update_asset_challenges(db, kakao_id, total_asset)
+        except Exception as e:
+            db.rollback()
+            logger.warning(f"챌린지 진행도 갱신 실패 ({kakao_id}): {e}")
+
+    @staticmethod
     def _check_trading_time() -> Optional[Dict]:
         """거래 가능 시간 확인"""
         if not is_trading_available():
@@ -230,13 +252,23 @@ class TradeService:
 
         # 미션 및 업적 처리
         mission_reward = MissionService.increment_trade_count(db, kakao_id)
-        new_achievements = MissionService.check_and_award_achievements(db, kakao_id)
 
-        # 마일스톤 자동 체크·지급 (거래 횟수 기준)
+        # 총 자산 계산 (자산 업적/마일스톤/챌린지 판정용, 실패해도 거래에는 영향 없음)
+        total_asset = TradeService._safe_get_total_asset(db, kakao_id)
+
+        new_achievements = MissionService.check_and_award_achievements(
+            db, kakao_id, total_asset=total_asset
+        )
+
+        # 마일스톤 자동 체크·지급 (자산·거래 횟수 기준)
         new_milestones = MilestoneService.check_milestones(
             db, kakao_id,
+            total_asset=total_asset,
             total_trades=user.total_trades,
         )
+
+        # 주간 챌린지 진행도 갱신
+        TradeService._update_trade_challenges(db, kakao_id, total_asset)
 
         # 감사 로그
         log_trade(
@@ -256,6 +288,7 @@ class TradeService:
             from services.asset_service import AssetService
             AssetService.record_daily_asset(db, kakao_id)
         except Exception as e:
+            db.rollback()  # 예외로 오염된 세션이 이후 커밋에 영향 주지 않도록
             logger.warning(f"자산 히스토리 기록 실패 (매수 후): {e}")
 
         return {
@@ -405,21 +438,25 @@ class TradeService:
 
         # 미션 및 업적 처리
         mission_reward = MissionService.increment_trade_count(db, kakao_id)
+
+        # 총 자산 계산 (자산 업적/마일스톤/챌린지 판정용, 실패해도 거래에는 영향 없음)
+        total_asset = TradeService._safe_get_total_asset(db, kakao_id)
+
         new_achievements = MissionService.check_and_award_achievements(
-            db, kakao_id, trade_profit=profit if profit > 0 else 0
+            db, kakao_id,
+            trade_profit=profit if profit > 0 else 0,
+            total_asset=total_asset,
         )
 
         # 마일스톤 자동 체크·지급 (자산·거래 횟수 기준)
-        try:
-            from services.asset_service import AssetService
-            total_asset = AssetService.get_total_asset(db, kakao_id)
-        except Exception:
-            total_asset = None
         new_milestones = MilestoneService.check_milestones(
             db, kakao_id,
             total_asset=total_asset,
             total_trades=user.total_trades,
         )
+
+        # 주간 챌린지 진행도 갱신
+        TradeService._update_trade_challenges(db, kakao_id, total_asset)
 
         # 감사 로그
         log_trade(
@@ -441,6 +478,7 @@ class TradeService:
             from services.asset_service import AssetService
             AssetService.record_daily_asset(db, kakao_id)
         except Exception as e:
+            db.rollback()  # 예외로 오염된 세션이 이후 커밋에 영향 주지 않도록
             logger.warning(f"자산 히스토리 기록 실패 (매도 후): {e}")
 
         return {
@@ -482,7 +520,18 @@ class TradeService:
             )
 
         # 수수료 포함 최대 수량 계산
+        # buy_stock과 동일한 수수료 라운딩(내림)으로 필요 금액을 계산해
+        # float 오차로 경계 수량이 "잔고 부족"으로 실패하는 문제를 방지
+        def required_cash(qty: int) -> int:
+            amount = price * qty
+            return amount + int(amount * GameConfig.TRADE_FEE_RATE)
+
         max_qty = int(user.cash / (price * (1 + GameConfig.TRADE_FEE_RATE)))
+        max_qty = min(max_qty, GameConfig.MAX_QUANTITY)
+        while max_qty > 0 and required_cash(max_qty) > user.cash:
+            max_qty -= 1
+        while max_qty < GameConfig.MAX_QUANTITY and required_cash(max_qty + 1) <= user.cash:
+            max_qty += 1
 
         if max_qty < 1:
             return error_response(

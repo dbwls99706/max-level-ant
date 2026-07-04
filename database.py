@@ -77,7 +77,8 @@ def init_db():
     데이터베이스 테이블 생성 및 마이그레이션
     앱 시작 시 호출
     """
-    # 모든 모델 임포트 (테이블 생성을 위해)
+    # 모든 모델 임포트 (Base.metadata에 테이블 등록 — 임포트 순서와 무관하게 동작 보장)
+    import models  # noqa: F401
 
     # 테이블 생성
     Base.metadata.create_all(bind=engine)
@@ -120,6 +121,8 @@ def _migrate_db():
         'enhance_level': 'INTEGER DEFAULT 0',
         'enhance_title_seed': 'INTEGER DEFAULT 0',
         'enhance_class': 'INTEGER DEFAULT 0',
+        'pending_quiz': 'VARCHAR(2000)',
+        'pending_quiz_bet': 'BIGINT DEFAULT 0',
     }
 
     # 허용된 SQL 타입 화이트리스트 (SQL 인젝션 방지)
@@ -169,6 +172,40 @@ def _migrate_db():
         logger.info(f"데이터베이스 마이그레이션 완료 ({added_count}개 컬럼 추가)")
     else:
         logger.debug("마이그레이션: 추가할 컬럼 없음")
+
+    _widen_integer_columns(inspector)
+
+
+def _widen_integer_columns(inspector):
+    """
+    int4 → int8 타입 확장 (대형 거래 시 오버플로 방지)
+    - transactions.fee, holdings.avg_price는 거래 금액에 비례해 int4 상한을 넘을 수 있음
+    - SQLite는 동적 타입이라 확장 불필요
+    """
+    if engine.dialect.name != "postgresql":
+        return
+
+    type_upgrades = [
+        ("transactions", "fee"),
+        ("holdings", "avg_price"),
+    ]
+    table_names = set(inspector.get_table_names())
+
+    with engine.connect() as conn:
+        for table, column in type_upgrades:
+            if table not in table_names:
+                continue
+            columns = {col["name"]: col for col in inspector.get_columns(table)}
+            if column not in columns:
+                continue
+            if "BIGINT" in str(columns[column]["type"]).upper():
+                continue
+            try:
+                conn.execute(text(f'ALTER TABLE {table} ALTER COLUMN {column} TYPE BIGINT'))
+                conn.commit()
+                logger.info(f"컬럼 타입 확장됨: {table}.{column} → BIGINT")
+            except SQLAlchemyError as e:
+                logger.warning(f"컬럼 타입 확장 실패 ({table}.{column}): {e}")
 
 
 def reset_db():

@@ -13,7 +13,7 @@ from sqlalchemy.exc import SQLAlchemyError
 
 from models import User
 from config import GameConfig, KST
-from services.common import safe_add
+from services.common import safe_add, get_user_for_update
 from utils import get_service_logger
 
 logger = get_service_logger()
@@ -147,7 +147,8 @@ class MissionService:
         거래 횟수 증가 및 미션 완료 체크
         Returns: 미션 완료 시 보상 정보, 아니면 None
         """
-        user = db.query(User).filter(User.kakao_id == kakao_id).first()
+        # FOR UPDATE로 동시 요청 시 카운트/보상 lost update 방지
+        user = get_user_for_update(db, kakao_id)
         if not user:
             return None
 
@@ -231,13 +232,16 @@ class MissionService:
     def check_and_award_achievements(
             db: Session,
             kakao_id: str,
-            trade_profit: int = 0
+            trade_profit: int = 0,
+            total_asset: Optional[int] = None
     ) -> List[Dict]:
         """
         업적 달성 체크 및 보상 지급
+        total_asset: 총 자산 기준 업적(millionaire) 판정용 (None이면 해당 업적 스킵)
         Returns: 새로 달성한 업적 목록
         """
-        user = db.query(User).filter(User.kakao_id == kakao_id).first()
+        # FOR UPDATE로 동시 요청 시 보상 lost update 방지
+        user = get_user_for_update(db, kakao_id)
         if not user:
             return []
 
@@ -263,6 +267,7 @@ class MissionService:
             ("trades_50", user.total_trades >= 50),
             ("trades_100", user.total_trades >= 100),
             ("streak_7", user.attendance_streak >= 7),
+            ("millionaire", total_asset is not None and total_asset >= 100_000_000),
         ]
 
         for ach_id, condition in checks:

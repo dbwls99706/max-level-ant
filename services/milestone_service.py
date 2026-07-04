@@ -7,9 +7,10 @@ from typing import Dict, List, Optional
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import SQLAlchemyError
 
-from models import Milestone, User
+from models import Milestone
 from services.common import (
     get_user_with_error_for_update,
+    get_user_for_update,
     error_response,
     success_response,
     safe_add,
@@ -134,7 +135,9 @@ class MilestoneService:
         마일스톤 달성 체크 & 자동 보상 지급
         Returns: 새로 달성한 마일스톤 리스트 (보상 이미 지급됨)
         """
-        user = db.query(User).filter(User.kakao_id == kakao_id).first()
+        # FOR UPDATE로 동시 요청 시 보상 lost update 방지
+        # (중복 지급은 UniqueConstraint로 별도 방어)
+        user = get_user_for_update(db, kakao_id)
         if not user:
             return []
 

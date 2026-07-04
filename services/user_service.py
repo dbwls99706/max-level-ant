@@ -221,9 +221,51 @@ class UserService:
             from services.asset_service import AssetService
             AssetService.record_daily_asset(db, kakao_id)
         except Exception as e:
+            db.rollback()  # 예외로 오염된 세션이 이후 커밋에 영향 주지 않도록
             logger.warning(f"자산 히스토리 기록 실패 (출석 후): {e}")
 
+        # 출석 기반 보상 파이프라인 (스트릭 업적/마일스톤, 자산 마일스톤, 주간 챌린지)
+        cls._run_attendance_rewards(db, kakao_id, user.attendance_streak)
+
+        # 보상 지급으로 잔고가 바뀌었을 수 있으므로 최신값 반환
+        db.refresh(user)
+
         return True, reward, user.attendance_streak, user.cash, enhance_level
+
+    @classmethod
+    def _run_attendance_rewards(cls, db: Session, kakao_id: str, streak: int) -> None:
+        """
+        출석 이벤트 기반 보상 체크 (실패해도 출석 자체에는 영향 없음)
+        - 거래를 하지 않는 유저도 스트릭/자산 업적·마일스톤을 받을 수 있도록 출석에서 트리거
+        """
+        try:
+            from services.asset_service import AssetService
+            total_asset = AssetService.get_total_asset(db, kakao_id)
+        except Exception as e:
+            db.rollback()
+            logger.warning(f"총 자산 계산 실패 (출석 후): {e}")
+            total_asset = None
+
+        try:
+            from services.mission_service import MissionService
+            from services.milestone_service import MilestoneService
+            MissionService.check_and_award_achievements(db, kakao_id, total_asset=total_asset)
+            MilestoneService.check_milestones(
+                db, kakao_id,
+                total_asset=total_asset,
+                streak=streak,
+            )
+        except Exception as e:
+            db.rollback()
+            logger.warning(f"출석 업적/마일스톤 체크 실패 ({kakao_id}): {e}")
+
+        try:
+            from services.challenge_service import ChallengeService
+            ChallengeService.update_challenge_progress(db, kakao_id, "ATTENDANCE")
+            ChallengeService.update_asset_challenges(db, kakao_id, total_asset)
+        except Exception as e:
+            db.rollback()
+            logger.warning(f"출석 챌린지 갱신 실패 ({kakao_id}): {e}")
 
     @staticmethod
     def get_balance(db: Session, kakao_id: str) -> Optional[int]:

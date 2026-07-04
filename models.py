@@ -62,6 +62,10 @@ class User(Base):
     updown_round = Column(Integer, default=0)  # 현재 라운드
     updown_multiplier = Column(Float, default=1.0)  # 누적 배율
 
+    # 시장예측(역사 퀴즈) 출제 상태 — 서버가 출제한 퀴즈만 판정에 사용 (조작 방지)
+    pending_quiz = Column(String(2000), nullable=True)  # 출제된 퀴즈 (JSON)
+    pending_quiz_bet = Column(BigInteger, default=0)  # 출제 시점 베팅 금액
+
     # 각성 시스템 (투자 감각 각성)
     enhance_level = Column(Integer, default=0)       # 각성 레벨 (0~20)
     enhance_title_seed = Column(Integer, default=0)  # 칭호 후보 인덱스 (0~4, 레벨업 시 랜덤 고정)
@@ -96,8 +100,8 @@ class Holding(Base):
     # 보유 수량
     quantity = Column(Integer, default=0)
     
-    # 평균 매수가
-    avg_price = Column(Integer, default=0)
+    # 평균 매수가 (수수료 포함 평단가는 잔고 상한까지 커질 수 있어 BigInteger)
+    avg_price = Column(BigInteger, default=0)
     
     # 총 매수 금액 (평균가 계산용)
     total_invested = Column(BigInteger, default=0)
@@ -135,7 +139,7 @@ class Transaction(Base):
     quantity = Column(Integer, nullable=False)  # 수량
     price = Column(Integer, nullable=False)  # 체결가
     total_amount = Column(BigInteger, nullable=False)  # 총 금액
-    fee = Column(Integer, default=0)  # 수수료
+    fee = Column(BigInteger, default=0)  # 수수료 (대형 거래 시 int4 초과 가능)
     
     # 수익 (매도 시에만)
     profit = Column(BigInteger, nullable=True)

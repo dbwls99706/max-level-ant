@@ -118,12 +118,14 @@ class TestBuyStock:
 
         with patch("services.trade_service.StockService") as MockSS, \
              patch("services.trade_service.MissionService") as MockMS, \
+             patch("services.trade_service.MilestoneService") as MockMile, \
              patch("services.trade_service.is_trading_available", return_value=True), \
              patch("services.asset_service.AssetService.record_daily_asset"):
             MockSS.get_price.return_value = MOCK_STOCK
             MockSS._cache_stock.return_value = None
             MockMS.increment_trade_count.return_value = None
             MockMS.check_and_award_achievements.return_value = []
+            MockMile.check_milestones.return_value = []
 
             result = TradeService.buy_stock(db, test_user.kakao_id, "삼성전자", quantity)
 

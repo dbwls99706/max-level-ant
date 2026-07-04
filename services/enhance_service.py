@@ -151,6 +151,14 @@ class EnhanceService:
                 extra=f"rate={success_rate}% roll={roll}"
             )
 
+            # 주간 챌린지(각성 도전자) 진행도 갱신 (실패해도 각성에는 영향 없음)
+            try:
+                from services.challenge_service import ChallengeService
+                ChallengeService.update_challenge_progress(db, kakao_id, "ENHANCE")
+            except Exception as e:
+                db.rollback()
+                logger.warning(f"각성 챌린지 갱신 실패 ({kakao_id}): {e}")
+
             # 레벨업으로 칭호가 바뀌었는지 확인
             title_changed = old_name != new_name
 

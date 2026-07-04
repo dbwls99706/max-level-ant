@@ -9,7 +9,7 @@ import random
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import SQLAlchemyError
 
-from models import WeeklyChallenge, UserChallenge, User
+from models import WeeklyChallenge, UserChallenge, User, AssetHistory
 from services.common import (
     get_user_with_error_for_update,
     error_response,
@@ -188,36 +188,103 @@ class ChallengeService:
         increment: int = 1
     ) -> Optional[Dict]:
         """
-        챌린지 진행도 업데이트
-        거래 완료, 출석 완료 등 이벤트 발생 시 호출
+        카운트형 챌린지 진행도 업데이트 (TRADE_COUNT, ATTENDANCE, ENHANCE)
+        거래 완료, 출석 완료, 각성 성공 등 이벤트 발생 시 호출
         """
         challenge = cls.get_or_create_weekly_challenge(db)
         if not challenge or challenge.challenge_type != challenge_type:
             return None
 
+        return cls._apply_challenge_value(
+            db, kakao_id, challenge, increment=increment
+        )
+
+    @classmethod
+    def update_asset_challenges(
+        cls,
+        db: Session,
+        kakao_id: str,
+        total_asset: Optional[int]
+    ) -> Optional[Dict]:
+        """
+        지표형 챌린지 진행도 업데이트 (PROFIT_RATE, ASSET_GROWTH)
+        - 이번 주 시작 시점 자산(AssetHistory) 대비 증가분으로 계산
+        - 거래/출석 등 총자산이 계산되는 이벤트에서 호출
+        """
+        if total_asset is None:
+            return None
+
+        challenge = cls.get_or_create_weekly_challenge(db)
+        if not challenge or challenge.challenge_type not in ("PROFIT_RATE", "ASSET_GROWTH"):
+            return None
+
+        baseline = cls._get_week_baseline_asset(db, kakao_id, challenge.start_date)
+        if not baseline or baseline <= 0:
+            return None
+
+        growth = total_asset - baseline
+        if challenge.challenge_type == "PROFIT_RATE":
+            value = int((growth / baseline) * 100)  # % 단위
+        else:
+            value = growth // 10_000  # 만원 단위
+
+        if value <= 0:
+            return None
+
+        return cls._apply_challenge_value(db, kakao_id, challenge, set_value=value)
+
+    @classmethod
+    def _get_week_baseline_asset(cls, db: Session, kakao_id: str, week_start) -> Optional[int]:
+        """이번 주 시작 시점 자산 (주 시작 후 첫 기록 → 주 시작 전 마지막 기록 → 초기 자금)"""
+        first_this_week = db.query(AssetHistory).filter(
+            AssetHistory.kakao_id == kakao_id,
+            AssetHistory.record_date >= week_start
+        ).order_by(AssetHistory.record_date.asc()).first()
+        if first_this_week:
+            return first_this_week.total_asset
+
+        last_before = db.query(AssetHistory).filter(
+            AssetHistory.kakao_id == kakao_id,
+            AssetHistory.record_date < week_start
+        ).order_by(AssetHistory.record_date.desc()).first()
+        if last_before:
+            return last_before.total_asset
+
+        user = db.query(User).filter(User.kakao_id == kakao_id).first()
+        return user.initial_cash if user else None
+
+    @classmethod
+    def _apply_challenge_value(
+        cls,
+        db: Session,
+        kakao_id: str,
+        challenge: WeeklyChallenge,
+        increment: int = 0,
+        set_value: Optional[int] = None
+    ) -> Optional[Dict]:
+        """챌린지 진행값 적용 (increment: 누적, set_value: 최대값 갱신) 및 완료 처리"""
         user_challenge = db.query(UserChallenge).filter(
             UserChallenge.kakao_id == kakao_id,
             UserChallenge.challenge_id == challenge.id
         ).first()
 
         if not user_challenge:
-            try:
-                user_challenge = UserChallenge(
-                    kakao_id=kakao_id,
-                    challenge_id=challenge.id,
-                    current_value=0
-                )
-                db.add(user_challenge)
-            except SQLAlchemyError as e:
-                logger.error(f"유저 챌린지 생성 DB 오류: {e}")
-                return None
+            user_challenge = UserChallenge(
+                kakao_id=kakao_id,
+                challenge_id=challenge.id,
+                current_value=0
+            )
+            db.add(user_challenge)
 
         # 이미 완료된 경우 스킵
         if user_challenge.completed == 1:
             return None
 
         try:
-            user_challenge.current_value += increment
+            if set_value is not None:
+                user_challenge.current_value = max(user_challenge.current_value or 0, set_value)
+            else:
+                user_challenge.current_value = (user_challenge.current_value or 0) + increment
 
             # 목표 달성 체크 (0으로 나누기 방지)
             target = challenge.target_value if challenge.target_value > 0 else 1
