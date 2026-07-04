@@ -54,7 +54,7 @@ class AssetService:
     def get_total_asset(cls, db: Session, kakao_id: str) -> Optional[int]:
         """
         총 자산 조회 (현금 + 보유 주식 평가액)
-        마일스톤/챌린지 판정용
+        챌린지 판정용
         """
         user = db.query(User).filter(User.kakao_id == kakao_id).first()
         if not user:
@@ -62,6 +62,23 @@ class AssetService:
 
         _, _, total_asset = cls._compute_assets(db, user)
         return total_asset
+
+    @classmethod
+    def get_asset_and_profit(
+        cls, db: Session, kakao_id: str
+    ) -> Tuple[Optional[int], Optional[int]]:
+        """
+        총 자산과 수익금(총 자산 - 초기 자금) 조회
+        수익 마일스톤/업적은 수익금 기준으로 판정 (초기 자금만으로는 0원)
+        Returns: (total_asset, total_profit) — 유저 없으면 (None, None)
+        """
+        user = db.query(User).filter(User.kakao_id == kakao_id).first()
+        if not user:
+            return None, None
+
+        _, _, total_asset = cls._compute_assets(db, user)
+        total_profit = total_asset - (user.initial_cash or 0)
+        return total_asset, total_profit
 
     @classmethod
     def record_daily_asset(cls, db: Session, kakao_id: str) -> Dict:

@@ -248,7 +248,7 @@ class UserService:
             db.rollback()  # 예외로 오염된 세션이 이후 커밋에 영향 주지 않도록
             logger.warning(f"자산 히스토리 기록 실패 (출석 후): {e}")
 
-        # 출석 기반 보상 파이프라인 (스트릭 업적/마일스톤, 자산 마일스톤, 주간 챌린지)
+        # 출석 기반 보상 파이프라인 (스트릭 업적/마일스톤, 수익 마일스톤, 주간 챌린지)
         cls._run_attendance_rewards(db, kakao_id, user.attendance_streak)
 
         # 보상 지급으로 잔고가 바뀌었을 수 있으므로 최신값 반환
@@ -265,23 +265,24 @@ class UserService:
         try:
             from services.asset_service import AssetService
 
-            total_asset = AssetService.get_total_asset(db, kakao_id)
+            total_asset, total_profit = AssetService.get_asset_and_profit(db, kakao_id)
         except Exception as e:
             db.rollback()
             logger.warning(f"총 자산 계산 실패 (출석 후): {e}")
             total_asset = None
+            total_profit = None
 
         try:
             from services.mission_service import MissionService
             from services.milestone_service import MilestoneService
 
             MissionService.check_and_award_achievements(
-                db, kakao_id, total_asset=total_asset
+                db, kakao_id, total_profit=total_profit
             )
             MilestoneService.check_milestones(
                 db,
                 kakao_id,
-                total_asset=total_asset,
+                total_profit=total_profit,
                 streak=streak,
             )
         except Exception as e:

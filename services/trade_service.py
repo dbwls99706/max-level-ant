@@ -75,16 +75,18 @@ class TradeService:
         return None
 
     @staticmethod
-    def _safe_get_total_asset(db: Session, kakao_id: str) -> Optional[int]:
-        """총 자산 계산 (실패 시 None, 세션 오염 방지 롤백)"""
+    def _safe_get_asset_and_profit(
+        db: Session, kakao_id: str
+    ) -> tuple[Optional[int], Optional[int]]:
+        """총 자산·수익금 계산 (실패 시 (None, None), 세션 오염 방지 롤백)"""
         try:
             from services.asset_service import AssetService
 
-            return AssetService.get_total_asset(db, kakao_id)
+            return AssetService.get_asset_and_profit(db, kakao_id)
         except Exception as e:
             db.rollback()
             logger.warning(f"총 자산 계산 실패 ({kakao_id}): {e}")
-            return None
+            return None, None
 
     @staticmethod
     def _update_trade_challenges(
@@ -266,18 +268,20 @@ class TradeService:
         # 미션 및 업적 처리
         mission_reward = MissionService.increment_trade_count(db, kakao_id)
 
-        # 총 자산 계산 (자산 업적/마일스톤/챌린지 판정용, 실패해도 거래에는 영향 없음)
-        total_asset = TradeService._safe_get_total_asset(db, kakao_id)
-
-        new_achievements = MissionService.check_and_award_achievements(
-            db, kakao_id, total_asset=total_asset
+        # 총 자산·수익금 계산 (업적/마일스톤/챌린지 판정용, 실패해도 거래에는 영향 없음)
+        total_asset, total_profit = TradeService._safe_get_asset_and_profit(
+            db, kakao_id
         )
 
-        # 마일스톤 자동 체크·지급 (자산·거래 횟수 기준)
+        new_achievements = MissionService.check_and_award_achievements(
+            db, kakao_id, total_profit=total_profit
+        )
+
+        # 마일스톤 자동 체크·지급 (수익금·거래 횟수 기준)
         new_milestones = MilestoneService.check_milestones(
             db,
             kakao_id,
-            total_asset=total_asset,
+            total_profit=total_profit,
             total_trades=user.total_trades,
         )
 
@@ -448,21 +452,23 @@ class TradeService:
         # 미션 및 업적 처리
         mission_reward = MissionService.increment_trade_count(db, kakao_id)
 
-        # 총 자산 계산 (자산 업적/마일스톤/챌린지 판정용, 실패해도 거래에는 영향 없음)
-        total_asset = TradeService._safe_get_total_asset(db, kakao_id)
+        # 총 자산·수익금 계산 (업적/마일스톤/챌린지 판정용, 실패해도 거래에는 영향 없음)
+        total_asset, total_profit = TradeService._safe_get_asset_and_profit(
+            db, kakao_id
+        )
 
         new_achievements = MissionService.check_and_award_achievements(
             db,
             kakao_id,
             trade_profit=profit if profit > 0 else 0,
-            total_asset=total_asset,
+            total_profit=total_profit,
         )
 
-        # 마일스톤 자동 체크·지급 (자산·거래 횟수 기준)
+        # 마일스톤 자동 체크·지급 (수익금·거래 횟수 기준)
         new_milestones = MilestoneService.check_milestones(
             db,
             kakao_id,
-            total_asset=total_asset,
+            total_profit=total_profit,
             total_trades=user.total_trades,
         )
 

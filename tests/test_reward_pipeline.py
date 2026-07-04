@@ -60,21 +60,28 @@ class TestGetTotalAsset:
 
 
 class TestMilestones:
-    """자산/스트릭 마일스톤 지급 복구"""
+    """수익/스트릭 마일스톤 지급 복구"""
 
-    def test_asset_milestone_awarded(self, db, test_user):
-        """총자산 기준 마일스톤 자동 지급"""
+    def test_profit_milestone_awarded(self, db, test_user):
+        """수익금 기준 마일스톤 자동 지급"""
         achieved = MilestoneService.check_milestones(
-            db, test_user.kakao_id, total_asset=10_000_000
+            db, test_user.kakao_id, total_profit=10_000_000
         )
         types = {m["type"] for m in achieved}
         assert "ASSET_10M" in types
 
         # 중복 지급 없음
         again = MilestoneService.check_milestones(
-            db, test_user.kakao_id, total_asset=10_000_000
+            db, test_user.kakao_id, total_profit=10_000_000
         )
         assert all(m["type"] != "ASSET_10M" for m in again)
+
+    def test_no_profit_no_milestone(self, db, test_user):
+        """수익이 없으면(초기 자금 그대로) 수익 마일스톤 미지급"""
+        achieved = MilestoneService.check_milestones(
+            db, test_user.kakao_id, total_profit=0
+        )
+        assert all(m["type"] != "ASSET_10M" for m in achieved)
 
     def test_streak_milestone_awarded(self, db, test_user):
         """연속 출석 마일스톤 자동 지급"""
@@ -96,16 +103,16 @@ class TestMilestones:
 class TestMillionaireAchievement:
     """millionaire 업적 평가 복구"""
 
-    def test_millionaire_awarded_with_total_asset(self, db, test_user):
+    def test_millionaire_awarded_with_total_profit(self, db, test_user):
         new_achievements = MissionService.check_and_award_achievements(
-            db, test_user.kakao_id, total_asset=100_000_000
+            db, test_user.kakao_id, total_profit=100_000_000
         )
         ids = {a["id"] for a in new_achievements}
         assert "millionaire" in ids
 
     def test_millionaire_not_awarded_below_threshold(self, db, test_user):
         new_achievements = MissionService.check_and_award_achievements(
-            db, test_user.kakao_id, total_asset=99_999_999
+            db, test_user.kakao_id, total_profit=99_999_999
         )
         ids = {a["id"] for a in new_achievements}
         assert "millionaire" not in ids

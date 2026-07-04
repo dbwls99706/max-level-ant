@@ -971,17 +971,20 @@ class SocialHandlerMixin(BaseHandlerMixin):
             try:
                 from services.asset_service import AssetService
 
-                total_asset = AssetService.get_total_asset(self.db, self.kakao_id)
+                _, total_profit = AssetService.get_asset_and_profit(
+                    self.db, self.kakao_id
+                )
+                total_profit = max(0, total_profit or 0)
             except Exception:
-                total_asset = 0
+                total_profit = 0
             total_trades = getattr(user, "total_trades", 0) or 0
 
             header += "\n\n🎯 다음 목표 (보상 자동 지급)"
             for m in result["pending"][:3]:
                 cat = m.get("category", "")
                 threshold = m.get("threshold", 0)
-                if cat == "asset" and total_asset and threshold:
-                    pct = int(min(99, total_asset / threshold * 100))
+                if cat == "asset" and threshold:
+                    pct = int(min(99, total_profit / threshold * 100))
                     bar = "▓" * (pct // 10) + "░" * (10 - pct // 10)
                     hint = f" [{bar}] {pct}%"
                 elif cat == "trade" and threshold:

@@ -88,7 +88,7 @@ ACHIEVEMENTS = {
     "millionaire": {
         "id": "millionaire",
         "name": "억만장자",
-        "description": "총 자산 1억원 달성",
+        "description": "수익금 1억원 달성",
         "reward": 10_000_000,
         "icon": "💎",
     },
@@ -236,11 +236,11 @@ class MissionService:
         db: Session,
         kakao_id: str,
         trade_profit: int = 0,
-        total_asset: Optional[int] = None,
+        total_profit: Optional[int] = None,
     ) -> List[Dict]:
         """
         업적 달성 체크 및 보상 지급
-        total_asset: 총 자산 기준 업적(millionaire) 판정용 (None이면 해당 업적 스킵)
+        total_profit: 수익금 (총 자산 - 초기 자금) — millionaire 판정용 (None이면 스킵)
         Returns: 새로 달성한 업적 목록
         """
         # FOR UPDATE로 동시 요청 시 보상 lost update 방지
@@ -269,7 +269,7 @@ class MissionService:
             ("trades_50", user.total_trades >= 50),
             ("trades_100", user.total_trades >= 100),
             ("streak_7", user.attendance_streak >= 7),
-            ("millionaire", total_asset is not None and total_asset >= 100_000_000),
+            ("millionaire", total_profit is not None and total_profit >= 100_000_000),
         ]
 
         for ach_id, condition in checks:

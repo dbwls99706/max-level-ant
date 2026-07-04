@@ -27,45 +27,46 @@ class MilestoneService:
 
     # 마일스톤 정의
     MILESTONES = {
-        # 자산 달성 마일스톤
+        # 수익 달성 마일스톤 (수익금 = 총 자산 - 초기 자금)
+        # 초기 자금만으로는 0원부터 시작 — 실제 투자 성과 기준으로 판정
         "ASSET_10M": {
             "name": "🌱 천만장자",
-            "description": "총 자산 1,000만원 달성",
+            "description": "수익금 1,000만원 달성",
             "threshold": 10_000_000,
             "reward": 500_000,
             "category": "asset",
         },
         "ASSET_30M": {
             "name": "📈 삼천만원 돌파",
-            "description": "총 자산 3,000만원 달성",
+            "description": "수익금 3,000만원 달성",
             "threshold": 30_000_000,
             "reward": 1_000_000,
             "category": "asset",
         },
         "ASSET_50M": {
             "name": "⭐ 오천만원 클럽",
-            "description": "총 자산 5,000만원 달성",
+            "description": "수익금 5,000만원 달성",
             "threshold": 50_000_000,
             "reward": 2_000_000,
             "category": "asset",
         },
         "ASSET_100M": {
             "name": "🏆 억만장자",
-            "description": "총 자산 1억원 달성",
+            "description": "수익금 1억원 달성",
             "threshold": 100_000_000,
             "reward": 5_000_000,
             "category": "asset",
         },
         "ASSET_500M": {
             "name": "👑 자산왕",
-            "description": "총 자산 5억원 달성",
+            "description": "수익금 5억원 달성",
             "threshold": 500_000_000,
             "reward": 20_000_000,
             "category": "asset",
         },
         "ASSET_1B": {
             "name": "💎 전설의 투자자",
-            "description": "총 자산 10억원 달성",
+            "description": "수익금 10억원 달성",
             "threshold": 1_000_000_000,
             "reward": 50_000_000,
             "category": "asset",
@@ -128,12 +129,13 @@ class MilestoneService:
         cls,
         db: Session,
         kakao_id: str,
-        total_asset: int = None,
+        total_profit: int = None,
         total_trades: int = None,
         streak: int = None,
     ) -> List[Dict]:
         """
         마일스톤 달성 체크 & 자동 보상 지급
+        total_profit: 수익금 (총 자산 - 초기 자금) — asset 카테고리 판정 기준
         Returns: 새로 달성한 마일스톤 리스트 (보상 이미 지급됨)
         """
         # FOR UPDATE로 동시 요청 시 보상 lost update 방지
@@ -159,10 +161,10 @@ class MilestoneService:
             should_achieve = False
             current_value = 0
 
-            if info["category"] == "asset" and total_asset is not None:
-                if total_asset >= info["threshold"]:
+            if info["category"] == "asset" and total_profit is not None:
+                if total_profit >= info["threshold"]:
                     should_achieve = True
-                    current_value = total_asset
+                    current_value = total_profit
 
             elif info["category"] == "trade" and total_trades is not None:
                 if total_trades >= info["threshold"]:
