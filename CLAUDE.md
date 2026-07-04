@@ -135,6 +135,11 @@ pytest -k "test_buy"      # Run tests matching pattern
 - **No Alembic**: Schema migrations are manual via `_migrate_db()` in `database.py`
 - **Imports**: Relative imports within packages (handlers, services, utils), absolute from root
 
+## Git Conventions
+
+- **Commit messages**: 한 줄로만 작성. Co-Authored-By, Generated-with, 세션 링크 등 트레일러/서명 절대 금지 — AI 도구 흔적이 남지 않아야 함
+- **Branch names**: `claude/` 접두사 등 AI 도구 흔적 없는 이름 사용 (예: `feat/battle-rework`, `fix/kis-rate-limit`)
+
 ## Linting
 
 ```bash
