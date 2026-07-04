@@ -2,12 +2,13 @@
 카카오톡 챗봇 응답 포맷 헬퍼
 - 다양한 말풍선 타입 지원
 """
+
 from typing import List, Dict, Optional
 
 
 class KakaoResponse:
     """카카오톡 챗봇 응답 생성 헬퍼"""
-    
+
     @staticmethod
     def simple_text(text: str) -> Dict:
         """
@@ -15,17 +16,9 @@ class KakaoResponse:
         """
         return {
             "version": "2.0",
-            "template": {
-                "outputs": [
-                    {
-                        "simpleText": {
-                            "text": text
-                        }
-                    }
-                ]
-            }
+            "template": {"outputs": [{"simpleText": {"text": text}}]},
         }
-    
+
     @staticmethod
     def simple_image(image_url: str, alt_text: str = "이미지") -> Dict:
         """
@@ -35,88 +28,57 @@ class KakaoResponse:
             "version": "2.0",
             "template": {
                 "outputs": [
-                    {
-                        "simpleImage": {
-                            "imageUrl": image_url,
-                            "altText": alt_text
-                        }
-                    }
+                    {"simpleImage": {"imageUrl": image_url, "altText": alt_text}}
                 ]
-            }
+            },
         }
-    
+
     @staticmethod
     def basic_card(
         title: str,
         description: str,
         thumbnail_url: Optional[str] = None,
-        buttons: Optional[List[Dict]] = None
+        buttons: Optional[List[Dict]] = None,
     ) -> Dict:
         """
         기본 카드 응답
-        
+
         buttons 예시:
         [
             {"action": "message", "label": "버튼1", "messageText": "/명령어"},
             {"action": "webLink", "label": "링크", "webLinkUrl": "https://..."}
         ]
         """
-        card = {
-            "title": title,
-            "description": description
-        }
-        
+        card = {"title": title, "description": description}
+
         if thumbnail_url:
             card["thumbnail"] = {"imageUrl": thumbnail_url}
-        
+
         if buttons:
             card["buttons"] = buttons
-        
-        return {
-            "version": "2.0",
-            "template": {
-                "outputs": [
-                    {
-                        "basicCard": card
-                    }
-                ]
-            }
-        }
-    
+
+        return {"version": "2.0", "template": {"outputs": [{"basicCard": card}]}}
+
     @staticmethod
     def text_card(
-        title: str,
-        description: str,
-        buttons: Optional[List[Dict]] = None
+        title: str, description: str, buttons: Optional[List[Dict]] = None
     ) -> Dict:
         """
         텍스트 카드 응답 (썸네일 없음)
         """
-        card = {
-            "title": title,
-            "description": description
-        }
-        
+        card = {"title": title, "description": description}
+
         if buttons:
             card["buttons"] = buttons
-        
-        return {
-            "version": "2.0",
-            "template": {
-                "outputs": [
-                    {
-                        "textCard": card
-                    }
-                ]
-            }
-        }
-    
+
+        return {"version": "2.0", "template": {"outputs": [{"textCard": card}]}}
+
     @staticmethod
     def list_card(
         header: str,
         items: List[Dict],
         buttons: Optional[List[Dict]] = None,
-        list_layout: Optional[str] = None
+        list_layout: Optional[str] = None,
     ) -> Dict:
         """
         리스트 카드 응답 (팀채팅 챗봇 지원 컴포넌트)
@@ -133,10 +95,7 @@ class KakaoResponse:
             }
         ]
         """
-        card = {
-            "header": {"title": header},
-            "items": items
-        }
+        card = {"header": {"title": header}, "items": items}
 
         if list_layout:
             card["listLayout"] = list_layout
@@ -144,17 +103,8 @@ class KakaoResponse:
         if buttons:
             card["buttons"] = buttons
 
-        return {
-            "version": "2.0",
-            "template": {
-                "outputs": [
-                    {
-                        "listCard": card
-                    }
-                ]
-            }
-        }
-    
+        return {"version": "2.0", "template": {"outputs": [{"listCard": card}]}}
+
     # 버튼 레이아웃 vertical 최대 노출 개수 (카카오 그룹 챗봇 가이드 기준)
     MAX_VERTICAL_BUTTONS = 5
     # 카드 description 안전 한도. 본문은 항상 이 한도 안에서 '단일 카드'로만 노출한다.
@@ -227,10 +177,7 @@ class KakaoResponse:
         return join([header] + kept + more + tail)
 
     @staticmethod
-    def text_with_buttons(
-        text: str,
-        buttons: List[Dict]
-    ) -> Dict:
+    def text_with_buttons(text: str, buttons: List[Dict]) -> Dict:
         """
         본문 + 액션 버튼을 함께 담은 응답.
 
@@ -264,38 +211,27 @@ class KakaoResponse:
                         "textCard": {
                             "description": card_text or " ",
                             "buttons": card_buttons,
-                            "buttonLayout": "vertical"
+                            "buttonLayout": "vertical",
                         }
                     }
                 ]
-            }
+            },
         }
-    
+
     @staticmethod
     def button_message(label: str, message_text: str) -> Dict:
         """메시지 전송 버튼 생성"""
-        return {
-            "action": "message",
-            "label": label,
-            "messageText": message_text
-        }
-    
+        return {"action": "message", "label": label, "messageText": message_text}
+
     @staticmethod
     def button_link(label: str, url: str) -> Dict:
         """웹 링크 버튼 생성"""
-        return {
-            "action": "webLink",
-            "label": label,
-            "webLinkUrl": url
-        }
-    
+        return {"action": "webLink", "label": label, "webLinkUrl": url}
+
     @staticmethod
     def button_share(label: str = "공유하기") -> Dict:
         """공유 버튼 생성"""
-        return {
-            "action": "share",
-            "label": label
-        }
+        return {"action": "share", "label": label}
 
 
 # 사용 예시

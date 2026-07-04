@@ -4,8 +4,9 @@
 - N+1 쿼리 최적화
 - 트랜잭션 안전성
 """
+
 from datetime import datetime, timedelta
-from typing import Dict, List, Set
+from typing import Dict, List, Optional, Set, Tuple
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import SQLAlchemyError
 
@@ -27,6 +28,59 @@ class AssetService:
         return StockService.batch_get_prices(stock_codes)
 
     @classmethod
+    def _compute_assets(cls, db: Session, user: User) -> Tuple[int, int, int]:
+        """
+        유저의 현금/주식평가액/총자산 계산 (N+1 최적화)
+        Returns: (cash, stock_value, total_asset)
+        """
+        holdings = (
+            db.query(Holding)
+            .filter(Holding.kakao_id == user.kakao_id, Holding.quantity > 0)
+            .all()
+        )
+
+        stock_codes: Set[str] = {h.stock_code for h in holdings}
+        stock_prices = cls._prefetch_stock_prices(stock_codes)
+
+        stock_value = 0
+        for h in holdings:
+            # 현재가 조회 실패 시 평균 매수가 사용
+            price = stock_prices.get(h.stock_code) or h.avg_price
+            stock_value = safe_add(stock_value, price * h.quantity)
+
+        return user.cash, stock_value, safe_add(user.cash, stock_value)
+
+    @classmethod
+    def get_total_asset(cls, db: Session, kakao_id: str) -> Optional[int]:
+        """
+        총 자산 조회 (현금 + 보유 주식 평가액)
+        챌린지 판정용
+        """
+        user = db.query(User).filter(User.kakao_id == kakao_id).first()
+        if not user:
+            return None
+
+        _, _, total_asset = cls._compute_assets(db, user)
+        return total_asset
+
+    @classmethod
+    def get_asset_and_profit(
+        cls, db: Session, kakao_id: str
+    ) -> Tuple[Optional[int], Optional[int]]:
+        """
+        총 자산과 수익금(총 자산 - 초기 자금) 조회
+        수익 마일스톤/업적은 수익금 기준으로 판정 (초기 자금만으로는 0원)
+        Returns: (total_asset, total_profit) — 유저 없으면 (None, None)
+        """
+        user = db.query(User).filter(User.kakao_id == kakao_id).first()
+        if not user:
+            return None, None
+
+        _, _, total_asset = cls._compute_assets(db, user)
+        total_profit = total_asset - (user.initial_cash or 0)
+        return total_asset, total_profit
+
+    @classmethod
     def record_daily_asset(cls, db: Session, kakao_id: str) -> Dict:
         """
         일일 자산 기록 (하루에 한 번)
@@ -35,10 +89,13 @@ class AssetService:
         today = datetime.now(KST).date()
 
         # 이미 오늘 기록이 있는지 확인
-        existing = db.query(AssetHistory).filter(
-            AssetHistory.kakao_id == kakao_id,
-            AssetHistory.record_date == today
-        ).first()
+        existing = (
+            db.query(AssetHistory)
+            .filter(
+                AssetHistory.kakao_id == kakao_id, AssetHistory.record_date == today
+            )
+            .first()
+        )
 
         if existing:
             return {"success": True, "message": "이미 기록됨", "updated": False}
@@ -47,29 +104,8 @@ class AssetService:
         if not user:
             return {"success": False, "message": "유저 없음"}
 
-        # 보유 종목 조회
-        holdings = db.query(Holding).filter(
-            Holding.kakao_id == kakao_id,
-            Holding.quantity > 0
-        ).all()
-
-        # N+1 최적화: 모든 종목 코드 수집 후 배치 조회
-        stock_codes: Set[str] = {h.stock_code for h in holdings}
-        stock_prices = cls._prefetch_stock_prices(stock_codes)
-
-        # 총 자산 계산
-        cash = user.cash
-        stock_value = 0
-
-        for h in holdings:
-            price = stock_prices.get(h.stock_code)
-            if price:
-                stock_value = safe_add(stock_value, price * h.quantity)
-            else:
-                # 현재가 조회 실패 시 평균 매수가 사용
-                stock_value = safe_add(stock_value, h.avg_price * h.quantity)
-
-        total_asset = safe_add(cash, stock_value)
+        # 총 자산 계산 (N+1 최적화)
+        cash, stock_value, total_asset = cls._compute_assets(db, user)
 
         # 기록 저장
         try:
@@ -78,7 +114,7 @@ class AssetService:
                 record_date=today,
                 total_asset=total_asset,
                 cash=cash,
-                stock_value=stock_value
+                stock_value=stock_value,
             )
             db.add(history)
             db.commit()
@@ -92,7 +128,7 @@ class AssetService:
             "updated": True,
             "total_asset": total_asset,
             "cash": cash,
-            "stock_value": stock_value
+            "stock_value": stock_value,
         }
 
     @classmethod
@@ -100,17 +136,22 @@ class AssetService:
         """최근 N일간 자산 히스토리"""
         start_date = datetime.now(KST).date() - timedelta(days=days)
 
-        histories = db.query(AssetHistory).filter(
-            AssetHistory.kakao_id == kakao_id,
-            AssetHistory.record_date >= start_date
-        ).order_by(AssetHistory.record_date).all()
+        histories = (
+            db.query(AssetHistory)
+            .filter(
+                AssetHistory.kakao_id == kakao_id,
+                AssetHistory.record_date >= start_date,
+            )
+            .order_by(AssetHistory.record_date)
+            .all()
+        )
 
         return [
             {
                 "date": str(h.record_date),
                 "total_asset": h.total_asset,
                 "cash": h.cash,
-                "stock_value": h.stock_value
+                "stock_value": h.stock_value,
             }
             for h in histories
         ]
@@ -182,7 +223,9 @@ class AssetService:
         else:
             change_emoji = "🔻"
 
-        lines.append(f"\n{change_emoji} {days}일 변동: {change:+,}원 ({change_rate:+.1f}%)")
+        lines.append(
+            f"\n{change_emoji} {days}일 변동: {change:+,}원 ({change_rate:+.1f}%)"
+        )
 
         return "\n".join(lines)
 
@@ -192,10 +235,7 @@ class AssetService:
         history = cls.get_asset_history(db, kakao_id, 30)
 
         if not history:
-            return {
-                "has_history": False,
-                "message": "아직 자산 기록이 없습니다."
-            }
+            return {"has_history": False, "message": "아직 자산 기록이 없습니다."}
 
         current = history[-1]["total_asset"] if history else 0
 
@@ -207,7 +247,7 @@ class AssetService:
             if prev > 0:
                 changes["day"] = {
                     "amount": current - prev,
-                    "rate": ((current - prev) / prev) * 100
+                    "rate": ((current - prev) / prev) * 100,
                 }
 
         if len(history) >= 7:
@@ -215,7 +255,7 @@ class AssetService:
             if week_ago > 0:
                 changes["week"] = {
                     "amount": current - week_ago,
-                    "rate": ((current - week_ago) / week_ago) * 100
+                    "rate": ((current - week_ago) / week_ago) * 100,
                 }
 
         if len(history) >= 30:
@@ -223,7 +263,7 @@ class AssetService:
             if month_ago > 0:
                 changes["month"] = {
                     "amount": current - month_ago,
-                    "rate": ((current - month_ago) / month_ago) * 100
+                    "rate": ((current - month_ago) / month_ago) * 100,
                 }
 
         # 최고/최저
@@ -236,5 +276,5 @@ class AssetService:
             "changes": changes,
             "all_time_high": all_time_high,
             "all_time_low": all_time_low,
-            "record_count": len(history)
+            "record_count": len(history),
         }

@@ -5,6 +5,7 @@
 - 개선된 캐시 전략 (TTL + 무효화)
 - 서킷 브레이커 (연속 실패 시 일시적 차단)
 """
+
 from datetime import datetime, timedelta, timezone
 from typing import Optional, Dict, List
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -32,8 +33,9 @@ class CircuitBreaker:
     - OPEN: 차단 중 (실패 임계값 초과 후)
     - HALF_OPEN: 복구 시도 중
     """
-    FAILURE_THRESHOLD = 5    # 연속 실패 N회 시 차단
-    RECOVERY_TIMEOUT = 60    # 차단 후 N초 뒤 복구 시도
+
+    FAILURE_THRESHOLD = 5  # 연속 실패 N회 시 차단
+    RECOVERY_TIMEOUT = 60  # 차단 후 N초 뒤 복구 시도
 
     def __init__(self):
         self._failure_count = 0
@@ -48,8 +50,13 @@ class CircuitBreaker:
                 return False
             if self._state == "OPEN":
                 # 복구 타임아웃 확인
-                if self._last_failure_time and \
-                        (datetime.now(timezone.utc) - self._last_failure_time).total_seconds() >= self.RECOVERY_TIMEOUT:
+                if (
+                    self._last_failure_time
+                    and (
+                        datetime.now(timezone.utc) - self._last_failure_time
+                    ).total_seconds()
+                    >= self.RECOVERY_TIMEOUT
+                ):
                     self._state = "HALF_OPEN"
                     logger.info("KIS API 서킷 브레이커: HALF_OPEN (복구 시도)")
                     return False
@@ -131,10 +138,11 @@ class KISAPIClient:
 
     _access_token = None
     _token_expires_at = None
+    _token_lock = threading.Lock()  # 토큰 중복 발급 방지
 
     @classmethod
     def get_access_token(cls) -> Optional[str]:
-        """OAuth 접근 토큰 발급 (24시간 유효)"""
+        """OAuth 접근 토큰 발급 (24시간 유효, 스레드 안전)"""
         if not KISConfig.is_configured():
             logger.warning("KIS API 설정이 없습니다. 환경변수를 확인하세요.")
             return None
@@ -144,43 +152,56 @@ class KISAPIClient:
             logger.warning("KIS API 서킷 브레이커 열림 - 토큰 발급 스킵")
             return None
 
-        # 토큰이 아직 유효하면 재사용
+        # 토큰이 아직 유효하면 재사용 (락 없이 빠른 확인)
         if cls._access_token and cls._token_expires_at:
             if datetime.now(timezone.utc) < cls._token_expires_at:
                 return cls._access_token
 
-        try:
-            url = f"{KISConfig.BASE_URL}/oauth2/tokenP"
-            headers = {"Content-Type": "application/json"}
-            body = {
-                "grant_type": "client_credentials",
-                "appkey": KISConfig.APP_KEY,
-                "appsecret": KISConfig.APP_SECRET
-            }
+        # 병렬 배치 조회 중 여러 스레드가 동시에 만료를 감지해도
+        # 토큰 발급 요청은 한 번만 나가도록 락으로 직렬화
+        with cls._token_lock:
+            # 락 대기 중 다른 스레드가 이미 발급했으면 재사용
+            if cls._access_token and cls._token_expires_at:
+                if datetime.now(timezone.utc) < cls._token_expires_at:
+                    return cls._access_token
 
-            resp = requests.post(url, headers=headers, json=body, timeout=KISConfig.API_TIMEOUT)
+            try:
+                url = f"{KISConfig.BASE_URL}/oauth2/tokenP"
+                headers = {"Content-Type": "application/json"}
+                body = {
+                    "grant_type": "client_credentials",
+                    "appkey": KISConfig.APP_KEY,
+                    "appsecret": KISConfig.APP_SECRET,
+                }
 
-            if resp.status_code == 200:
-                data = resp.json()
-                cls._access_token = data.get("access_token")
-                # 토큰 만료시간 설정 (23시간 - 여유 1시간)
-                cls._token_expires_at = datetime.now(timezone.utc) + timedelta(hours=23)
-                logger.info("KIS API 토큰 발급 성공")
-                _circuit_breaker.record_success()
-                return cls._access_token
-            else:
-                logger.error(f"KIS 토큰 발급 실패: {resp.status_code}")
+                _kis_throttle.wait()  # 토큰 발급도 유량 제한 대상
+                resp = requests.post(
+                    url, headers=headers, json=body, timeout=KISConfig.API_TIMEOUT
+                )
+
+                if resp.status_code == 200:
+                    data = resp.json()
+                    cls._access_token = data.get("access_token")
+                    # 토큰 만료시간 설정 (23시간 - 여유 1시간)
+                    cls._token_expires_at = datetime.now(timezone.utc) + timedelta(
+                        hours=23
+                    )
+                    logger.info("KIS API 토큰 발급 성공")
+                    _circuit_breaker.record_success()
+                    return cls._access_token
+                else:
+                    logger.error(f"KIS 토큰 발급 실패: {resp.status_code}")
+                    _circuit_breaker.record_failure()
+                    return None
+
+            except Timeout:
+                logger.error("KIS 토큰 발급 타임아웃")
                 _circuit_breaker.record_failure()
                 return None
-
-        except Timeout:
-            logger.error("KIS 토큰 발급 타임아웃")
-            _circuit_breaker.record_failure()
-            return None
-        except RequestException as e:
-            logger.error(f"KIS 토큰 발급 네트워크 에러: {e}")
-            _circuit_breaker.record_failure()
-            return None
+            except RequestException as e:
+                logger.error(f"KIS 토큰 발급 네트워크 에러: {e}")
+                _circuit_breaker.record_failure()
+                return None
 
     @classmethod
     def _get_headers(cls, tr_id: str) -> Optional[Dict]:
@@ -240,14 +261,18 @@ class KISAPIClient:
             return None
 
         try:
-            url = f"{KISConfig.BASE_URL}/uapi/domestic-stock/v1/quotations/inquire-price"
+            url = (
+                f"{KISConfig.BASE_URL}/uapi/domestic-stock/v1/quotations/inquire-price"
+            )
             params = {
                 "FID_COND_MRKT_DIV_CODE": "J",  # 주식
-                "FID_INPUT_ISCD": stock_code
+                "FID_INPUT_ISCD": stock_code,
             }
 
             _kis_throttle.wait()  # 초당 거래건수 초과 방지
-            resp = requests.get(url, headers=headers, params=params, timeout=KISConfig.API_TIMEOUT)
+            resp = requests.get(
+                url, headers=headers, params=params, timeout=KISConfig.API_TIMEOUT
+            )
 
             if resp.status_code == 200:
                 data = resp.json()
@@ -268,11 +293,14 @@ class KISAPIClient:
                     _circuit_breaker.record_success()
                     return result
                 else:
+                    # rt_cd != "0"은 잘못된 종목코드 등 "데이터 없음" 응답 —
+                    # API 자체는 정상 동작 중이므로 서킷 실패로 집계하지 않는다
+                    # (존재하지 않는 종목 몇 번 조회로 전체 시세가 차단되는 오탐 방지)
                     logger.warning(
                         f"KIS 시세 조회 응답 에러 ({stock_code}): "
                         f"rt_cd={data.get('rt_cd')} msg={data.get('msg1')}"
                     )
-                    _circuit_breaker.record_failure()
+                    _circuit_breaker.record_success()
             else:
                 # KIS는 HTTP 500에도 본문(msg_cd/msg1)에 실패 사유를 담아준다.
                 # (예: EGW00201 초당 거래건수 초과, 권한/헤더 문제 등)
@@ -330,23 +358,30 @@ class KISAPIClient:
             }
 
             _kis_throttle.wait()  # 초당 거래건수 초과 방지
-            resp = requests.get(url, headers=headers, params=params, timeout=KISConfig.API_TIMEOUT)
+            resp = requests.get(
+                url, headers=headers, params=params, timeout=KISConfig.API_TIMEOUT
+            )
 
             if resp.status_code == 200:
                 data = resp.json()
                 if data.get("rt_cd") == "0":
                     output = data.get("output", [])
                     results = []
-                    for item in output[:cls.VOLUME_RANK_FETCH_SIZE]:
+                    for item in output[: cls.VOLUME_RANK_FETCH_SIZE]:
                         try:
-                            results.append({
-                                "code": item.get("mksc_shrn_iscd", "") or item.get("stck_shrn_iscd", ""),
-                                "name": item.get("hts_kor_isnm", ""),
-                                "price": int(item.get("stck_prpr", 0) or 0),
-                                "change": float(item.get("prdy_ctrt", 0) or 0),
-                                "volume": int(item.get("acml_vol", 0) or 0),
-                                "trading_value": int(item.get("acml_tr_pbmn", 0) or 0),
-                            })
+                            results.append(
+                                {
+                                    "code": item.get("mksc_shrn_iscd", "")
+                                    or item.get("stck_shrn_iscd", ""),
+                                    "name": item.get("hts_kor_isnm", ""),
+                                    "price": int(item.get("stck_prpr", 0) or 0),
+                                    "change": float(item.get("prdy_ctrt", 0) or 0),
+                                    "volume": int(item.get("acml_vol", 0) or 0),
+                                    "trading_value": int(
+                                        item.get("acml_tr_pbmn", 0) or 0
+                                    ),
+                                }
+                            )
                         except (ValueError, TypeError, KeyError):
                             continue
                     return results
@@ -373,10 +408,14 @@ class KISAPIClient:
         upper = name.upper()
         if "ETN" in upper:
             return True
-        return any(upper.startswith(prefix.upper()) for prefix in KISConfig.ETF_BRAND_PREFIXES)
+        return any(
+            upper.startswith(prefix.upper()) for prefix in KISConfig.ETF_BRAND_PREFIXES
+        )
 
     @classmethod
-    def get_fluctuation_rank(cls, sort: str = "1", category: str = "stock") -> List[Dict]:
+    def get_fluctuation_rank(
+        cls, sort: str = "1", category: str = "stock"
+    ) -> List[Dict]:
         """
         등락률 순위 조회 (거래량 순위 데이터를 등락률로 재정렬)
         sort: 1=상승률순, 2=하락률순
@@ -394,7 +433,8 @@ class KISAPIClient:
         else:
             # 개별 종목만: ETF/ETN, 레버리지/인버스 제외
             items = [
-                s for s in items
+                s
+                for s in items
                 if not cls._is_etf_or_etn(s.get("name", ""))
                 and not cls._is_excluded_from_ranking(s.get("name", ""))
             ]
@@ -419,13 +459,12 @@ class KISAPIClient:
 
         try:
             url = f"{KISConfig.BASE_URL}/uapi/domestic-stock/v1/quotations/inquire-index-price"
-            params = {
-                "FID_COND_MRKT_DIV_CODE": "U",
-                "FID_INPUT_ISCD": index_code
-            }
+            params = {"FID_COND_MRKT_DIV_CODE": "U", "FID_INPUT_ISCD": index_code}
 
             _kis_throttle.wait()  # 초당 거래건수 초과 방지
-            resp = requests.get(url, headers=headers, params=params, timeout=KISConfig.API_TIMEOUT)
+            resp = requests.get(
+                url, headers=headers, params=params, timeout=KISConfig.API_TIMEOUT
+            )
 
             if resp.status_code == 200:
                 data = resp.json()
@@ -450,7 +489,9 @@ class StockService:
     """주식 시세 관련 서비스"""
 
     # 시세 캐시 (TTL: 1분)
+    # TTLCache는 스레드 안전하지 않으므로 배치 병렬 조회 시 락으로 보호
     _price_cache = TTLCache(maxsize=500, ttl=CacheConfig.STOCK_PRICE_TTL)
+    _price_cache_lock = threading.Lock()
 
     @staticmethod
     def _cap_limit(limit: int, default: int = 10) -> int:
@@ -524,6 +565,8 @@ class StockService:
     _name_to_code = {v: k for k, v in STOCK_LIST.items()}
 
     # API에서 가져온 종목 캐시 (급등주/급락주 등)
+    # 쓰기는 _cache_load_lock으로 보호, 순회는 스냅샷(list) 사용
+    # (순회 중 다른 스레드가 추가하면 RuntimeError 발생 방지)
     _dynamic_stocks_by_name = {}  # {name: code}
     _dynamic_stocks_by_code = {}  # {code: name}
     _cache_loaded = False  # DB 캐시 로드 여부
@@ -542,6 +585,7 @@ class StockService:
 
             try:
                 from models import StockCache
+
                 db = SessionLocal()
                 try:
                     cached_stocks = db.query(StockCache).all()
@@ -573,19 +617,26 @@ class StockService:
         if cls._dynamic_stocks_by_code.get(code) == name:
             return
 
-        # 메모리 캐시
-        cls._dynamic_stocks_by_name[name] = code
-        cls._dynamic_stocks_by_code[code] = name
+        # 메모리 캐시 (쓰기는 락으로 보호 — 순회 스냅샷과의 경합 방지)
+        with cls._cache_load_lock:
+            cls._dynamic_stocks_by_name[name] = code
+            cls._dynamic_stocks_by_code[code] = name
 
         # DB 영구 저장
         try:
             from models import StockCache
+
             db = SessionLocal()
             try:
-                existing = db.query(StockCache).filter(StockCache.stock_code == code).first()
+                existing = (
+                    db.query(StockCache).filter(StockCache.stock_code == code).first()
+                )
                 if existing:
                     # 기존 이름이 코드가 아닌 경우에만 업데이트 스킵
-                    if existing.stock_name != name and not existing.stock_name.isdigit():
+                    if (
+                        existing.stock_name != name
+                        and not existing.stock_name.isdigit()
+                    ):
                         pass  # 기존 좋은 이름 유지
                     else:
                         existing.stock_name = name
@@ -629,8 +680,8 @@ class StockService:
             if query in name:
                 return {"code": code, "name": name}
 
-        # 6. 부분 이름 매칭 (동적 캐시)
-        for name, code in cls._dynamic_stocks_by_name.items():
+        # 6. 부분 이름 매칭 (동적 캐시) — 순회 중 변경 방지 위해 스냅샷 사용
+        for name, code in list(cls._dynamic_stocks_by_name.items()):
             if query in name:
                 return {"code": code, "name": name}
 
@@ -666,9 +717,9 @@ class StockService:
                 if len(results) >= limit:
                     break
 
-        # 동적 캐시에서도 검색
+        # 동적 캐시에서도 검색 (스냅샷 순회)
         if len(results) < limit:
-            for name, code in cls._dynamic_stocks_by_name.items():
+            for name, code in list(cls._dynamic_stocks_by_name.items()):
                 if code in seen_codes:
                     continue
                 name_clean = name.replace(" ", "")
@@ -704,9 +755,9 @@ class StockService:
                 if len(results) >= limit:
                     break
 
-        # 동적 캐시에서도 검색
+        # 동적 캐시에서도 검색 (스냅샷 순회)
         if len(results) < limit:
-            for name, code in cls._dynamic_stocks_by_name.items():
+            for name, code in list(cls._dynamic_stocks_by_name.items()):
                 if code in seen_codes:
                     continue
                 if query in name.lower() or query in code:
@@ -726,9 +777,11 @@ class StockService:
         code = stock_info["code"]
         name = stock_info["name"]  # 우리가 가진 종목명 사용
 
-        # 캐시 확인
-        if code in cls._price_cache:
-            return cls._price_cache[code]
+        # 캐시 확인 (TTL 만료 처리와 경합하지 않도록 락 보호)
+        with cls._price_cache_lock:
+            cached = cls._price_cache.get(code)
+        if cached:
+            return cached
 
         # KIS API 조회
         result = KISAPIClient.get_stock_price(code)
@@ -736,12 +789,15 @@ class StockService:
         if result:
             # API 응답의 이름 대신 우리 종목명 사용
             result["name"] = name
-            cls._price_cache[code] = result
+            with cls._price_cache_lock:
+                cls._price_cache[code] = result
             return result
 
         # 종목은 인식했으나 KIS 시세 API가 응답하지 않은 경우
         # (종목명 오타가 아니라 시세 조회 실패임을 로그로 명확히 남긴다)
-        logger.warning(f"시세 조회 실패: 종목 인식 OK이나 KIS 응답 없음 ({name}/{code})")
+        logger.warning(
+            f"시세 조회 실패: 종목 인식 OK이나 KIS 응답 없음 ({name}/{code})"
+        )
         return None
 
     @classmethod
@@ -756,7 +812,9 @@ class StockService:
         return stocks
 
     @classmethod
-    def get_top_trading_value(cls, market: str = "KOSPI", limit: int = 10) -> List[Dict]:
+    def get_top_trading_value(
+        cls, market: str = "KOSPI", limit: int = 10
+    ) -> List[Dict]:
         """거래대금 상위 종목"""
         limit = cls._cap_limit(limit, default=10)
         market_code = "J" if market == "KOSPI" else "Q"
@@ -837,14 +895,15 @@ class StockService:
 
         prices = {}
 
-        # 캐시에 있는 종목은 즉시 반환, 없는 것만 API 호출
+        # 캐시에 있는 종목은 즉시 반환, 없는 것만 API 호출 (락 보호)
         uncached_codes = []
-        for code in stock_codes:
-            if code in cls._price_cache:
-                cached = cls._price_cache[code]
-                prices[code] = cached["price"]
-            else:
-                uncached_codes.append(code)
+        with cls._price_cache_lock:
+            for code in stock_codes:
+                cached = cls._price_cache.get(code)
+                if cached:
+                    prices[code] = cached["price"]
+                else:
+                    uncached_codes.append(code)
 
         if not uncached_codes:
             return prices
@@ -855,7 +914,9 @@ class StockService:
             return code, stock_info
 
         with ThreadPoolExecutor(max_workers=min(5, len(uncached_codes))) as executor:
-            futures = {executor.submit(fetch_price, code): code for code in uncached_codes}
+            futures = {
+                executor.submit(fetch_price, code): code for code in uncached_codes
+            }
             for future in as_completed(futures):
                 try:
                     code, stock_info = future.result(timeout=15)

@@ -3,6 +3,7 @@
 - 급등주, 급락주, 인기종목
 - 시장 현황, 뉴스, 검색
 """
+
 from typing import Dict
 
 from services import StockService, NewsService
@@ -22,10 +23,22 @@ class MarketHandlerMixin(BaseHandlerMixin):
             return KakaoResponse.text_with_buttons(
                 "🔍 어떤 종목을 찾으시나요?",
                 [
-                    {"label": "🔍 반도체", "action": "message", "messageText": "/검색 반도체"},
-                    {"label": "🔍 자동차", "action": "message", "messageText": "/검색 자동차"},
-                    {"label": "🔍 바이오", "action": "message", "messageText": "/검색 바이오"},
-                ]
+                    {
+                        "label": "🔍 반도체",
+                        "action": "message",
+                        "messageText": "/검색 반도체",
+                    },
+                    {
+                        "label": "🔍 자동차",
+                        "action": "message",
+                        "messageText": "/검색 자동차",
+                    },
+                    {
+                        "label": "🔍 바이오",
+                        "action": "message",
+                        "messageText": "/검색 바이오",
+                    },
+                ],
             )
 
         query = parts[1].strip()
@@ -36,8 +49,12 @@ class MarketHandlerMixin(BaseHandlerMixin):
                 f"'{query}' 관련 종목을 찾을 수 없습니다.",
                 [
                     {"label": "🚀 급등주", "action": "message", "messageText": "/급등"},
-                    {"label": "📊 인기종목", "action": "message", "messageText": "/인기"},
-                ]
+                    {
+                        "label": "📊 인기종목",
+                        "action": "message",
+                        "messageText": "/인기",
+                    },
+                ],
             )
 
         # 검색 결과에 시세 미리보기 추가 (배치 조회로 성능 최적화)
@@ -57,8 +74,17 @@ class MarketHandlerMixin(BaseHandlerMixin):
             else:
                 msg += f"\n{i}. {r['name']}"
 
-        buttons = [{"label": f"📊 {r['name']}", "action": "message", "messageText": f"/시세 {r['name']}"} for r in results[:3]]
-        buttons.append({"label": "🚀 급등주", "action": "message", "messageText": "/급등"})
+        buttons = [
+            {
+                "label": f"📊 {r['name']}",
+                "action": "message",
+                "messageText": f"/시세 {r['name']}",
+            }
+            for r in results[:3]
+        ]
+        buttons.append(
+            {"label": "🚀 급등주", "action": "message", "messageText": "/급등"}
+        )
         buttons.extend(self._get_game_buttons())
 
         return KakaoResponse.text_with_buttons(msg, buttons)
@@ -73,8 +99,12 @@ class MarketHandlerMixin(BaseHandlerMixin):
                 [
                     {"label": "🚀 급등주", "action": "message", "messageText": "/급등"},
                     {"label": "📉 급락주", "action": "message", "messageText": "/급락"},
-                    {"label": "💼 포트폴리오", "action": "message", "messageText": "/포트폴리오"},
-                ]
+                    {
+                        "label": "💼 포트폴리오",
+                        "action": "message",
+                        "messageText": "/포트폴리오",
+                    },
+                ],
             )
 
         msg = "🔥 인기종목 TOP 5 (거래대금순)\n"
@@ -90,8 +120,17 @@ class MarketHandlerMixin(BaseHandlerMixin):
             else:
                 msg += f"\n   {price:,}원 ({change:+.2f}%) {emoji}\n"
 
-        buttons = [{"label": f"📊 {s.get('name', '???')}", "action": "message", "messageText": f"/시세 {s.get('name', '')}"} for s in stocks[:4]]
-        buttons.append({"label": "🚀 급등주", "action": "message", "messageText": "/급등"})
+        buttons = [
+            {
+                "label": f"📊 {s.get('name', '???')}",
+                "action": "message",
+                "messageText": f"/시세 {s.get('name', '')}",
+            }
+            for s in stocks[:4]
+        ]
+        buttons.append(
+            {"label": "🚀 급등주", "action": "message", "messageText": "/급등"}
+        )
 
         return KakaoResponse.text_with_buttons(msg, buttons)
 
@@ -105,8 +144,12 @@ class MarketHandlerMixin(BaseHandlerMixin):
                 [
                     {"label": "🚀 급등주", "action": "message", "messageText": "/급등"},
                     {"label": "📉 급락주", "action": "message", "messageText": "/급락"},
-                    {"label": "💼 포트폴리오", "action": "message", "messageText": "/포트폴리오"},
-                ]
+                    {
+                        "label": "💼 포트폴리오",
+                        "action": "message",
+                        "messageText": "/포트폴리오",
+                    },
+                ],
             )
 
         msg = "📊 거래량 TOP 5\n"
@@ -118,8 +161,17 @@ class MarketHandlerMixin(BaseHandlerMixin):
             msg += f"\n{i}. {name}"
             msg += f"\n   {price:,}원 ({change:+.2f}%) {emoji}\n"
 
-        buttons = [{"label": f"📊 {s.get('name', '???')}", "action": "message", "messageText": f"/시세 {s.get('name', '')}"} for s in stocks[:4]]
-        buttons.append({"label": "🚀 급등주", "action": "message", "messageText": "/급등"})
+        buttons = [
+            {
+                "label": f"📊 {s.get('name', '???')}",
+                "action": "message",
+                "messageText": f"/시세 {s.get('name', '')}",
+            }
+            for s in stocks[:4]
+        ]
+        buttons.append(
+            {"label": "🚀 급등주", "action": "message", "messageText": "/급등"}
+        )
 
         return KakaoResponse.text_with_buttons(msg, buttons)
 
@@ -133,8 +185,12 @@ class MarketHandlerMixin(BaseHandlerMixin):
                 [
                     self._popular_stock_btn(),
                     {"label": "📉 급락주", "action": "message", "messageText": "/급락"},
-                    {"label": "💼 포트폴리오", "action": "message", "messageText": "/포트폴리오"},
-                ]
+                    {
+                        "label": "💼 포트폴리오",
+                        "action": "message",
+                        "messageText": "/포트폴리오",
+                    },
+                ],
             )
 
         msg = "🚀 오늘의 급등주 TOP 5\n"
@@ -144,9 +200,20 @@ class MarketHandlerMixin(BaseHandlerMixin):
             price = s.get("price", 0)
             msg += f"\n{i}. {name} 📈{change:+.1f}% ({price:,}원)"
 
-        buttons = [{"label": f"🔥 {s.get('name', '???')}", "action": "message", "messageText": f"/시세 {s.get('name', '')}"} for s in stocks[:3]]
-        buttons.append({"label": "📉 급락주", "action": "message", "messageText": "/급락"})
-        buttons.append({"label": "📊 ETF급등", "action": "message", "messageText": "/ETF급등"})
+        buttons = [
+            {
+                "label": f"🔥 {s.get('name', '???')}",
+                "action": "message",
+                "messageText": f"/시세 {s.get('name', '')}",
+            }
+            for s in stocks[:3]
+        ]
+        buttons.append(
+            {"label": "📉 급락주", "action": "message", "messageText": "/급락"}
+        )
+        buttons.append(
+            {"label": "📊 ETF급등", "action": "message", "messageText": "/ETF급등"}
+        )
 
         return KakaoResponse.text_with_buttons(msg, buttons)
 
@@ -160,8 +227,12 @@ class MarketHandlerMixin(BaseHandlerMixin):
                 [
                     self._popular_stock_btn("💎"),
                     {"label": "🚀 급등주", "action": "message", "messageText": "/급등"},
-                    {"label": "💼 포트폴리오", "action": "message", "messageText": "/포트폴리오"},
-                ]
+                    {
+                        "label": "💼 포트폴리오",
+                        "action": "message",
+                        "messageText": "/포트폴리오",
+                    },
+                ],
             )
 
         msg = "📉 오늘의 급락주 TOP 5 (저점매수 기회?)\n"
@@ -171,9 +242,20 @@ class MarketHandlerMixin(BaseHandlerMixin):
             price = s.get("price", 0)
             msg += f"\n{i}. {name} 🔻{change:+.1f}% ({price:,}원)"
 
-        buttons = [{"label": f"💎 {s.get('name', '???')}", "action": "message", "messageText": f"/시세 {s.get('name', '')}"} for s in stocks[:3]]
-        buttons.append({"label": "🚀 급등주", "action": "message", "messageText": "/급등"})
-        buttons.append({"label": "📊 ETF급락", "action": "message", "messageText": "/ETF급락"})
+        buttons = [
+            {
+                "label": f"💎 {s.get('name', '???')}",
+                "action": "message",
+                "messageText": f"/시세 {s.get('name', '')}",
+            }
+            for s in stocks[:3]
+        ]
+        buttons.append(
+            {"label": "🚀 급등주", "action": "message", "messageText": "/급등"}
+        )
+        buttons.append(
+            {"label": "📊 ETF급락", "action": "message", "messageText": "/ETF급락"}
+        )
 
         return KakaoResponse.text_with_buttons(msg, buttons)
 
@@ -187,8 +269,12 @@ class MarketHandlerMixin(BaseHandlerMixin):
                 [
                     {"label": "🚀 급등주", "action": "message", "messageText": "/급등"},
                     {"label": "📉 급락주", "action": "message", "messageText": "/급락"},
-                    {"label": "💼 포트폴리오", "action": "message", "messageText": "/포트폴리오"},
-                ]
+                    {
+                        "label": "💼 포트폴리오",
+                        "action": "message",
+                        "messageText": "/포트폴리오",
+                    },
+                ],
             )
 
         msg = "📊 오늘의 ETF 급등 TOP 5\n"
@@ -198,9 +284,20 @@ class MarketHandlerMixin(BaseHandlerMixin):
             price = s.get("price", 0)
             msg += f"\n{i}. {name} 📈{change:+.1f}% ({price:,}원)"
 
-        buttons = [{"label": f"🔥 {s.get('name', '???')}", "action": "message", "messageText": f"/시세 {s.get('name', '')}"} for s in stocks[:3]]
-        buttons.append({"label": "📊 ETF급락", "action": "message", "messageText": "/ETF급락"})
-        buttons.append({"label": "🚀 급등주", "action": "message", "messageText": "/급등"})
+        buttons = [
+            {
+                "label": f"🔥 {s.get('name', '???')}",
+                "action": "message",
+                "messageText": f"/시세 {s.get('name', '')}",
+            }
+            for s in stocks[:3]
+        ]
+        buttons.append(
+            {"label": "📊 ETF급락", "action": "message", "messageText": "/ETF급락"}
+        )
+        buttons.append(
+            {"label": "🚀 급등주", "action": "message", "messageText": "/급등"}
+        )
 
         return KakaoResponse.text_with_buttons(msg, buttons)
 
@@ -214,8 +311,12 @@ class MarketHandlerMixin(BaseHandlerMixin):
                 [
                     {"label": "🚀 급등주", "action": "message", "messageText": "/급등"},
                     {"label": "📉 급락주", "action": "message", "messageText": "/급락"},
-                    {"label": "💼 포트폴리오", "action": "message", "messageText": "/포트폴리오"},
-                ]
+                    {
+                        "label": "💼 포트폴리오",
+                        "action": "message",
+                        "messageText": "/포트폴리오",
+                    },
+                ],
             )
 
         msg = "📊 오늘의 ETF 급락 TOP 5\n"
@@ -225,9 +326,20 @@ class MarketHandlerMixin(BaseHandlerMixin):
             price = s.get("price", 0)
             msg += f"\n{i}. {name} 🔻{change:+.1f}% ({price:,}원)"
 
-        buttons = [{"label": f"💎 {s.get('name', '???')}", "action": "message", "messageText": f"/시세 {s.get('name', '')}"} for s in stocks[:3]]
-        buttons.append({"label": "📊 ETF급등", "action": "message", "messageText": "/ETF급등"})
-        buttons.append({"label": "📉 급락주", "action": "message", "messageText": "/급락"})
+        buttons = [
+            {
+                "label": f"💎 {s.get('name', '???')}",
+                "action": "message",
+                "messageText": f"/시세 {s.get('name', '')}",
+            }
+            for s in stocks[:3]
+        ]
+        buttons.append(
+            {"label": "📊 ETF급등", "action": "message", "messageText": "/ETF급등"}
+        )
+        buttons.append(
+            {"label": "📉 급락주", "action": "message", "messageText": "/급락"}
+        )
 
         return KakaoResponse.text_with_buttons(msg, buttons)
 
@@ -241,8 +353,12 @@ class MarketHandlerMixin(BaseHandlerMixin):
                 [
                     {"label": "🚀 급등주", "action": "message", "messageText": "/급등"},
                     {"label": "📉 급락주", "action": "message", "messageText": "/급락"},
-                    {"label": "💼 포트폴리오", "action": "message", "messageText": "/포트폴리오"},
-                ]
+                    {
+                        "label": "💼 포트폴리오",
+                        "action": "message",
+                        "messageText": "/포트폴리오",
+                    },
+                ],
             )
 
         msg = "📈 시장 현황\n"
@@ -268,8 +384,8 @@ class MarketHandlerMixin(BaseHandlerMixin):
             [
                 {"label": "🚀 급등주", "action": "message", "messageText": "/급등"},
                 {"label": "📉 급락주", "action": "message", "messageText": "/급락"},
-                {"label": "📊 거래량", "action": "message", "messageText": "/인기"}
-            ]
+                {"label": "📊 거래량", "action": "message", "messageText": "/인기"},
+            ],
         )
 
     def handle_news(self) -> Dict:
@@ -281,7 +397,11 @@ class MarketHandlerMixin(BaseHandlerMixin):
             title = "📰 주식시장 뉴스"
             buttons = [
                 self._popular_stock_btn("📰", "/뉴스"),
-                {"label": "📰 반도체", "action": "message", "messageText": "/뉴스 반도체"},
+                {
+                    "label": "📰 반도체",
+                    "action": "message",
+                    "messageText": "/뉴스 반도체",
+                },
                 {"label": "🚀 급등주", "action": "message", "messageText": "/급등"},
             ]
         else:
@@ -289,8 +409,16 @@ class MarketHandlerMixin(BaseHandlerMixin):
             news = NewsService.get_stock_news(query, limit=3)
             title = f"📰 '{query}' 관련 뉴스"
             buttons = [
-                {"label": f"📈 {query} 매수", "action": "message", "messageText": f"/매수 {query} 10"},
-                {"label": f"📉 {query} 매도", "action": "message", "messageText": f"/매도 {query} 10"},
+                {
+                    "label": f"📈 {query} 매수",
+                    "action": "message",
+                    "messageText": f"/매수 {query} 10",
+                },
+                {
+                    "label": f"📉 {query} 매도",
+                    "action": "message",
+                    "messageText": f"/매도 {query} 10",
+                },
                 {"label": "📰 다른 뉴스", "action": "message", "messageText": "/뉴스"},
                 {"label": "🚀 급등주", "action": "message", "messageText": "/급등"},
             ]
@@ -300,13 +428,17 @@ class MarketHandlerMixin(BaseHandlerMixin):
                 "📰 뉴스를 불러오지 못했습니다.",
                 [
                     {"label": "🚀 급등주", "action": "message", "messageText": "/급등"},
-                    {"label": "💼 포트폴리오", "action": "message", "messageText": "/포트폴리오"},
-                ]
+                    {
+                        "label": "💼 포트폴리오",
+                        "action": "message",
+                        "messageText": "/포트폴리오",
+                    },
+                ],
             )
 
         msg = f"{title}\n"
         for i, n in enumerate(news, 1):
-            t = n.get('title', '')
+            t = n.get("title", "")
             if len(t) > 35:
                 t = t[:35] + "..."
             msg += f"\n{i}. {t}"

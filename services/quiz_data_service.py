@@ -4,6 +4,7 @@
 - 캐시로 API 호출 최소화 (6시간 TTL)
 - 주식 추천 절대 금지, 비하 표현 금지
 """
+
 import random
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional
@@ -60,7 +61,9 @@ _FALL_DESCRIPTIONS = [
 ]
 
 
-def _fetch_stock_prices(ticker: str, begin_dt: str, end_dt: str) -> Optional[List[Dict]]:
+def _fetch_stock_prices(
+    ticker: str, begin_dt: str, end_dt: str
+) -> Optional[List[Dict]]:
     """
     공공데이터포털 API로 종목의 기간별 종가 조회
     - begin_dt, end_dt: YYYYMMDD 형식

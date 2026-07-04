@@ -4,10 +4,15 @@ services/common.py 단위 테스트
 - validate_bet, validate_quantity
 - error_response, success_response
 """
+
 from services.common import (
-    safe_add, safe_subtract, safe_multiply,
-    validate_bet, validate_quantity,
-    error_response, success_response,
+    safe_add,
+    safe_subtract,
+    safe_multiply,
+    validate_bet,
+    validate_quantity,
+    error_response,
+    success_response,
     MAX_SAFE_AMOUNT,
 )
 from config import GameConfig

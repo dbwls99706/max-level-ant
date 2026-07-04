@@ -3,6 +3,7 @@
 - 레버리지/인버스 등 지수 배율 상품이 급등/급락 순위에서 제외되는지 검증
 - get_volume_rank 결과를 등락률로 재정렬하는 로직 검증
 """
+
 from unittest.mock import patch
 
 from config import KISConfig
@@ -11,12 +12,42 @@ from services.stock_service import KISAPIClient
 
 # 거래량 순위 모킹 데이터 (레버리지/인버스 + 일반 종목 혼합)
 SAMPLE_VOLUME_RANK = [
-    {"code": "122630", "name": "KODEX 레버리지", "price": 20000, "change": 5.5, "volume": 1000},
-    {"code": "252670", "name": "KODEX 200선물인버스2X", "price": 3000, "change": -6.0, "volume": 900},
-    {"code": "005930", "name": "삼성전자", "price": 70000, "change": 3.2, "volume": 800},
-    {"code": "000660", "name": "SK하이닉스", "price": 150000, "change": -4.1, "volume": 700},
+    {
+        "code": "122630",
+        "name": "KODEX 레버리지",
+        "price": 20000,
+        "change": 5.5,
+        "volume": 1000,
+    },
+    {
+        "code": "252670",
+        "name": "KODEX 200선물인버스2X",
+        "price": 3000,
+        "change": -6.0,
+        "volume": 900,
+    },
+    {
+        "code": "005930",
+        "name": "삼성전자",
+        "price": 70000,
+        "change": 3.2,
+        "volume": 800,
+    },
+    {
+        "code": "000660",
+        "name": "SK하이닉스",
+        "price": 150000,
+        "change": -4.1,
+        "volume": 700,
+    },
     {"code": "035720", "name": "카카오", "price": 50000, "change": 1.0, "volume": 600},
-    {"code": "373220", "name": "LG에너지솔루션", "price": 400000, "change": -2.0, "volume": 500},
+    {
+        "code": "373220",
+        "name": "LG에너지솔루션",
+        "price": 400000,
+        "change": -2.0,
+        "volume": 500,
+    },
 ]
 
 
@@ -33,7 +64,9 @@ def test_excluded_from_ranking_detects_leverage_inverse():
 
 def test_gainers_exclude_leverage():
     """급등주(sort=1)에 레버리지/인버스가 포함되지 않는다"""
-    with patch.object(KISAPIClient, "get_volume_rank", return_value=list(SAMPLE_VOLUME_RANK)):
+    with patch.object(
+        KISAPIClient, "get_volume_rank", return_value=list(SAMPLE_VOLUME_RANK)
+    ):
         result = KISAPIClient.get_fluctuation_rank(sort="1")
 
     names = [s["name"] for s in result]
@@ -48,7 +81,9 @@ def test_gainers_exclude_leverage():
 
 def test_losers_exclude_leverage():
     """급락주(sort=2)에 레버리지/인버스가 포함되지 않는다"""
-    with patch.object(KISAPIClient, "get_volume_rank", return_value=list(SAMPLE_VOLUME_RANK)):
+    with patch.object(
+        KISAPIClient, "get_volume_rank", return_value=list(SAMPLE_VOLUME_RANK)
+    ):
         result = KISAPIClient.get_fluctuation_rank(sort="2")
 
     names = [s["name"] for s in result]
@@ -70,8 +105,20 @@ def test_fluctuation_rank_empty_when_no_data():
 def test_all_excluded_returns_empty():
     """후보가 전부 제외 대상이면 빈 리스트를 반환한다"""
     only_leverage = [
-        {"code": "122630", "name": "KODEX 레버리지", "price": 20000, "change": 5.5, "volume": 1000},
-        {"code": "252670", "name": "KODEX 인버스", "price": 3000, "change": -6.0, "volume": 900},
+        {
+            "code": "122630",
+            "name": "KODEX 레버리지",
+            "price": 20000,
+            "change": 5.5,
+            "volume": 1000,
+        },
+        {
+            "code": "252670",
+            "name": "KODEX 인버스",
+            "price": 3000,
+            "change": -6.0,
+            "volume": 900,
+        },
     ]
     with patch.object(KISAPIClient, "get_volume_rank", return_value=only_leverage):
         assert KISAPIClient.get_fluctuation_rank(sort="1") == []
@@ -89,13 +136,55 @@ def test_exclude_keywords_configurable():
 
 # 일반 ETF(레버리지 아님) + ETN + 개별 종목 혼합
 SAMPLE_MIXED_RANK = [
-    {"code": "069500", "name": "KODEX 200", "price": 35000, "change": 2.5, "volume": 2000},
-    {"code": "102110", "name": "TIGER 200", "price": 36000, "change": -3.0, "volume": 1900},
-    {"code": "385720", "name": "RISE 2차전지", "price": 12000, "change": 4.0, "volume": 1800},
-    {"code": "490450", "name": "SOL 미국배당", "price": 11000, "change": -1.5, "volume": 1700},
-    {"code": "530031", "name": "삼성 레버리지 WTI원유 선물 ETN", "price": 5000, "change": 7.0, "volume": 1600},
-    {"code": "005930", "name": "삼성전자", "price": 70000, "change": 3.2, "volume": 800},
-    {"code": "000660", "name": "SK하이닉스", "price": 150000, "change": -4.1, "volume": 700},
+    {
+        "code": "069500",
+        "name": "KODEX 200",
+        "price": 35000,
+        "change": 2.5,
+        "volume": 2000,
+    },
+    {
+        "code": "102110",
+        "name": "TIGER 200",
+        "price": 36000,
+        "change": -3.0,
+        "volume": 1900,
+    },
+    {
+        "code": "385720",
+        "name": "RISE 2차전지",
+        "price": 12000,
+        "change": 4.0,
+        "volume": 1800,
+    },
+    {
+        "code": "490450",
+        "name": "SOL 미국배당",
+        "price": 11000,
+        "change": -1.5,
+        "volume": 1700,
+    },
+    {
+        "code": "530031",
+        "name": "삼성 레버리지 WTI원유 선물 ETN",
+        "price": 5000,
+        "change": 7.0,
+        "volume": 1600,
+    },
+    {
+        "code": "005930",
+        "name": "삼성전자",
+        "price": 70000,
+        "change": 3.2,
+        "volume": 800,
+    },
+    {
+        "code": "000660",
+        "name": "SK하이닉스",
+        "price": 150000,
+        "change": -4.1,
+        "volume": 700,
+    },
     {"code": "035720", "name": "카카오", "price": 50000, "change": 1.0, "volume": 600},
 ]
 
@@ -115,7 +204,9 @@ def test_is_etf_or_etn_detection():
 
 def test_stock_category_excludes_etf():
     """개별 종목 급등주는 일반 ETF/ETN도 모두 제외한다"""
-    with patch.object(KISAPIClient, "get_volume_rank", return_value=list(SAMPLE_MIXED_RANK)):
+    with patch.object(
+        KISAPIClient, "get_volume_rank", return_value=list(SAMPLE_MIXED_RANK)
+    ):
         result = KISAPIClient.get_fluctuation_rank(sort="1", category="stock")
 
     names = [s["name"] for s in result]
@@ -126,7 +217,9 @@ def test_stock_category_excludes_etf():
 
 def test_etf_category_only_etf():
     """ETF 급등은 ETF/ETN만 노출하고 상승률 순으로 정렬한다"""
-    with patch.object(KISAPIClient, "get_volume_rank", return_value=list(SAMPLE_MIXED_RANK)):
+    with patch.object(
+        KISAPIClient, "get_volume_rank", return_value=list(SAMPLE_MIXED_RANK)
+    ):
         result = KISAPIClient.get_fluctuation_rank(sort="1", category="etf")
 
     names = [s["name"] for s in result]
@@ -142,7 +235,9 @@ def test_etf_category_only_etf():
 
 def test_etf_category_losers_sorted():
     """ETF 급락은 하락률 순으로 정렬한다"""
-    with patch.object(KISAPIClient, "get_volume_rank", return_value=list(SAMPLE_MIXED_RANK)):
+    with patch.object(
+        KISAPIClient, "get_volume_rank", return_value=list(SAMPLE_MIXED_RANK)
+    ):
         result = KISAPIClient.get_fluctuation_rank(sort="2", category="etf")
 
     changes = [s["change"] for s in result]

@@ -2,6 +2,7 @@
 UserService 단위 테스트
 - 유저 생성, 출석 체크, 닉네임 변경, 잔고 관리
 """
+
 from datetime import timedelta
 from unittest.mock import patch
 
@@ -34,7 +35,9 @@ class TestUserCreation:
 
     def test_create_user_invalid_nickname(self, db):
         """유효하지 않은 닉네임으로 유저 생성 - 닉네임 None으로 처리"""
-        user, is_new = UserService.create_user(db, "bad_nick_user", "a" * 100)  # 너무 긴 닉네임
+        user, is_new = UserService.create_user(
+            db, "bad_nick_user", "a" * 100
+        )  # 너무 긴 닉네임
         assert is_new is True
         assert user.nickname is None
 
@@ -86,8 +89,10 @@ class TestAttendance:
 
     def test_attendance_success(self, db, test_user):
         """출석 성공"""
-        with patch("services.asset_service.AssetService.record_daily_asset"), \
-             patch("services.user_service.log_attendance"):
+        with (
+            patch("services.asset_service.AssetService.record_daily_asset"),
+            patch("services.user_service.log_attendance"),
+        ):
             success, reward, streak, cash, _enhance = UserService.check_attendance(
                 db, test_user.kakao_id
             )
@@ -98,8 +103,10 @@ class TestAttendance:
 
     def test_attendance_duplicate_same_day(self, db, test_user):
         """같은 날 두 번 출석 방지"""
-        with patch("services.asset_service.AssetService.record_daily_asset"), \
-             patch("services.user_service.log_attendance"):
+        with (
+            patch("services.asset_service.AssetService.record_daily_asset"),
+            patch("services.user_service.log_attendance"),
+        ):
             UserService.check_attendance(db, test_user.kakao_id)
             success, reward, streak, cash, _enhance = UserService.check_attendance(
                 db, test_user.kakao_id
@@ -126,8 +133,10 @@ class TestAttendance:
         test_user.attendance_streak = 3
         db.commit()
 
-        with patch("services.asset_service.AssetService.record_daily_asset"), \
-             patch("services.user_service.log_attendance"):
+        with (
+            patch("services.asset_service.AssetService.record_daily_asset"),
+            patch("services.user_service.log_attendance"),
+        ):
             success, reward, streak, cash, _enhance = UserService.check_attendance(
                 db, test_user.kakao_id
             )
@@ -146,8 +155,10 @@ class TestAttendance:
         test_user.attendance_streak = 10
         db.commit()
 
-        with patch("services.asset_service.AssetService.record_daily_asset"), \
-             patch("services.user_service.log_attendance"):
+        with (
+            patch("services.asset_service.AssetService.record_daily_asset"),
+            patch("services.user_service.log_attendance"),
+        ):
             success, reward, streak, cash, _enhance = UserService.check_attendance(
                 db, test_user.kakao_id
             )

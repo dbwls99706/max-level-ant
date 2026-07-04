@@ -5,6 +5,7 @@
 - 주간 보너스
 - safe_add 적용, 예외 처리 개선
 """
+
 import json
 from datetime import datetime
 from typing import Dict, List, Optional, Tuple
@@ -13,7 +14,7 @@ from sqlalchemy.exc import SQLAlchemyError
 
 from models import User
 from config import GameConfig, KST
-from services.common import safe_add
+from services.common import safe_add, get_user_for_update
 from utils import get_service_logger
 
 logger = get_service_logger()
@@ -26,71 +27,71 @@ ACHIEVEMENTS = {
         "name": "첫 거래",
         "description": "첫 번째 주식 거래 완료",
         "reward": 500_000,
-        "icon": "🎯"
+        "icon": "🎯",
     },
     "first_profit": {
         "id": "first_profit",
         "name": "첫 수익",
         "description": "처음으로 수익 실현",
         "reward": 1_000_000,
-        "icon": "💰"
+        "icon": "💰",
     },
     "profit_1m": {
         "id": "profit_1m",
         "name": "100만원 수익",
         "description": "누적 실현 수익 100만원 달성",
         "reward": 2_000_000,
-        "icon": "📈"
+        "icon": "📈",
     },
     "profit_10m": {
         "id": "profit_10m",
         "name": "1000만원 수익",
         "description": "누적 실현 수익 1000만원 달성",
         "reward": 5_000_000,
-        "icon": "🚀"
+        "icon": "🚀",
     },
     "profit_100m": {
         "id": "profit_100m",
         "name": "1억 수익",
         "description": "누적 실현 수익 1억원 달성",
         "reward": 20_000_000,
-        "icon": "👑"
+        "icon": "👑",
     },
     "trades_10": {
         "id": "trades_10",
         "name": "거래 10회",
         "description": "총 10회 거래 달성",
         "reward": 500_000,
-        "icon": "📊"
+        "icon": "📊",
     },
     "trades_50": {
         "id": "trades_50",
         "name": "거래 50회",
         "description": "총 50회 거래 달성",
         "reward": 2_000_000,
-        "icon": "📈"
+        "icon": "📈",
     },
     "trades_100": {
         "id": "trades_100",
         "name": "거래 100회",
         "description": "총 100회 거래 달성",
         "reward": 5_000_000,
-        "icon": "🏆"
+        "icon": "🏆",
     },
     "streak_7": {
         "id": "streak_7",
         "name": "7일 연속 출석",
         "description": "7일 연속 출석 달성",
         "reward": 3_000_000,
-        "icon": "🔥"
+        "icon": "🔥",
     },
     "millionaire": {
         "id": "millionaire",
         "name": "억만장자",
-        "description": "총 자산 1억원 달성",
+        "description": "수익금 1억원 달성",
         "reward": 10_000_000,
-        "icon": "💎"
-    }
+        "icon": "💎",
+    },
 }
 
 
@@ -138,7 +139,7 @@ class MissionService:
             "completed": user.mission_completed == 1,
             "progress": user.daily_trade_count,
             "target": GameConfig.DAILY_MISSION_TRADE_COUNT,
-            "reward": GameConfig.DAILY_MISSION_REWARD
+            "reward": GameConfig.DAILY_MISSION_REWARD,
         }
 
     @staticmethod
@@ -147,7 +148,8 @@ class MissionService:
         거래 횟수 증가 및 미션 완료 체크
         Returns: 미션 완료 시 보상 정보, 아니면 None
         """
-        user = db.query(User).filter(User.kakao_id == kakao_id).first()
+        # FOR UPDATE로 동시 요청 시 카운트/보상 lost update 방지
+        user = get_user_for_update(db, kakao_id)
         if not user:
             return None
 
@@ -166,8 +168,10 @@ class MissionService:
 
             # 미션 완료 체크 (아직 미완료 상태일 때만)
             reward_info = None
-            if (user.mission_completed == 0 and
-                    user.daily_trade_count >= GameConfig.DAILY_MISSION_TRADE_COUNT):
+            if (
+                user.mission_completed == 0
+                and user.daily_trade_count >= GameConfig.DAILY_MISSION_TRADE_COUNT
+            ):
                 user.mission_completed = 1
 
                 # 주간 보너스 체크
@@ -181,7 +185,7 @@ class MissionService:
                 reward_info = {
                     "reward": reward,
                     "is_bonus_day": multiplier > 1.0,
-                    "multiplier": multiplier
+                    "multiplier": multiplier,
                 }
 
             db.commit()
@@ -229,15 +233,18 @@ class MissionService:
 
     @staticmethod
     def check_and_award_achievements(
-            db: Session,
-            kakao_id: str,
-            trade_profit: int = 0
+        db: Session,
+        kakao_id: str,
+        trade_profit: int = 0,
+        total_profit: Optional[int] = None,
     ) -> List[Dict]:
         """
         업적 달성 체크 및 보상 지급
+        total_profit: 수익금 (총 자산 - 초기 자금) — millionaire 판정용 (None이면 스킵)
         Returns: 새로 달성한 업적 목록
         """
-        user = db.query(User).filter(User.kakao_id == kakao_id).first()
+        # FOR UPDATE로 동시 요청 시 보상 lost update 방지
+        user = get_user_for_update(db, kakao_id)
         if not user:
             return []
 
@@ -246,8 +253,7 @@ class MissionService:
         # 실현 수익 업데이트
         if trade_profit > 0:
             user.total_profit_realized = safe_add(
-                user.total_profit_realized or 0,
-                trade_profit
+                user.total_profit_realized or 0, trade_profit
             )
 
         new_achievements = []
@@ -263,6 +269,7 @@ class MissionService:
             ("trades_50", user.total_trades >= 50),
             ("trades_100", user.total_trades >= 100),
             ("streak_7", user.attendance_streak >= 7),
+            ("millionaire", total_profit is not None and total_profit >= 100_000_000),
         ]
 
         for ach_id, condition in checks:
@@ -317,5 +324,5 @@ class MissionService:
             "is_bonus_day": is_bonus,
             "bonus_multiplier": multiplier,
             "total_trades": user.total_trades,
-            "total_profit_realized": user.total_profit_realized or 0
+            "total_profit_realized": user.total_profit_realized or 0,
         }

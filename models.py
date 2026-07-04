@@ -1,10 +1,19 @@
 """
 데이터베이스 모델 정의
 """
+
 from datetime import datetime, timezone
 from sqlalchemy import (
-    Column, String, BigInteger, Integer, Float,
-    DateTime, Date, ForeignKey, UniqueConstraint, Index
+    Column,
+    String,
+    BigInteger,
+    Integer,
+    Float,
+    DateTime,
+    Date,
+    ForeignKey,
+    UniqueConstraint,
+    Index,
 )
 from sqlalchemy.orm import relationship
 from database import Base
@@ -17,31 +26,32 @@ def _utcnow():
 
 class User(Base):
     """유저 테이블"""
+
     __tablename__ = "users"
-    
+
     # 카카오 유저 고유 ID
     kakao_id = Column(String(100), primary_key=True, index=True)
-    
+
     # 닉네임 (카카오에서 제공되면 사용)
     nickname = Column(String(100), nullable=True)
 
     # 닉네임 변경 횟수 (초기 2회 + 한달마다 1회 추가)
     nickname_change_count = Column(Integer, default=0)
     last_nickname_change = Column(Date, nullable=True)
-    
+
     # 보유 현금
     cash = Column(BigInteger, default=10_000_000)
 
     # 초기 자금 (수익률 계산용)
     initial_cash = Column(BigInteger, default=10_000_000)
-    
+
     # 생성일
     created_at = Column(DateTime, default=_utcnow)
-    
+
     # 출석 관련
     last_attendance = Column(Date, nullable=True)
     attendance_streak = Column(Integer, default=0)
-    
+
     # 광고 관련
     last_ad_date = Column(Date, nullable=True)
     ad_count_today = Column(Integer, default=0)
@@ -62,10 +72,18 @@ class User(Base):
     updown_round = Column(Integer, default=0)  # 현재 라운드
     updown_multiplier = Column(Float, default=1.0)  # 누적 배율
 
+    # 시장예측(역사 퀴즈) 출제 상태 — 서버가 출제한 퀴즈만 판정에 사용 (조작 방지)
+    pending_quiz = Column(String(2000), nullable=True)  # 출제된 퀴즈 (JSON)
+    pending_quiz_bet = Column(BigInteger, default=0)  # 출제 시점 베팅 금액
+
     # 각성 시스템 (투자 감각 각성)
-    enhance_level = Column(Integer, default=0)       # 각성 레벨 (0~20)
-    enhance_title_seed = Column(Integer, default=0)  # 칭호 후보 인덱스 (0~4, 레벨업 시 랜덤 고정)
-    enhance_class = Column(Integer, default=0)       # 직군 (0=미선택, 1=국장파, 2=서학파, 3=퀀트파)
+    enhance_level = Column(Integer, default=0)  # 각성 레벨 (0~20)
+    enhance_title_seed = Column(
+        Integer, default=0
+    )  # 칭호 후보 인덱스 (0~4, 레벨업 시 랜덤 고정)
+    enhance_class = Column(
+        Integer, default=0
+    )  # 직군 (0=미선택, 1=국장파, 2=서학파, 3=퀀트파)
 
     # 업적 관련 (JSON 문자열로 저장)
     achievements = Column(String(1000), default="[]")
@@ -73,81 +91,89 @@ class User(Base):
     total_trades = Column(Integer, default=0)  # 총 거래 횟수
 
     # 관계 설정
-    holdings = relationship("Holding", back_populates="user", cascade="all, delete-orphan")
-    transactions = relationship("Transaction", back_populates="user", cascade="all, delete-orphan")
-    
+    holdings = relationship(
+        "Holding", back_populates="user", cascade="all, delete-orphan"
+    )
+    transactions = relationship(
+        "Transaction", back_populates="user", cascade="all, delete-orphan"
+    )
+
     def __repr__(self):
         return f"<User(kakao_id={self.kakao_id}, cash={self.cash:,})>"
 
 
 class Holding(Base):
     """보유 주식 테이블"""
+
     __tablename__ = "holdings"
-    
+
     id = Column(Integer, primary_key=True, autoincrement=True)
-    
+
     # 유저 ID
-    kakao_id = Column(String(100), ForeignKey("users.kakao_id"), nullable=False, index=True)
-    
+    kakao_id = Column(
+        String(100), ForeignKey("users.kakao_id"), nullable=False, index=True
+    )
+
     # 종목 정보
     stock_code = Column(String(20), nullable=False)  # 종목 코드
     stock_name = Column(String(100), nullable=False)  # 종목명
-    
+
     # 보유 수량
     quantity = Column(Integer, default=0)
-    
-    # 평균 매수가
-    avg_price = Column(Integer, default=0)
-    
+
+    # 평균 매수가 (수수료 포함 평단가는 잔고 상한까지 커질 수 있어 BigInteger)
+    avg_price = Column(BigInteger, default=0)
+
     # 총 매수 금액 (평균가 계산용)
     total_invested = Column(BigInteger, default=0)
-    
+
     # 유니크 제약 + 복합 인덱스 (한 유저당 한 종목 하나의 레코드)
     __table_args__ = (
-        UniqueConstraint('kakao_id', 'stock_code', name='unique_user_stock'),
-        Index('ix_holding_user_stock', 'kakao_id', 'stock_code'),  # 조회 성능 최적화
+        UniqueConstraint("kakao_id", "stock_code", name="unique_user_stock"),
+        Index("ix_holding_user_stock", "kakao_id", "stock_code"),  # 조회 성능 최적화
     )
-    
+
     # 관계 설정
     user = relationship("User", back_populates="holdings")
-    
+
     def __repr__(self):
         return f"<Holding(user={self.kakao_id}, stock={self.stock_name}, qty={self.quantity})>"
 
 
 class Transaction(Base):
     """거래 내역 테이블"""
+
     __tablename__ = "transactions"
-    
+
     id = Column(Integer, primary_key=True, autoincrement=True)
-    
+
     # 유저 ID
-    kakao_id = Column(String(100), ForeignKey("users.kakao_id"), nullable=False, index=True)
-    
+    kakao_id = Column(
+        String(100), ForeignKey("users.kakao_id"), nullable=False, index=True
+    )
+
     # 종목 정보
     stock_code = Column(String(20), nullable=False)
     stock_name = Column(String(100), nullable=False)
-    
+
     # 거래 유형 (BUY / SELL)
     trade_type = Column(String(10), nullable=False)
-    
+
     # 거래 정보
     quantity = Column(Integer, nullable=False)  # 수량
     price = Column(Integer, nullable=False)  # 체결가
     total_amount = Column(BigInteger, nullable=False)  # 총 금액
-    fee = Column(Integer, default=0)  # 수수료
-    
+    fee = Column(BigInteger, default=0)  # 수수료 (대형 거래 시 int4 초과 가능)
+
     # 수익 (매도 시에만)
     profit = Column(BigInteger, nullable=True)
     profit_rate = Column(Float, nullable=True)
-    
+
     # 거래 시간
     created_at = Column(DateTime, default=_utcnow)
 
     # 인덱스 (최근 거래 조회 최적화)
-    __table_args__ = (
-        Index('ix_transaction_user_created', 'kakao_id', 'created_at'),
-    )
+    __table_args__ = (Index("ix_transaction_user_created", "kakao_id", "created_at"),)
 
     # 관계 설정
     user = relationship("User", back_populates="transactions")
@@ -158,15 +184,20 @@ class Transaction(Base):
 
 class Battle(Base):
     """배틀 테이블 - 2인 주가 예측 대결"""
+
     __tablename__ = "battles"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
 
     # 도전자 (배틀 생성자)
-    challenger_id = Column(String(100), ForeignKey("users.kakao_id"), nullable=False, index=True)
+    challenger_id = Column(
+        String(100), ForeignKey("users.kakao_id"), nullable=False, index=True
+    )
 
     # 상대방 (배틀 수락자)
-    opponent_id = Column(String(100), ForeignKey("users.kakao_id"), nullable=True, index=True)
+    opponent_id = Column(
+        String(100), ForeignKey("users.kakao_id"), nullable=True, index=True
+    )
 
     # 배틀 대상 종목
     stock_code = Column(String(20), nullable=False)
@@ -205,6 +236,7 @@ class Battle(Base):
 
 class WeeklyChallenge(Base):
     """주간 챌린지 테이블"""
+
     __tablename__ = "weekly_challenges"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
@@ -234,12 +266,17 @@ class WeeklyChallenge(Base):
 
 class UserChallenge(Base):
     """유저별 챌린지 진행 현황"""
+
     __tablename__ = "user_challenges"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
 
-    kakao_id = Column(String(100), ForeignKey("users.kakao_id"), nullable=False, index=True)
-    challenge_id = Column(Integer, ForeignKey("weekly_challenges.id"), nullable=False, index=True)
+    kakao_id = Column(
+        String(100), ForeignKey("users.kakao_id"), nullable=False, index=True
+    )
+    challenge_id = Column(
+        Integer, ForeignKey("weekly_challenges.id"), nullable=False, index=True
+    )
 
     # 현재 진행값
     current_value = Column(Integer, default=0)
@@ -251,7 +288,7 @@ class UserChallenge(Base):
     reward_claimed = Column(Integer, default=0)
 
     __table_args__ = (
-        UniqueConstraint('kakao_id', 'challenge_id', name='unique_user_challenge'),
+        UniqueConstraint("kakao_id", "challenge_id", name="unique_user_challenge"),
     )
 
     def __repr__(self):
@@ -260,11 +297,14 @@ class UserChallenge(Base):
 
 class Milestone(Base):
     """마일스톤 달성 기록"""
+
     __tablename__ = "milestones"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
 
-    kakao_id = Column(String(100), ForeignKey("users.kakao_id"), nullable=False, index=True)
+    kakao_id = Column(
+        String(100), ForeignKey("users.kakao_id"), nullable=False, index=True
+    )
 
     # 마일스톤 타입 (ASSET_10M, ASSET_50M, ASSET_100M, TRADE_100, etc.)
     milestone_type = Column(String(50), nullable=False)
@@ -279,7 +319,7 @@ class Milestone(Base):
     reward_claimed = Column(Integer, default=0)
 
     __table_args__ = (
-        UniqueConstraint('kakao_id', 'milestone_type', name='unique_user_milestone'),
+        UniqueConstraint("kakao_id", "milestone_type", name="unique_user_milestone"),
     )
 
     def __repr__(self):
@@ -288,11 +328,14 @@ class Milestone(Base):
 
 class AssetHistory(Base):
     """자산 히스토리 (차트용)"""
+
     __tablename__ = "asset_history"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
 
-    kakao_id = Column(String(100), ForeignKey("users.kakao_id"), nullable=False, index=True)
+    kakao_id = Column(
+        String(100), ForeignKey("users.kakao_id"), nullable=False, index=True
+    )
 
     # 기록 날짜
     record_date = Column(Date, nullable=False)
@@ -307,7 +350,7 @@ class AssetHistory(Base):
     stock_value = Column(BigInteger, default=0)
 
     __table_args__ = (
-        UniqueConstraint('kakao_id', 'record_date', name='unique_user_date_asset'),
+        UniqueConstraint("kakao_id", "record_date", name="unique_user_date_asset"),
     )
 
     def __repr__(self):
@@ -316,6 +359,7 @@ class AssetHistory(Base):
 
 class ChatRoomMember(Base):
     """채팅방별 유저 매핑 (그룹 챗봇용)"""
+
     __tablename__ = "chatroom_members"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
@@ -324,14 +368,16 @@ class ChatRoomMember(Base):
     group_key = Column(String(200), nullable=False, index=True)
 
     # 유저 ID
-    kakao_id = Column(String(100), ForeignKey("users.kakao_id"), nullable=False, index=True)
+    kakao_id = Column(
+        String(100), ForeignKey("users.kakao_id"), nullable=False, index=True
+    )
 
     # 최근 활동 시간
     last_active = Column(DateTime, default=_utcnow, onupdate=_utcnow)
 
     __table_args__ = (
-        UniqueConstraint('group_key', 'kakao_id', name='unique_chatroom_member'),
-        Index('ix_chatroom_group_kakao', 'group_key', 'kakao_id'),
+        UniqueConstraint("group_key", "kakao_id", name="unique_chatroom_member"),
+        Index("ix_chatroom_group_kakao", "group_key", "kakao_id"),
     )
 
     def __repr__(self):
@@ -340,6 +386,7 @@ class ChatRoomMember(Base):
 
 class StockCache(Base):
     """종목 코드/이름 영구 캐시"""
+
     __tablename__ = "stock_cache"
 
     # 종목 코드 (PK)

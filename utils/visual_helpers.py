@@ -67,17 +67,17 @@ def get_profit_emoji(profit_rate: float) -> str:
     if profit_rate >= 100:
         return "🚀💰"  # 100% 이상
     elif profit_rate >= 50:
-        return "🚀"    # 50% 이상
+        return "🚀"  # 50% 이상
     elif profit_rate >= 20:
-        return "📈"    # 20% 이상
+        return "📈"  # 20% 이상
     elif profit_rate >= 0:
-        return "💹"    # 양수
+        return "💹"  # 양수
     elif profit_rate >= -20:
-        return "📉"    # -20% 이상
+        return "📉"  # -20% 이상
     elif profit_rate >= -50:
-        return "💔"    # -50% 이상
+        return "💔"  # -50% 이상
     else:
-        return "🆘"    # -50% 미만
+        return "🆘"  # -50% 미만
 
 
 def get_tier_title(total_asset: int) -> str:
@@ -90,11 +90,11 @@ def get_tier_title(total_asset: int) -> str:
         return "👑 투자의 신"
     elif total_asset >= 100_000_000:  # 1억
         return "🏆 자산가"
-    elif total_asset >= 50_000_000:   # 5천만
+    elif total_asset >= 50_000_000:  # 5천만
         return "⭐ 재테크 고수"
-    elif total_asset >= 20_000_000:   # 2천만
+    elif total_asset >= 20_000_000:  # 2천만
         return "📊 중급 투자자"
-    elif total_asset >= 10_000_000:   # 1천만
+    elif total_asset >= 10_000_000:  # 1천만
         return "🌱 초보 투자자"
     else:
         return "😢 파산 위기"
@@ -113,11 +113,11 @@ def sanitize_input(text: str, max_length: int = 100) -> str:
     # 위험한 문자 제거/이스케이프
     # 중요: & 문자를 먼저 치환해야 다른 문자들이 &lt; 등으로 변환된 후
     # &가 다시 &amp;lt;로 바뀌는 것을 방지
-    text = text.replace('&', '&amp;')
-    text = text.replace('<', '&lt;')
-    text = text.replace('>', '&gt;')
-    text = text.replace('"', '&quot;')
-    text = text.replace("'", '&#39;')
+    text = text.replace("&", "&amp;")
+    text = text.replace("<", "&lt;")
+    text = text.replace(">", "&gt;")
+    text = text.replace('"', "&quot;")
+    text = text.replace("'", "&#39;")
 
     return text.strip()
 

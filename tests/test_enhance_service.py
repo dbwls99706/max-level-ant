@@ -1,6 +1,7 @@
 """
 각성 시스템 (투자 감각 각성) 테스트
 """
+
 import pytest
 from unittest.mock import patch
 
@@ -36,7 +37,9 @@ class TestEnhanceInfo:
         assert result["level"] == 10
         valid_names = [t[0] for t in EnhanceConfig.TITLE_NAMES[10]]
         assert result["title_name"] in valid_names
-        assert result["attendance_multiplier"] == EnhanceConfig.get_attendance_multiplier(10)
+        assert result[
+            "attendance_multiplier"
+        ] == EnhanceConfig.get_attendance_multiplier(10)
         assert result["lottery_multiplier"] == EnhanceConfig.get_lottery_multiplier(10)
 
     def test_enhance_info_max_level(self, db, test_user):
@@ -59,7 +62,9 @@ class TestEnhanceAttempt:
 
     def test_enhance_success(self, db, test_user):
         """각성 성공 시 레벨 증가"""
-        with patch("services.enhance_service.random.randint", return_value=1):  # 무조건 성공
+        with patch(
+            "services.enhance_service.random.randint", return_value=1
+        ):  # 무조건 성공
             result = EnhanceService.attempt_enhance(db, test_user.kakao_id)
 
         assert result["success"] is True
@@ -83,7 +88,9 @@ class TestEnhanceAttempt:
         test_user.enhance_level = 3
         db.commit()
 
-        with patch("services.enhance_service.random.randint", return_value=100):  # 무조건 실패
+        with patch(
+            "services.enhance_service.random.randint", return_value=100
+        ):  # 무조건 실패
             result = EnhanceService.attempt_enhance(db, test_user.kakao_id)
 
         assert result["success"] is True
@@ -97,7 +104,9 @@ class TestEnhanceAttempt:
         test_user.cash = 100_000_000
         db.commit()
 
-        with patch("services.enhance_service.random.randint", return_value=100):  # 무조건 실패
+        with patch(
+            "services.enhance_service.random.randint", return_value=100
+        ):  # 무조건 실패
             result = EnhanceService.attempt_enhance(db, test_user.kakao_id)
 
         assert result["enhanced"] is False
@@ -109,7 +118,9 @@ class TestEnhanceAttempt:
         test_user.enhance_level = 0
         db.commit()
 
-        with patch("services.enhance_service.random.randint", return_value=100):  # 무조건 실패
+        with patch(
+            "services.enhance_service.random.randint", return_value=100
+        ):  # 무조건 실패
             result = EnhanceService.attempt_enhance(db, test_user.kakao_id)
 
         assert result["enhanced"] is False
@@ -210,8 +221,10 @@ class TestEnhanceWithAttendance:
         test_user.enhance_level = 10  # +50% 보너스
         db.commit()
 
-        with patch("services.asset_service.AssetService.record_daily_asset"), \
-             patch("services.user_service.log_attendance"):
+        with (
+            patch("services.asset_service.AssetService.record_daily_asset"),
+            patch("services.user_service.log_attendance"),
+        ):
             success, reward, streak, cash, enhance_level = UserService.check_attendance(
                 db, test_user.kakao_id
             )
@@ -219,7 +232,9 @@ class TestEnhanceWithAttendance:
         assert success is True
         assert enhance_level == 10
         # 기본 30만 * 1.5 = 45만
-        expected = int(GameConfig.ATTENDANCE_REWARD * EnhanceConfig.get_attendance_multiplier(10))
+        expected = int(
+            GameConfig.ATTENDANCE_REWARD * EnhanceConfig.get_attendance_multiplier(10)
+        )
         assert reward == expected
 
 
@@ -234,8 +249,10 @@ class TestEnhanceWithLottery:
         db.commit()
 
         # 5등 (10000원) 고정
-        with patch("services.game_service.random.random", return_value=0.99), \
-             patch("services.game_service.random.randint", return_value=10000):
+        with (
+            patch("services.game_service.random.random", return_value=0.99),
+            patch("services.game_service.random.randint", return_value=10000),
+        ):
             result = GameService.play_lottery(db, test_user.kakao_id)
 
         assert result["success"] is True

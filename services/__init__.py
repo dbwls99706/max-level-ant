@@ -1,6 +1,7 @@
 """
 서비스 모듈
 """
+
 from .user_service import UserService
 from .stock_service import StockService
 from .trade_service import TradeService
@@ -26,7 +27,7 @@ from .common import (
     calculate_profit,
     safe_add,
     safe_subtract,
-    safe_multiply
+    safe_multiply,
 )
 
 __all__ = [
@@ -55,5 +56,5 @@ __all__ = [
     "calculate_profit",
     "safe_add",
     "safe_subtract",
-    "safe_multiply"
+    "safe_multiply",
 ]

@@ -2,6 +2,7 @@
 MissionService 단위 테스트
 - 일간 미션, 업적 달성
 """
+
 from services.mission_service import MissionService, ACHIEVEMENTS
 from config import GameConfig
 
@@ -74,8 +75,12 @@ class TestAchievements:
         test_user.total_trades = 1
         db.commit()
 
-        first_result = MissionService.check_and_award_achievements(db, test_user.kakao_id)
-        second_result = MissionService.check_and_award_achievements(db, test_user.kakao_id)
+        first_result = MissionService.check_and_award_achievements(
+            db, test_user.kakao_id
+        )
+        second_result = MissionService.check_and_award_achievements(
+            db, test_user.kakao_id
+        )
 
         assert len(first_result) >= 1
         first_ids = [a["id"] for a in first_result]

@@ -2,6 +2,7 @@
 예측게임 관련 핸들러
 - 복권, 시장예측(역사 퀴즈), 업다운(멀티라운드), 각성(투자 감각 각성)
 """
+
 from typing import Dict
 
 from services import GameService
@@ -34,12 +35,28 @@ class GameHandlerMixin(BaseHandlerMixin):
         return KakaoResponse.text_with_buttons(
             msg,
             [
-                {"label": "🎁 보물상자", "action": "message", "messageText": "/보물상자"},
+                {
+                    "label": "🎁 보물상자",
+                    "action": "message",
+                    "messageText": "/보물상자",
+                },
                 {"label": "🧬 각성", "action": "message", "messageText": "/각성"},
-                {"label": "⚡ 5만 예언 배틀", "action": "message", "messageText": f"/시장예측 {small_bet}"},
-                {"label": "🔥 50만 대박 배틀", "action": "message", "messageText": f"/시장예측 {big_bet}"},
-                {"label": "🔢 5만 업다운", "action": "message", "messageText": f"/업다운 {small_bet}"},
-            ]
+                {
+                    "label": "⚡ 5만 예언 배틀",
+                    "action": "message",
+                    "messageText": f"/시장예측 {small_bet}",
+                },
+                {
+                    "label": "🔥 50만 대박 배틀",
+                    "action": "message",
+                    "messageText": f"/시장예측 {big_bet}",
+                },
+                {
+                    "label": "🔢 5만 업다운",
+                    "action": "message",
+                    "messageText": f"/업다운 {small_bet}",
+                },
+            ],
         )
 
     def handle_lottery(self) -> Dict:
@@ -51,10 +68,18 @@ class GameHandlerMixin(BaseHandlerMixin):
             return KakaoResponse.text_with_buttons(
                 result["message"],
                 [
-                    {"label": "⚡ 예언 배틀", "action": "message", "messageText": f"/시장예측 {bet}"},
-                    {"label": "🔢 업다운", "action": "message", "messageText": f"/업다운 {bet}"},
-                    {"label": "🚀 급등주", "action": "message", "messageText": "/급등"}
-                ]
+                    {
+                        "label": "⚡ 예언 배틀",
+                        "action": "message",
+                        "messageText": f"/시장예측 {bet}",
+                    },
+                    {
+                        "label": "🔢 업다운",
+                        "action": "message",
+                        "messageText": f"/업다운 {bet}",
+                    },
+                    {"label": "🚀 급등주", "action": "message", "messageText": "/급등"},
+                ],
             )
 
         tier = result["tier"]
@@ -108,22 +133,44 @@ class GameHandlerMixin(BaseHandlerMixin):
         msg = f"""🎁 {name}의 보물상자... {reveal}
 
 {effect}
-{tier}! {result['message']}
+{tier}! {result["message"]}
 
 🪙 획득 골드: {reward_text}{enhance_line}{near_miss_line}
 
 {remaining_msg}
-💰 현재 골드: {result['cash']:,}원"""
+💰 현재 골드: {result["cash"]:,}원"""
 
         buttons = []
         if remaining > 0:
-            buttons.append({"label": f"🎁 한번 더! ({remaining}회 남음)", "action": "message", "messageText": "/보물상자"})
+            buttons.append(
+                {
+                    "label": f"🎁 한번 더! ({remaining}회 남음)",
+                    "action": "message",
+                    "messageText": "/보물상자",
+                }
+            )
         if is_big_win:
-            buttons.append({"label": "💼 포트폴리오", "action": "message", "messageText": "/포트폴리오"})
-            buttons.append({"label": "🏆 랭킹", "action": "message", "messageText": "/랭킹"})
+            buttons.append(
+                {
+                    "label": "💼 포트폴리오",
+                    "action": "message",
+                    "messageText": "/포트폴리오",
+                }
+            )
+            buttons.append(
+                {"label": "🏆 랭킹", "action": "message", "messageText": "/랭킹"}
+            )
         else:
-            buttons.append({"label": "⚡ 예언 배틀", "action": "message", "messageText": f"/시장예측 {GameConfig.DEFAULT_BET}"})
-            buttons.append({"label": "📈 급등주", "action": "message", "messageText": "/급등"})
+            buttons.append(
+                {
+                    "label": "⚡ 예언 배틀",
+                    "action": "message",
+                    "messageText": f"/시장예측 {GameConfig.DEFAULT_BET}",
+                }
+            )
+            buttons.append(
+                {"label": "📈 급등주", "action": "message", "messageText": "/급등"}
+            )
 
         return KakaoResponse.text_with_buttons(msg, buttons)
 
@@ -144,10 +191,22 @@ class GameHandlerMixin(BaseHandlerMixin):
                 "사용법: /시장예측 [금액]\n"
                 "예: /시장예측 100000",
                 [
-                    {"label": "⚡ 5만 예언!", "action": "message", "messageText": "/시장예측 50000"},
-                    {"label": "🔥 10만 배팅!", "action": "message", "messageText": "/시장예측 100000"},
-                    {"label": "💥 50만 올인!", "action": "message", "messageText": "/시장예측 500000"},
-                ]
+                    {
+                        "label": "⚡ 5만 예언!",
+                        "action": "message",
+                        "messageText": "/시장예측 50000",
+                    },
+                    {
+                        "label": "🔥 10만 배팅!",
+                        "action": "message",
+                        "messageText": "/시장예측 100000",
+                    },
+                    {
+                        "label": "💥 50만 올인!",
+                        "action": "message",
+                        "messageText": "/시장예측 500000",
+                    },
+                ],
             )
 
         try:
@@ -156,80 +215,51 @@ class GameHandlerMixin(BaseHandlerMixin):
             return KakaoResponse.text_with_buttons(
                 "골드 금액을 숫자로 입력해주세요.\n예: /시장예측 100000",
                 [
-                    {"label": "⚡ 5만 예언!", "action": "message", "messageText": "/시장예측 50000"},
-                    {"label": "🔥 10만 배팅!", "action": "message", "messageText": "/시장예측 100000"},
-                ]
+                    {
+                        "label": "⚡ 5만 예언!",
+                        "action": "message",
+                        "messageText": "/시장예측 50000",
+                    },
+                    {
+                        "label": "🔥 10만 배팅!",
+                        "action": "message",
+                        "messageText": "/시장예측 100000",
+                    },
+                ],
             )
 
         # 선택지가 없으면 퀴즈 출제 (상승/하락 선택 유도)
         if len(parts) < 3:
-            from services.common import (
-                check_market_closed_for_game, get_user_with_error, validate_bet
-            )
-            from config import GameProbability
+            result = GameService.issue_stock_quiz(self.db, self.kakao_id, bet)
+            if not result["success"]:
+                from config import ErrorCode
 
-            # 장 마감 여부 사전 확인
-            can_play, market_error = check_market_closed_for_game("🔮")
-            if not can_play:
-                return self._market_closed_response(market_error["message"])
-
-            # 유저 조회 및 잔액 사전 확인
-            user, user_error = get_user_with_error(self.db, self.kakao_id)
-            if user_error:
-                return self._game_failure_response(user_error["message"])
-
-            is_valid, bet_error = validate_bet(bet, user.cash)
-            if not is_valid:
-                return self._game_failure_response(bet_error)
-
-            # 퀴즈 출제
-            import random
-            quiz = random.choice(GameProbability.HISTORICAL_STOCK_DATA)
-
-            return KakaoResponse.text_with_buttons(
-                f"⚡ 예언 배틀 시작!\n\n"
-                f"📊 종목: {quiz['stock_name']}\n"
-                f"📅 기간: {quiz['period']}\n\n"
-                f"💡 당시 이슈: {quiz['description']}\n\n"
-                f"이 상황에서 주가는 올랐을까, 내렸을까?\n"
-                f"💰 맞추면 {bet * 2:,}원 / 💸 틀리면 전멸!",
-                [
-                    {"label": "📈 상승!", "action": "message",
-                     "messageText": f"/시장예측 {bet} 상승 {quiz['stock_name']}|{quiz['period']}"},
-                    {"label": "📉 하락!", "action": "message",
-                     "messageText": f"/시장예측 {bet} 하락 {quiz['stock_name']}|{quiz['period']}"},
-                ]
-            )
+                if result.get("error_code") == ErrorCode.MARKET_CLOSED:
+                    return self._market_closed_response(result["message"])
+                return self._game_failure_response(result["message"])
+            return self._quiz_issued_response(result)
 
         # 선택지가 있으면 정답 확인
+        # (판정은 서버가 출제해 저장한 퀴즈로만 — 메시지로 퀴즈를 지정할 수 없음)
         choice = parts[2].strip()
-
-        # 특정 퀴즈 지정 여부 확인 (버튼에서 온 경우)
-        specific_quiz = None
-        if len(parts) >= 4:
-            quiz_key = " ".join(parts[3:])
-            if "|" in quiz_key:
-                stock_name, period = quiz_key.split("|", 1)
-                from config import GameProbability
-                for q in GameProbability.HISTORICAL_STOCK_DATA:
-                    if q["stock_name"] == stock_name and q["period"] == period:
-                        specific_quiz = q
-                        break
-
-        if specific_quiz:
-            # 특정 퀴즈로 직접 판정
-            result = self._play_quiz_with_specific(bet, choice, specific_quiz)
-        else:
-            # 랜덤 퀴즈
-            result = GameService.play_stock_quiz(self.db, self.kakao_id, bet, choice)
+        result = GameService.answer_stock_quiz(self.db, self.kakao_id, choice)
 
         if not result["success"]:
+            from config import ErrorCode
+
+            # 출제된 퀴즈가 없으면 새로 출제해서 안내
+            if result.get("error_code") == ErrorCode.INVALID_STATE:
+                issued = GameService.issue_stock_quiz(self.db, self.kakao_id, bet)
+                if issued["success"]:
+                    return self._quiz_issued_response(issued)
+            if result.get("error_code") == ErrorCode.MARKET_CLOSED:
+                return self._market_closed_response(result["message"])
             return self._game_failure_response(result["message"])
 
         quiz = result["quiz"]
 
         if result["won"]:
-            if result['profit'] >= 500_000:
+            if result["profit"] >= 500_000:
                 effect = "💥⚡ 예언 적중! 대박 골드 폭발!"
             else:
                 effect = "⚡ 예언 적중! 골드 2배 획득!"
@@ -238,7 +268,9 @@ class GameHandlerMixin(BaseHandlerMixin):
         else:
             effect = "💨 빗나갔다! 골드 전멸..."
             profit_text = f"📉 {result['profit']:,}원"
-            encourage = "틀렸다면 더욱 중요! 아래 당시 상황을 읽으면 다음엔 맞출 수 있어요 📖"
+            encourage = (
+                "틀렸다면 더욱 중요! 아래 당시 상황을 읽으면 다음엔 맞출 수 있어요 📖"
+            )
 
         answer_emoji = "📈" if quiz["answer"] == "상승" else "📉"
 
@@ -248,112 +280,96 @@ class GameHandlerMixin(BaseHandlerMixin):
         name = self._display_name()
         msg = f"""⚡ {name}의 과거 주가 예언 배틀
 
-📊 {quiz['stock_name']}
-📅 {quiz['period']}
+📊 {quiz["stock_name"]}
+📅 {quiz["period"]}
 
-{answer_emoji} 정답: {quiz['answer']}!
-🎯 내 선택: {result['choice']}
+{answer_emoji} 정답: {quiz["answer"]}!
+🎯 내 선택: {result["choice"]}
 
 {effect}
 {encourage}
 
 📰 왜 이런 움직임이었을까?
-{quiz['description']}
+{quiz["description"]}
 
 💡 투자 인사이트
 {lesson}
 
-🪙 베팅: {result['bet']:,}원
+🪙 베팅: {result["bet"]:,}원
 {profit_text}
-💰 현재 골드: {result['cash']:,}원"""
+💰 현재 골드: {result["cash"]:,}원"""
 
         if result["won"]:
             buttons = [
-                {"label": "⚡ 다시 예언!", "action": "message", "messageText": f"/시장예측 {bet}"},
-                {"label": "🔥 2배 올인!", "action": "message", "messageText": f"/시장예측 {bet * 2}"},
-                {"label": "💼 포트폴리오", "action": "message", "messageText": "/포트폴리오"},
+                {
+                    "label": "⚡ 다시 예언!",
+                    "action": "message",
+                    "messageText": f"/시장예측 {bet}",
+                },
+                {
+                    "label": "🔥 2배 올인!",
+                    "action": "message",
+                    "messageText": f"/시장예측 {bet * 2}",
+                },
+                {
+                    "label": "💼 포트폴리오",
+                    "action": "message",
+                    "messageText": "/포트폴리오",
+                },
                 {"label": "📈 급등주", "action": "message", "messageText": "/급등"},
             ]
             if result["bet"] >= 500_000:
-                buttons[2] = {"label": "🏆 랭킹", "action": "message", "messageText": "/랭킹"}
+                buttons[2] = {
+                    "label": "🏆 랭킹",
+                    "action": "message",
+                    "messageText": "/랭킹",
+                }
         else:
             buttons = [
-                {"label": "⚡ 다시 예언!", "action": "message", "messageText": f"/시장예측 {bet}"},
-                {"label": "🎁 보물상자", "action": "message", "messageText": "/보물상자"},
+                {
+                    "label": "⚡ 다시 예언!",
+                    "action": "message",
+                    "messageText": f"/시장예측 {bet}",
+                },
+                {
+                    "label": "🎁 보물상자",
+                    "action": "message",
+                    "messageText": "/보물상자",
+                },
                 {"label": "📈 급등주", "action": "message", "messageText": "/급등"},
             ]
 
         return KakaoResponse.text_with_buttons(msg, buttons)
 
-    def _play_quiz_with_specific(self, bet: int, choice: str, quiz: dict) -> Dict:
-        """특정 퀴즈로 직접 판정 (버튼에서 퀴즈가 지정된 경우)"""
-        from services.common import (
-            get_user_with_error_for_update, validate_bet,
-            check_market_closed_for_game, error_response,
-            safe_add, safe_subtract, safe_multiply
+    def _quiz_issued_response(self, result: Dict) -> Dict:
+        """시장예측 퀴즈 출제 응답 (정답 힌트인 당시 이슈는 결과에서만 공개)"""
+        quiz = result["quiz"]
+        bet = result["bet"]
+
+        header = "⚡ 예언 배틀 시작!"
+        if result.get("reissued"):
+            header = "⚡ 진행 중인 예언 배틀이 있어요!\n(먼저 이 퀴즈에 답해주세요)"
+
+        return KakaoResponse.text_with_buttons(
+            f"{header}\n\n"
+            f"📊 종목: {quiz['stock_name']}\n"
+            f"📅 기간: {quiz['period']}\n\n"
+            f"이 기간 주가는 올랐을까, 내렸을까?\n"
+            f"💡 당시 이슈는 결과 발표 때 공개!\n"
+            f"💰 맞추면 {bet * 2:,}원 / 💸 틀리면 전멸!",
+            [
+                {
+                    "label": "📈 상승!",
+                    "action": "message",
+                    "messageText": f"/시장예측 {bet} 상승",
+                },
+                {
+                    "label": "📉 하락!",
+                    "action": "message",
+                    "messageText": f"/시장예측 {bet} 하락",
+                },
+            ],
         )
-        from config import GameProbability, ErrorCode
-        from utils import log_game
-
-        can_play, market_error = check_market_closed_for_game("🔮")
-        if not can_play:
-            return market_error
-
-        user, error = get_user_with_error_for_update(self.db, self.kakao_id)
-        if error:
-            return error
-
-        is_valid, bet_error = validate_bet(bet, user.cash)
-        if not is_valid:
-            return error_response(ErrorCode.INVALID_BET, bet_error)
-
-        choice_normalized = choice.strip()
-        if choice_normalized not in ["상승", "하락"]:
-            if choice_normalized in ["상", "up", "오름"]:
-                choice_normalized = "상승"
-            elif choice_normalized in ["하", "down", "내림"]:
-                choice_normalized = "하락"
-            else:
-                return error_response(ErrorCode.INVALID_CHOICE, "상승 또는 하락 중 선택해주세요.")
-
-        user.cash = safe_subtract(user.cash, bet)
-        won = (choice_normalized == quiz["answer"])
-
-        if won:
-            multiplier = GameProbability.STOCK_QUIZ_MULTIPLIER
-            winnings = safe_multiply(bet, multiplier)
-        else:
-            multiplier = 0
-            winnings = 0
-
-        user.cash = safe_add(user.cash, winnings)
-
-        from sqlalchemy.exc import SQLAlchemyError
-        try:
-            self.db.commit()
-        except SQLAlchemyError:
-            self.db.rollback()
-            return error_response(ErrorCode.DB_ERROR, "데이터베이스 오류가 발생했습니다.")
-
-        log_game(
-            kakao_id=self.kakao_id, game_type="STOCK_QUIZ",
-            bet=bet, result=f"{quiz['answer']}({'WIN' if won else 'LOSE'})",
-            winnings=winnings, profit=winnings - bet, cash_after=user.cash,
-            extra=f"stock={quiz['stock_name']} period={quiz['period']} choice={choice_normalized}"
-        )
-
-        return {
-            "success": True,
-            "quiz": quiz,
-            "choice": choice_normalized,
-            "answer": quiz["answer"],
-            "won": won,
-            "bet": bet,
-            "multiplier": multiplier,
-            "winnings": winnings,
-            "profit": winnings - bet,
-            "cash": user.cash
-        }
 
     # ==========================================
     # 업다운 (멀티라운드)
@@ -379,10 +395,22 @@ class GameHandlerMixin(BaseHandlerMixin):
                 "💰 정산: 원할 때 수익 확정!\n\n"
                 "사용법: /업다운 [금액]",
                 [
-                    {"label": "🔢 5만원", "action": "message", "messageText": "/업다운 50000"},
-                    {"label": "🔢 10만원", "action": "message", "messageText": "/업다운 100000"},
-                    {"label": "🔢 50만원", "action": "message", "messageText": "/업다운 500000"},
-                ]
+                    {
+                        "label": "🔢 5만원",
+                        "action": "message",
+                        "messageText": "/업다운 50000",
+                    },
+                    {
+                        "label": "🔢 10만원",
+                        "action": "message",
+                        "messageText": "/업다운 100000",
+                    },
+                    {
+                        "label": "🔢 50만원",
+                        "action": "message",
+                        "messageText": "/업다운 500000",
+                    },
+                ],
             )
 
         # /업다운 [상승/하락] — 진행중인 게임의 라운드 진행
@@ -397,9 +425,17 @@ class GameHandlerMixin(BaseHandlerMixin):
             return KakaoResponse.text_with_buttons(
                 "투자금은 숫자로 입력해주세요.\n예: /업다운 50000",
                 [
-                    {"label": "🔢 5만원", "action": "message", "messageText": "/업다운 50000"},
-                    {"label": "🔢 10만원", "action": "message", "messageText": "/업다운 100000"},
-                ]
+                    {
+                        "label": "🔢 5만원",
+                        "action": "message",
+                        "messageText": "/업다운 50000",
+                    },
+                    {
+                        "label": "🔢 10만원",
+                        "action": "message",
+                        "messageText": "/업다운 100000",
+                    },
+                ],
             )
 
         # /업다운 [금액] [상승/하락] — 새 게임은 금액만, 라운드는 별도
@@ -431,14 +467,26 @@ class GameHandlerMixin(BaseHandlerMixin):
 📈 상승 선택 시 배율: x{up_mult}
 📉 하락 선택 시 배율: x{down_mult}
 
-🪙 투입 골드: {result['bet']:,}원
-💰 현재 골드: {result['cash']:,}원"""
+🪙 투입 골드: {result["bet"]:,}원
+💰 현재 골드: {result["cash"]:,}원"""
 
         buttons = []
         if result["can_up"]:
-            buttons.append({"label": f"📈 상승 (x{up_mult})", "action": "message", "messageText": "/업다운 상승"})
+            buttons.append(
+                {
+                    "label": f"📈 상승 (x{up_mult})",
+                    "action": "message",
+                    "messageText": "/업다운 상승",
+                }
+            )
         if result["can_down"]:
-            buttons.append({"label": f"📉 하락 (x{down_mult})", "action": "message", "messageText": "/업다운 하락"})
+            buttons.append(
+                {
+                    "label": f"📉 하락 (x{down_mult})",
+                    "action": "message",
+                    "messageText": "/업다운 하락",
+                }
+            )
 
         return KakaoResponse.text_with_buttons(msg, buttons)
 
@@ -476,6 +524,7 @@ class GameHandlerMixin(BaseHandlerMixin):
             fee_notice = ""
             if current_round >= 4:
                 from config import GameProbability
+
                 for (start_r, end_r), rate in GameProbability.UPDOWN_ROUND_FEE.items():
                     if start_r <= current_round <= end_r:
                         pct = int((1 - rate) * 100)
@@ -486,13 +535,13 @@ class GameHandlerMixin(BaseHandlerMixin):
             msg = f"""🔢 업다운 — 라운드 {current_round - 1}
 
 {arrow} {prev} → {next_num}
-🎯 예측: {result['choice']} — {streak_effect}
+🎯 예측: {result["choice"]} — {streak_effect}
 
 이번 배율: x{round_mult}
 📊 누적 배율: x{total_mult}
 
-🪙 투입 골드: {result['bet']:,}원
-💎 현재 가치: {potential:,}원 (+{potential - result['bet']:,}원){fee_notice}
+🪙 투입 골드: {result["bet"]:,}원
+💎 현재 가치: {potential:,}원 (+{potential - result["bet"]:,}원){fee_notice}
 
 다음 숫자가 {next_num}보다 높을까? 낮을까?"""
 
@@ -501,10 +550,28 @@ class GameHandlerMixin(BaseHandlerMixin):
             down_mult = result["down_multiplier"]
 
             if result["can_up"]:
-                buttons.append({"label": f"📈 상승 (x{up_mult})", "action": "message", "messageText": "/업다운 상승"})
+                buttons.append(
+                    {
+                        "label": f"📈 상승 (x{up_mult})",
+                        "action": "message",
+                        "messageText": "/업다운 상승",
+                    }
+                )
             if result["can_down"]:
-                buttons.append({"label": f"📉 하락 (x{down_mult})", "action": "message", "messageText": "/업다운 하락"})
-            buttons.append({"label": f"💰 정산 ({potential:,}원)", "action": "message", "messageText": "/업다운정산"})
+                buttons.append(
+                    {
+                        "label": f"📉 하락 (x{down_mult})",
+                        "action": "message",
+                        "messageText": "/업다운 하락",
+                    }
+                )
+            buttons.append(
+                {
+                    "label": f"💰 정산 ({potential:,}원)",
+                    "action": "message",
+                    "messageText": "/업다운정산",
+                }
+            )
 
             return KakaoResponse.text_with_buttons(msg, buttons)
         else:
@@ -520,20 +587,28 @@ class GameHandlerMixin(BaseHandlerMixin):
             msg = f"""🔢 {name}의 업다운 — 게임 오버!
 
 {arrow} {prev} → {next_num}
-🎯 예측: {result['choice']} / 정답: {result['actual']}
+🎯 예측: {result["choice"]} / 정답: {result["actual"]}
 
 {fail_msg}
 
-💸 골드 손실: -{result['bet']:,}원
-💰 현재 골드: {result['cash']:,}원"""
+💸 골드 손실: -{result["bet"]:,}원
+💰 현재 골드: {result["cash"]:,}원"""
 
             return KakaoResponse.text_with_buttons(
                 msg,
                 [
-                    {"label": "🔢 다시 도전!", "action": "message", "messageText": f"/업다운 {result['bet']}"},
-                    {"label": "⚡ 예언 배틀", "action": "message", "messageText": f"/시장예측 {GameConfig.DEFAULT_BET}"},
-                    {"label": "📈 급등주", "action": "message", "messageText": "/급등"}
-                ]
+                    {
+                        "label": "🔢 다시 도전!",
+                        "action": "message",
+                        "messageText": f"/업다운 {result['bet']}",
+                    },
+                    {
+                        "label": "⚡ 예언 배틀",
+                        "action": "message",
+                        "messageText": f"/시장예측 {GameConfig.DEFAULT_BET}",
+                    },
+                    {"label": "📈 급등주", "action": "message", "messageText": "/급등"},
+                ],
             )
 
     def handle_updown_cashout(self) -> Dict:
@@ -570,24 +645,36 @@ class GameHandlerMixin(BaseHandlerMixin):
 {effect}
 
 🎯 클리어 라운드: {rounds}라운드
-📊 최종 배율: x{result['multiplier']}
+📊 최종 배율: x{result["multiplier"]}
 
-🪙 투입 골드: {result['bet']:,}원
-💎 수령 골드: {result['winnings']:,}원
+🪙 투입 골드: {result["bet"]:,}원
+💎 수령 골드: {result["winnings"]:,}원
 {profit_text}
 
-💰 현재 골드: {result['cash']:,}원"""
+💰 현재 골드: {result["cash"]:,}원"""
 
         buttons = [
-            {"label": "🔢 다시 도전!", "action": "message", "messageText": f"/업다운 {result['bet']}"},
+            {
+                "label": "🔢 다시 도전!",
+                "action": "message",
+                "messageText": f"/업다운 {result['bet']}",
+            },
         ]
         # 대박 정산 시 랭킹 버튼 추가
         if is_big_cashout:
-            buttons.append({"label": "🏆 랭킹", "action": "message", "messageText": "/랭킹"})
-        buttons.extend([
-            {"label": "⚡ 예언 배틀", "action": "message", "messageText": f"/시장예측 {GameConfig.DEFAULT_BET}"},
-            {"label": "📈 급등주", "action": "message", "messageText": "/급등"}
-        ])
+            buttons.append(
+                {"label": "🏆 랭킹", "action": "message", "messageText": "/랭킹"}
+            )
+        buttons.extend(
+            [
+                {
+                    "label": "⚡ 예언 배틀",
+                    "action": "message",
+                    "messageText": f"/시장예측 {GameConfig.DEFAULT_BET}",
+                },
+                {"label": "📈 급등주", "action": "message", "messageText": "/급등"},
+            ]
+        )
 
         return KakaoResponse.text_with_buttons(msg, buttons)
 
@@ -601,20 +688,38 @@ class GameHandlerMixin(BaseHandlerMixin):
         msg = f"""🔢 업다운 — 진행 중!
 
 🎲 현재 숫자: {number}
-📊 라운드: {status['round']}
-💎 누적 배율: x{status['multiplier']}
-🪙 투입 골드: {status['bet']:,}원
+📊 라운드: {status["round"]}
+💎 누적 배율: x{status["multiplier"]}
+🪙 투입 골드: {status["bet"]:,}원
 💎 현재 가치: {potential:,}원
 
 다음 숫자가 {number}보다 높을까? 낮을까?"""
 
         buttons = []
         if status["can_up"]:
-            buttons.append({"label": f"📈 상승 (x{up_mult})", "action": "message", "messageText": "/업다운 상승"})
+            buttons.append(
+                {
+                    "label": f"📈 상승 (x{up_mult})",
+                    "action": "message",
+                    "messageText": "/업다운 상승",
+                }
+            )
         if status["can_down"]:
-            buttons.append({"label": f"📉 하락 (x{down_mult})", "action": "message", "messageText": "/업다운 하락"})
+            buttons.append(
+                {
+                    "label": f"📉 하락 (x{down_mult})",
+                    "action": "message",
+                    "messageText": "/업다운 하락",
+                }
+            )
         if status["round"] >= 2:
-            buttons.append({"label": f"💰 정산 ({potential:,}원)", "action": "message", "messageText": "/업다운정산"})
+            buttons.append(
+                {
+                    "label": f"💰 정산 ({potential:,}원)",
+                    "action": "message",
+                    "messageText": "/업다운정산",
+                }
+            )
 
         return KakaoResponse.text_with_buttons(msg, buttons)
 
@@ -623,10 +728,18 @@ class GameHandlerMixin(BaseHandlerMixin):
         return KakaoResponse.text_with_buttons(
             result["message"],
             [
-                {"label": "📈 상승", "action": "message", "messageText": "/업다운 상승"},
-                {"label": "📉 하락", "action": "message", "messageText": "/업다운 하락"},
+                {
+                    "label": "📈 상승",
+                    "action": "message",
+                    "messageText": "/업다운 상승",
+                },
+                {
+                    "label": "📉 하락",
+                    "action": "message",
+                    "messageText": "/업다운 하락",
+                },
                 {"label": "💰 정산", "action": "message", "messageText": "/업다운정산"},
-            ]
+            ],
         )
 
     # ==========================================
@@ -647,6 +760,7 @@ class GameHandlerMixin(BaseHandlerMixin):
     def _show_enhance_info(self) -> Dict:
         """각성 정보 표시"""
         from services.common import check_market_closed_for_game
+
         result = EnhanceService.get_enhance_info(self.db, self.kakao_id)
 
         if not result["success"]:
@@ -688,7 +802,11 @@ class GameHandlerMixin(BaseHandlerMixin):
             msg += "\n\n👑 만렙 달성! 당신을 넘을 개미는 없습니다."
             buttons = [
                 {"label": "📅 출석", "action": "message", "messageText": "/출석"},
-                {"label": "🎁 보물상자", "action": "message", "messageText": "/보물상자"},
+                {
+                    "label": "🎁 보물상자",
+                    "action": "message",
+                    "messageText": "/보물상자",
+                },
             ]
         else:
             cost = result["next_cost"]
@@ -716,19 +834,26 @@ class GameHandlerMixin(BaseHandlerMixin):
                 msg += f"\n\n❌ 골드 부족 (보유: {result['cash']:,}원)"
             else:
                 buttons.append(
-                    {"label": f"🧬 각성하기 ({cost:,}원)", "action": "message", "messageText": "/각성 시도"}
+                    {
+                        "label": f"🧬 각성하기 ({cost:,}원)",
+                        "action": "message",
+                        "messageText": "/각성 시도",
+                    }
                 )
 
-        buttons.extend([
-            {"label": "📅 출석", "action": "message", "messageText": "/출석"},
-            {"label": "🎮 예측 게임", "action": "message", "messageText": "/예측"},
-        ])
+        buttons.extend(
+            [
+                {"label": "📅 출석", "action": "message", "messageText": "/출석"},
+                {"label": "🎮 예측 게임", "action": "message", "messageText": "/예측"},
+            ]
+        )
 
         return KakaoResponse.text_with_buttons(msg, buttons)
 
     def _do_enhance(self) -> Dict:
         """실제 각성 실행 (장 마감 후만 가능)"""
         from services.common import check_market_closed_for_game
+
         can_play, market_error = check_market_closed_for_game("🧬")
         if not can_play:
             return self._market_closed_response(market_error["message"])
@@ -751,7 +876,9 @@ class GameHandlerMixin(BaseHandlerMixin):
                 # 레벨 10 직군 배정 — 특별 연출
                 class_emoji = result.get("class_emoji", "")
                 class_name = result.get("class_name", "")
-                class_info = EnhanceConfig.CLASS_INFO.get(result.get("enhance_class", 0), {})
+                class_info = EnhanceConfig.CLASS_INFO.get(
+                    result.get("enhance_class", 0), {}
+                )
                 class_desc = class_info.get("desc", "")
                 evolution_msg = (
                     f"\n\n🎖️ 직군 배정!\n"
@@ -768,7 +895,11 @@ class GameHandlerMixin(BaseHandlerMixin):
             lot_bonus = int((result["lottery_multiplier"] - 1) * 100)
 
             # 레벨별 고유 문구
-            flavor = EnhanceConfig.SUCCESS_FLAVORS[new_lv] if new_lv < len(EnhanceConfig.SUCCESS_FLAVORS) else ""
+            flavor = (
+                EnhanceConfig.SUCCESS_FLAVORS[new_lv]
+                if new_lv < len(EnhanceConfig.SUCCESS_FLAVORS)
+                else ""
+            )
 
             # 이펙트 — 레벨 구간별
             if new_lv >= 20:
@@ -798,7 +929,7 @@ class GameHandlerMixin(BaseHandlerMixin):
 🎁 보물상자 보너스: +{lot_bonus}%
 
 🪙 사용: -{cost:,}원
-💰 현재 골드: {result['cash']:,}원"""
+💰 현재 골드: {result["cash"]:,}원"""
 
         else:
             # 실패 — 레벨 0으로 초기화 + 레벨별 고유 문구
@@ -806,7 +937,11 @@ class GameHandlerMixin(BaseHandlerMixin):
             new_name = result["new_title"]
 
             # 레벨별 고유 실패 문구
-            fail_flavor = EnhanceConfig.FAIL_FLAVORS[old_lv] if old_lv < len(EnhanceConfig.FAIL_FLAVORS) else ""
+            fail_flavor = (
+                EnhanceConfig.FAIL_FLAVORS[old_lv]
+                if old_lv < len(EnhanceConfig.FAIL_FLAVORS)
+                else ""
+            )
 
             if old_lv >= 15:
                 header = f"💀 Lv.{old_lv}의 빛이 꺼집니다..."
@@ -819,7 +954,9 @@ class GameHandlerMixin(BaseHandlerMixin):
                 reset_msg = f"💥 Lv.{old_lv} → Lv.0\n익숙해진 시장 감각이 흐려집니다.\n처음 주식에 발 들인 그 날로."
             elif old_lv >= 1:
                 header = "💨 각성 실패..."
-                reset_msg = f"🔄 Lv.{old_lv} → Lv.0\n짧은 성장이 리셋됩니다. 다시 쪼렙부터."
+                reset_msg = (
+                    f"🔄 Lv.{old_lv} → Lv.0\n짧은 성장이 리셋됩니다. 다시 쪼렙부터."
+                )
             else:
                 header = "💨 각성 실패!"
                 reset_msg = "🛡️ Lv.0 유지 — 잃을 레벨도 없었습니다."
@@ -832,27 +969,44 @@ class GameHandlerMixin(BaseHandlerMixin):
 💬 {fail_flavor}
 
 🪙 사용: -{cost:,}원
-💰 현재 골드: {result['cash']:,}원"""
+💰 현재 골드: {result["cash"]:,}원"""
 
         # 다시 각성 가능 여부 체크 (장마감 여부도 확인)
         from services.common import check_market_closed_for_game
+
         can_enhance, _ = check_market_closed_for_game("🧬")
         buttons = []
         if new_lv < EnhanceConfig.MAX_LEVEL:
             next_cost = EnhanceConfig.get_cost(new_lv)
             if result["cash"] >= next_cost and can_enhance:
                 buttons.append(
-                    {"label": f"🧬 다시 각성! ({next_cost:,}원)", "action": "message", "messageText": "/각성 시도"}
+                    {
+                        "label": f"🧬 다시 각성! ({next_cost:,}원)",
+                        "action": "message",
+                        "messageText": "/각성 시도",
+                    }
                 )
-            buttons.append({"label": "🧬 각성 정보", "action": "message", "messageText": "/각성"})
+            buttons.append(
+                {"label": "🧬 각성 정보", "action": "message", "messageText": "/각성"}
+            )
 
         # 직업 승급이나 고레벨 달성 시 랭킹 버튼
         if result["enhanced"] and (result.get("title_changed") or new_lv >= 10):
-            buttons.append({"label": "🧬 각성 랭킹", "action": "message", "messageText": "/각성랭킹"})
+            buttons.append(
+                {
+                    "label": "🧬 각성 랭킹",
+                    "action": "message",
+                    "messageText": "/각성랭킹",
+                }
+            )
         else:
-            buttons.append({"label": "🎮 예측 게임", "action": "message", "messageText": "/예측"})
+            buttons.append(
+                {"label": "🎮 예측 게임", "action": "message", "messageText": "/예측"}
+            )
 
-        buttons.append({"label": "📈 급등주", "action": "message", "messageText": "/급등"})
+        buttons.append(
+            {"label": "📈 급등주", "action": "message", "messageText": "/급등"}
+        )
 
         return KakaoResponse.text_with_buttons(msg, buttons)
 

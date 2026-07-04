@@ -5,6 +5,7 @@
 - 닉네임 검증 강화
 - safe_add 적용
 """
+
 import re
 from datetime import datetime, timedelta
 from typing import Optional, Tuple, Dict
@@ -25,6 +26,7 @@ def register_chatroom_member(db: Session, group_key: str, kakao_id: str) -> None
     if not group_key or not kakao_id:
         return
     from database import SessionLocal
+
     separate_db = None
     try:
         separate_db = SessionLocal()
@@ -35,12 +37,17 @@ def register_chatroom_member(db: Session, group_key: str, kakao_id: str) -> None
         if not user_exists:
             return
 
-        existing = separate_db.query(ChatRoomMember).filter(
-            ChatRoomMember.group_key == group_key,
-            ChatRoomMember.kakao_id == kakao_id
-        ).first()
+        existing = (
+            separate_db.query(ChatRoomMember)
+            .filter(
+                ChatRoomMember.group_key == group_key,
+                ChatRoomMember.kakao_id == kakao_id,
+            )
+            .first()
+        )
         if existing:
             from models import _utcnow
+
             existing.last_active = _utcnow()
         else:
             member = ChatRoomMember(group_key=group_key, kakao_id=kakao_id)
@@ -61,12 +68,19 @@ class UserService:
     # 닉네임 제한
     NICKNAME_MIN_LENGTH = 2
     NICKNAME_MAX_LENGTH = 12
-    NICKNAME_PATTERN = re.compile(r'^[가-힣a-zA-Z0-9_]+$')
+    NICKNAME_PATTERN = re.compile(r"^[가-힣a-zA-Z0-9_]+$")
 
     # 금지 닉네임 패턴
     BANNED_PATTERNS = [
-        r'admin', r'관리자', r'운영자', r'시스템', r'system',
-        r'gm', r'운영', r'official', r'공식'
+        r"admin",
+        r"관리자",
+        r"운영자",
+        r"시스템",
+        r"system",
+        r"gm",
+        r"운영",
+        r"official",
+        r"공식",
     ]
 
     @classmethod
@@ -82,7 +96,10 @@ class UserService:
 
         # 길이 체크
         if len(nickname) < cls.NICKNAME_MIN_LENGTH:
-            return False, f"닉네임은 최소 {cls.NICKNAME_MIN_LENGTH}자 이상이어야 합니다."
+            return (
+                False,
+                f"닉네임은 최소 {cls.NICKNAME_MIN_LENGTH}자 이상이어야 합니다.",
+            )
 
         if len(nickname) > cls.NICKNAME_MAX_LENGTH:
             return False, f"닉네임은 최대 {cls.NICKNAME_MAX_LENGTH}자까지 가능합니다."
@@ -109,7 +126,9 @@ class UserService:
         return db.query(User).filter(User.kakao_id == kakao_id).first()
 
     @classmethod
-    def create_user(cls, db: Session, kakao_id: str, nickname: str = None) -> Tuple[User, bool]:
+    def create_user(
+        cls, db: Session, kakao_id: str, nickname: str = None
+    ) -> Tuple[User, bool]:
         """
         유저 생성 (기존 유저면 닉네임 업데이트)
         Returns: (User, is_new)
@@ -144,7 +163,7 @@ class UserService:
                 cash=GameConfig.INITIAL_CASH,
                 initial_cash=GameConfig.INITIAL_CASH,
                 attendance_streak=0,
-                ad_count_today=0
+                ad_count_today=0,
             )
             db.add(user)
             db.commit()
@@ -161,7 +180,9 @@ class UserService:
         return user, True
 
     @classmethod
-    def check_attendance(cls, db: Session, kakao_id: str) -> Tuple[bool, int, int, int, int]:
+    def check_attendance(
+        cls, db: Session, kakao_id: str
+    ) -> Tuple[bool, int, int, int, int]:
         """
         출석 체크 (FOR UPDATE로 동시성 제어)
         Returns: (success, reward, streak, current_cash, enhance_level)
@@ -172,7 +193,7 @@ class UserService:
             return False, 0, 0, 0, 0
 
         today = datetime.now(KST).date()
-        enhance_level = getattr(user, 'enhance_level', 0) or 0
+        enhance_level = getattr(user, "enhance_level", 0) or 0
 
         # 이미 출석했는지 확인
         if user.last_attendance == today:
@@ -187,7 +208,9 @@ class UserService:
 
         # 보상 계산 (연속 출석 보너스)
         reward = GameConfig.ATTENDANCE_REWARD
-        for days, multiplier in sorted(GameConfig.ATTENDANCE_STREAK_BONUS.items(), reverse=True):
+        for days, multiplier in sorted(
+            GameConfig.ATTENDANCE_STREAK_BONUS.items(), reverse=True
+        ):
             if user.attendance_streak >= days:
                 reward = int(reward * multiplier)
                 break
@@ -219,11 +242,61 @@ class UserService:
         # 자산 히스토리 기록 (비동기적으로 - 실패해도 출석에는 영향 없음)
         try:
             from services.asset_service import AssetService
+
             AssetService.record_daily_asset(db, kakao_id)
         except Exception as e:
+            db.rollback()  # 예외로 오염된 세션이 이후 커밋에 영향 주지 않도록
             logger.warning(f"자산 히스토리 기록 실패 (출석 후): {e}")
 
+        # 출석 기반 보상 파이프라인 (스트릭 업적/마일스톤, 수익 마일스톤, 주간 챌린지)
+        cls._run_attendance_rewards(db, kakao_id, user.attendance_streak)
+
+        # 보상 지급으로 잔고가 바뀌었을 수 있으므로 최신값 반환
+        db.refresh(user)
+
         return True, reward, user.attendance_streak, user.cash, enhance_level
+
+    @classmethod
+    def _run_attendance_rewards(cls, db: Session, kakao_id: str, streak: int) -> None:
+        """
+        출석 이벤트 기반 보상 체크 (실패해도 출석 자체에는 영향 없음)
+        - 거래를 하지 않는 유저도 스트릭/자산 업적·마일스톤을 받을 수 있도록 출석에서 트리거
+        """
+        try:
+            from services.asset_service import AssetService
+
+            total_asset, total_profit = AssetService.get_asset_and_profit(db, kakao_id)
+        except Exception as e:
+            db.rollback()
+            logger.warning(f"총 자산 계산 실패 (출석 후): {e}")
+            total_asset = None
+            total_profit = None
+
+        try:
+            from services.mission_service import MissionService
+            from services.milestone_service import MilestoneService
+
+            MissionService.check_and_award_achievements(
+                db, kakao_id, total_profit=total_profit
+            )
+            MilestoneService.check_milestones(
+                db,
+                kakao_id,
+                total_profit=total_profit,
+                streak=streak,
+            )
+        except Exception as e:
+            db.rollback()
+            logger.warning(f"출석 업적/마일스톤 체크 실패 ({kakao_id}): {e}")
+
+        try:
+            from services.challenge_service import ChallengeService
+
+            ChallengeService.update_challenge_progress(db, kakao_id, "ATTENDANCE")
+            ChallengeService.update_asset_challenges(db, kakao_id, total_asset)
+        except Exception as e:
+            db.rollback()
+            logger.warning(f"출석 챌린지 갱신 실패 ({kakao_id}): {e}")
 
     @staticmethod
     def get_balance(db: Session, kakao_id: str) -> Optional[int]:
@@ -263,7 +336,9 @@ class UserService:
         return True
 
     @classmethod
-    def is_nickname_taken(cls, db: Session, nickname: str, exclude_kakao_id: str = None) -> bool:
+    def is_nickname_taken(
+        cls, db: Session, nickname: str, exclude_kakao_id: str = None
+    ) -> bool:
         """
         닉네임 중복 확인 (exists 쿼리로 최적화)
         exclude_kakao_id: 자기 자신은 제외 (닉네임 변경 시)
@@ -276,7 +351,9 @@ class UserService:
         return db.query(stmt).scalar()
 
     @classmethod
-    def update_nickname(cls, db: Session, kakao_id: str, new_nickname: str) -> Tuple[bool, str]:
+    def update_nickname(
+        cls, db: Session, kakao_id: str, new_nickname: str
+    ) -> Tuple[bool, str]:
         """
         닉네임 업데이트 (초기 2회 + 한달마다 1회 추가)
         Returns: (success, message)
@@ -297,8 +374,8 @@ class UserService:
             return False, f"❌ 현재 닉네임과 동일합니다: {new_nickname}"
 
         # 닉네임 변경 가능 여부 확인
-        change_count = getattr(user, 'nickname_change_count', 0) or 0
-        last_change = getattr(user, 'last_nickname_change', None)
+        change_count = getattr(user, "nickname_change_count", 0) or 0
+        last_change = getattr(user, "last_nickname_change", None)
         today = datetime.now(KST).date()
 
         can_change = False
@@ -320,9 +397,15 @@ class UserService:
                 remaining_msg = "⚠️ 월간 변경권 사용 (다음 변경: 30일 후)"
             else:
                 days_left = 30 - days_passed
-                return False, f"❌ 닉네임 변경 횟수를 모두 사용했습니다.\n현재: {user.nickname}\n🕐 다음 변경 가능: {days_left}일 후"
+                return (
+                    False,
+                    f"❌ 닉네임 변경 횟수를 모두 사용했습니다.\n현재: {user.nickname}\n🕐 다음 변경 가능: {days_left}일 후",
+                )
         else:
-            return False, f"❌ 닉네임 변경 횟수를 모두 사용했습니다.\n현재: {user.nickname}"
+            return (
+                False,
+                f"❌ 닉네임 변경 횟수를 모두 사용했습니다.\n현재: {user.nickname}",
+            )
 
         if not can_change:
             return False, f"❌ 닉네임을 변경할 수 없습니다.\n현재: {user.nickname}"
@@ -341,7 +424,10 @@ class UserService:
             logger.error(f"닉네임 변경 DB 실패: {e}")
             return False, "❌ 닉네임 변경 중 오류가 발생했습니다."
 
-        return True, f"✅ 닉네임이 '{new_nickname}'(으)로 설정되었습니다!\n{remaining_msg}"
+        return (
+            True,
+            f"✅ 닉네임이 '{new_nickname}'(으)로 설정되었습니다!\n{remaining_msg}",
+        )
 
     @classmethod
     def get_user_stats(cls, db: Session, kakao_id: str) -> Optional[Dict]:
@@ -358,5 +444,5 @@ class UserService:
             "total_trades": user.total_trades,
             "total_profit_realized": user.total_profit_realized or 0,
             "attendance_streak": user.attendance_streak,
-            "created_at": str(user.created_at) if user.created_at else None
+            "created_at": str(user.created_at) if user.created_at else None,
         }

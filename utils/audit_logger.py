@@ -4,6 +4,7 @@
 - 분쟁 해결, 치팅 감지, 데이터 무결성 검증에 사용
 - 별도 파일(audit.log)에 기록
 """
+
 import logging
 import os
 from datetime import datetime, timezone
@@ -21,8 +22,7 @@ def _get_audit_logger() -> logging.Logger:
     audit_logger.propagate = False  # 루트 로거로 전파 방지
 
     formatter = logging.Formatter(
-        "%(asctime)s [AUDIT] %(message)s",
-        datefmt="%Y-%m-%dT%H:%M:%SZ"
+        "%(asctime)s [AUDIT] %(message)s", datefmt="%Y-%m-%dT%H:%M:%SZ"
     )
 
     # 콘솔 핸들러 (항상)
@@ -35,11 +35,12 @@ def _get_audit_logger() -> logging.Logger:
     try:
         os.makedirs(log_dir, exist_ok=True)
         from logging.handlers import RotatingFileHandler
+
         file_handler = RotatingFileHandler(
             os.path.join(log_dir, "audit.log"),
             maxBytes=10 * 1024 * 1024,  # 10MB
             backupCount=5,
-            encoding="utf-8"
+            encoding="utf-8",
         )
         file_handler.setFormatter(formatter)
         audit_logger.addHandler(file_handler)
@@ -129,8 +130,10 @@ def log_battle(
     """
     masked_ch = f"{challenger_id[:4]}****" if len(challenger_id) > 4 else "****"
     masked_op = f"{opponent_id[:4]}****" if len(opponent_id) > 4 else "****"
-    masked_winner = "DRAW" if winner_id is None else (
-        f"{winner_id[:4]}****" if len(winner_id) > 4 else "****"
+    masked_winner = (
+        "DRAW"
+        if winner_id is None
+        else (f"{winner_id[:4]}****" if len(winner_id) > 4 else "****")
     )
 
     price_change = end_price - start_price

@@ -5,6 +5,7 @@
 - 트랜잭션 안전성 강화
 - 오버플로우 방지
 """
+
 from typing import Optional, Dict, List, Set
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import SQLAlchemyError
@@ -19,9 +20,16 @@ from services.common import (
     validate_quantity,
     error_response,
     safe_add,
-    safe_subtract
+    safe_subtract,
 )
-from config import GameConfig, Messages, ErrorCode, TradeType, is_trading_available, get_market_status_message
+from config import (
+    GameConfig,
+    Messages,
+    ErrorCode,
+    TradeType,
+    is_trading_available,
+    get_market_status_message,
+)
 from utils import get_service_logger, log_trade
 
 logger = get_service_logger()
@@ -31,7 +39,9 @@ class TradeService:
     """주식 거래 관련 서비스"""
 
     @staticmethod
-    def find_holding_by_name(db: Session, kakao_id: str, stock_query: str) -> Optional[Holding]:
+    def find_holding_by_name(
+        db: Session, kakao_id: str, stock_query: str
+    ) -> Optional[Holding]:
         """
         유저 포트폴리오에서 종목명으로 검색
         동적 캐시가 사라져도 포트폴리오 종목은 찾을 수 있음
@@ -39,19 +49,24 @@ class TradeService:
         stock_query = stock_query.strip()
 
         # 1. 정확한 이름 매칭
-        holding = db.query(Holding).filter(
-            Holding.kakao_id == kakao_id,
-            Holding.stock_name == stock_query,
-            Holding.quantity > 0
-        ).first()
+        holding = (
+            db.query(Holding)
+            .filter(
+                Holding.kakao_id == kakao_id,
+                Holding.stock_name == stock_query,
+                Holding.quantity > 0,
+            )
+            .first()
+        )
         if holding:
             return holding
 
         # 2. 부분 이름 매칭
-        holdings = db.query(Holding).filter(
-            Holding.kakao_id == kakao_id,
-            Holding.quantity > 0
-        ).all()
+        holdings = (
+            db.query(Holding)
+            .filter(Holding.kakao_id == kakao_id, Holding.quantity > 0)
+            .all()
+        )
 
         for h in holdings:
             if stock_query in h.stock_name:
@@ -60,22 +75,46 @@ class TradeService:
         return None
 
     @staticmethod
+    def _safe_get_asset_and_profit(
+        db: Session, kakao_id: str
+    ) -> tuple[Optional[int], Optional[int]]:
+        """총 자산·수익금 계산 (실패 시 (None, None), 세션 오염 방지 롤백)"""
+        try:
+            from services.asset_service import AssetService
+
+            return AssetService.get_asset_and_profit(db, kakao_id)
+        except Exception as e:
+            db.rollback()
+            logger.warning(f"총 자산 계산 실패 ({kakao_id}): {e}")
+            return None, None
+
+    @staticmethod
+    def _update_trade_challenges(
+        db: Session, kakao_id: str, total_asset: Optional[int]
+    ) -> None:
+        """거래 이벤트 기반 주간 챌린지 진행도 갱신 (실패해도 거래에는 영향 없음)"""
+        try:
+            from services.challenge_service import ChallengeService
+
+            ChallengeService.update_challenge_progress(db, kakao_id, "TRADE_COUNT")
+            ChallengeService.update_asset_challenges(db, kakao_id, total_asset)
+        except Exception as e:
+            db.rollback()
+            logger.warning(f"챌린지 진행도 갱신 실패 ({kakao_id}): {e}")
+
+    @staticmethod
     def _check_trading_time() -> Optional[Dict]:
         """거래 가능 시간 확인"""
         if not is_trading_available():
             status_msg = get_market_status_message()
             return error_response(
                 ErrorCode.MARKET_CLOSED,
-                Messages.MARKET_CLOSED_TRADING.format(status_msg=status_msg)
+                Messages.MARKET_CLOSED_TRADING.format(status_msg=status_msg),
             )
         return None
 
     @staticmethod
-    def _get_stock_info(
-        db: Session,
-        kakao_id: str,
-        stock_query: str
-    ) -> tuple:
+    def _get_stock_info(db: Session, kakao_id: str, stock_query: str) -> tuple:
         """
         종목 정보 조회 (캐시 + 포트폴리오 폴백)
 
@@ -99,22 +138,16 @@ class TradeService:
                 name = StockService.search_stock(stock_query)["name"]
                 return None, error_response(
                     ErrorCode.PRICE_UNAVAILABLE,
-                    Messages.STOCK_PRICE_UNAVAILABLE.format(name=name)
+                    Messages.STOCK_PRICE_UNAVAILABLE.format(name=name),
                 )
             return None, error_response(
-                ErrorCode.STOCK_NOT_FOUND,
-                f"'{stock_query}' 종목을 찾을 수 없습니다."
+                ErrorCode.STOCK_NOT_FOUND, f"'{stock_query}' 종목을 찾을 수 없습니다."
             )
 
         return stock_info, None
 
     @staticmethod
-    def buy_stock(
-        db: Session,
-        kakao_id: str,
-        stock_query: str,
-        quantity: int
-    ) -> Dict:
+    def buy_stock(db: Session, kakao_id: str, stock_query: str, quantity: int) -> Dict:
         """주식 매수"""
         # 거래 가능 시간 확인
         time_error = TradeService._check_trading_time()
@@ -132,7 +165,9 @@ class TradeService:
             return error_response(ErrorCode.INVALID_QUANTITY, qty_error)
 
         # 종목 시세 조회
-        stock_info, stock_error = TradeService._get_stock_info(db, kakao_id, stock_query)
+        stock_info, stock_error = TradeService._get_stock_info(
+            db, kakao_id, stock_query
+        )
         if stock_error:
             return stock_error
 
@@ -145,7 +180,7 @@ class TradeService:
             logger.warning(f"비정상 주가 감지: {name}({code}) = {price}원")
             return error_response(
                 ErrorCode.API_ERROR,
-                f"'{name}' 시세가 비정상입니다. 잠시 후 다시 시도해주세요."
+                f"'{name}' 시세가 비정상입니다. 잠시 후 다시 시도해주세요.",
             )
 
         # 종목 캐시 저장
@@ -159,8 +194,7 @@ class TradeService:
         # 금액 오버플로우 체크
         if required_cash > GameConfig.MAX_CASH:
             return error_response(
-                ErrorCode.INVALID_AMOUNT,
-                "거래 금액이 너무 큽니다. 수량을 줄여주세요."
+                ErrorCode.INVALID_AMOUNT, "거래 금액이 너무 큽니다. 수량을 줄여주세요."
             )
 
         # 잔고 확인
@@ -171,15 +205,16 @@ class TradeService:
                 data={
                     "required": required_cash,
                     "cash": user.cash,
-                    "shortage": required_cash - user.cash
-                }
+                    "shortage": required_cash - user.cash,
+                },
             )
 
         # 기존 보유 종목 확인
-        holding = db.query(Holding).filter(
-            Holding.kakao_id == kakao_id,
-            Holding.stock_code == code
-        ).first()
+        holding = (
+            db.query(Holding)
+            .filter(Holding.kakao_id == kakao_id, Holding.stock_code == code)
+            .first()
+        )
 
         try:
             if holding:
@@ -200,7 +235,7 @@ class TradeService:
                     stock_name=name,
                     quantity=quantity,
                     avg_price=total_invested // quantity,
-                    total_invested=total_invested
+                    total_invested=total_invested,
                 )
                 db.add(holding)
 
@@ -216,7 +251,7 @@ class TradeService:
                 quantity=quantity,
                 price=price,
                 total_amount=total_amount,
-                fee=fee
+                fee=fee,
             )
             db.add(transaction)
 
@@ -226,17 +261,32 @@ class TradeService:
         except SQLAlchemyError as e:
             db.rollback()
             logger.error(f"매수 DB 트랜잭션 실패: {e}")
-            return error_response(ErrorCode.INTERNAL_ERROR, "거래 처리 중 오류가 발생했습니다.")
+            return error_response(
+                ErrorCode.INTERNAL_ERROR, "거래 처리 중 오류가 발생했습니다."
+            )
 
         # 미션 및 업적 처리
         mission_reward = MissionService.increment_trade_count(db, kakao_id)
-        new_achievements = MissionService.check_and_award_achievements(db, kakao_id)
 
-        # 마일스톤 자동 체크·지급 (거래 횟수 기준)
+        # 총 자산·수익금 계산 (업적/마일스톤/챌린지 판정용, 실패해도 거래에는 영향 없음)
+        total_asset, total_profit = TradeService._safe_get_asset_and_profit(
+            db, kakao_id
+        )
+
+        new_achievements = MissionService.check_and_award_achievements(
+            db, kakao_id, total_profit=total_profit
+        )
+
+        # 마일스톤 자동 체크·지급 (수익금·거래 횟수 기준)
         new_milestones = MilestoneService.check_milestones(
-            db, kakao_id,
+            db,
+            kakao_id,
+            total_profit=total_profit,
             total_trades=user.total_trades,
         )
+
+        # 주간 챌린지 진행도 갱신
+        TradeService._update_trade_challenges(db, kakao_id, total_asset)
 
         # 감사 로그
         log_trade(
@@ -254,8 +304,10 @@ class TradeService:
         # 자산 히스토리 기록 (실패해도 거래에는 영향 없음)
         try:
             from services.asset_service import AssetService
+
             AssetService.record_daily_asset(db, kakao_id)
         except Exception as e:
+            db.rollback()  # 예외로 오염된 세션이 이후 커밋에 영향 주지 않도록
             logger.warning(f"자산 히스토리 기록 실패 (매수 후): {e}")
 
         return {
@@ -272,16 +324,11 @@ class TradeService:
                 "mission_reward": mission_reward,
                 "new_achievements": new_achievements,
                 "new_milestones": new_milestones,
-            }
+            },
         }
 
     @staticmethod
-    def sell_stock(
-        db: Session,
-        kakao_id: str,
-        stock_query: str,
-        quantity: int
-    ) -> Dict:
+    def sell_stock(db: Session, kakao_id: str, stock_query: str, quantity: int) -> Dict:
         """주식 매도"""
         # 거래 가능 시간 확인
         time_error = TradeService._check_trading_time()
@@ -311,7 +358,7 @@ class TradeService:
             else:
                 return error_response(
                     ErrorCode.API_ERROR,
-                    f"'{name}' 시세 조회 실패. 잠시 후 다시 시도해주세요."
+                    f"'{name}' 시세 조회 실패. 잠시 후 다시 시도해주세요.",
                 )
         else:
             # 2. 포트폴리오에 없으면 일반 검색
@@ -321,28 +368,29 @@ class TradeService:
                 if resolved:
                     return error_response(
                         ErrorCode.PRICE_UNAVAILABLE,
-                        Messages.STOCK_PRICE_UNAVAILABLE.format(name=resolved["name"])
+                        Messages.STOCK_PRICE_UNAVAILABLE.format(name=resolved["name"]),
                     )
                 return error_response(
                     ErrorCode.STOCK_NOT_FOUND,
-                    f"'{stock_query}' 종목을 찾을 수 없습니다."
+                    f"'{stock_query}' 종목을 찾을 수 없습니다.",
                 )
 
             code = stock_info["code"]
             name = stock_info["name"]
             price = stock_info["price"]
 
-            holding = db.query(Holding).filter(
-                Holding.kakao_id == kakao_id,
-                Holding.stock_code == code
-            ).first()
+            holding = (
+                db.query(Holding)
+                .filter(Holding.kakao_id == kakao_id, Holding.stock_code == code)
+                .first()
+            )
 
         # 가격 유효성 검사 (0원 또는 음수 방지)
         if price <= 0:
             logger.warning(f"비정상 주가 감지: {name}({code}) = {price}원")
             return error_response(
                 ErrorCode.API_ERROR,
-                f"'{name}' 시세가 비정상입니다. 잠시 후 다시 시도해주세요."
+                f"'{name}' 시세가 비정상입니다. 잠시 후 다시 시도해주세요.",
             )
 
         if not holding or holding.quantity < quantity:
@@ -350,10 +398,7 @@ class TradeService:
             return error_response(
                 ErrorCode.INSUFFICIENT_STOCK,
                 "보유 수량이 부족합니다.",
-                data={
-                    "requested": quantity,
-                    "holding": holding_qty
-                }
+                data={"requested": quantity, "holding": holding_qty},
             )
 
         # 총 금액 계산
@@ -370,8 +415,7 @@ class TradeService:
             # 보유 수량 감소
             holding.quantity -= quantity
             holding.total_invested = safe_subtract(
-                holding.total_invested,
-                holding.avg_price * quantity
+                holding.total_invested, holding.avg_price * quantity
             )
 
             if holding.quantity == 0:
@@ -391,7 +435,7 @@ class TradeService:
                 total_amount=total_amount,
                 fee=fee,
                 profit=profit,
-                profit_rate=profit_rate
+                profit_rate=profit_rate,
             )
             db.add(transaction)
 
@@ -401,25 +445,35 @@ class TradeService:
         except SQLAlchemyError as e:
             db.rollback()
             logger.error(f"매도 DB 트랜잭션 실패: {e}")
-            return error_response(ErrorCode.INTERNAL_ERROR, "거래 처리 중 오류가 발생했습니다.")
+            return error_response(
+                ErrorCode.INTERNAL_ERROR, "거래 처리 중 오류가 발생했습니다."
+            )
 
         # 미션 및 업적 처리
         mission_reward = MissionService.increment_trade_count(db, kakao_id)
-        new_achievements = MissionService.check_and_award_achievements(
-            db, kakao_id, trade_profit=profit if profit > 0 else 0
+
+        # 총 자산·수익금 계산 (업적/마일스톤/챌린지 판정용, 실패해도 거래에는 영향 없음)
+        total_asset, total_profit = TradeService._safe_get_asset_and_profit(
+            db, kakao_id
         )
 
-        # 마일스톤 자동 체크·지급 (자산·거래 횟수 기준)
-        try:
-            from services.asset_service import AssetService
-            total_asset = AssetService.get_total_asset(db, kakao_id)
-        except Exception:
-            total_asset = None
+        new_achievements = MissionService.check_and_award_achievements(
+            db,
+            kakao_id,
+            trade_profit=profit if profit > 0 else 0,
+            total_profit=total_profit,
+        )
+
+        # 마일스톤 자동 체크·지급 (수익금·거래 횟수 기준)
         new_milestones = MilestoneService.check_milestones(
-            db, kakao_id,
-            total_asset=total_asset,
+            db,
+            kakao_id,
+            total_profit=total_profit,
             total_trades=user.total_trades,
         )
+
+        # 주간 챌린지 진행도 갱신
+        TradeService._update_trade_challenges(db, kakao_id, total_asset)
 
         # 감사 로그
         log_trade(
@@ -439,8 +493,10 @@ class TradeService:
         # 자산 히스토리 기록 (실패해도 거래에는 영향 없음)
         try:
             from services.asset_service import AssetService
+
             AssetService.record_daily_asset(db, kakao_id)
         except Exception as e:
+            db.rollback()  # 예외로 오염된 세션이 이후 커밋에 영향 주지 않도록
             logger.warning(f"자산 히스토리 기록 실패 (매도 후): {e}")
 
         return {
@@ -459,7 +515,7 @@ class TradeService:
                 "mission_reward": mission_reward,
                 "new_achievements": new_achievements,
                 "new_milestones": new_milestones,
-            }
+            },
         }
 
     @staticmethod
@@ -470,7 +526,9 @@ class TradeService:
         if error:
             return error
 
-        stock_info, stock_error = TradeService._get_stock_info(db, kakao_id, stock_query)
+        stock_info, stock_error = TradeService._get_stock_info(
+            db, kakao_id, stock_query
+        )
         if stock_error:
             return stock_error
 
@@ -478,17 +536,28 @@ class TradeService:
         if price <= 0:
             return error_response(
                 ErrorCode.API_ERROR,
-                f"'{stock_info['name']}' 시세가 비정상입니다. 잠시 후 다시 시도해주세요."
+                f"'{stock_info['name']}' 시세가 비정상입니다. 잠시 후 다시 시도해주세요.",
             )
 
         # 수수료 포함 최대 수량 계산
+        # buy_stock과 동일한 수수료 라운딩(내림)으로 필요 금액을 계산해
+        # float 오차로 경계 수량이 "잔고 부족"으로 실패하는 문제를 방지
+        def required_cash(qty: int) -> int:
+            amount = price * qty
+            return amount + int(amount * GameConfig.TRADE_FEE_RATE)
+
         max_qty = int(user.cash / (price * (1 + GameConfig.TRADE_FEE_RATE)))
+        max_qty = min(max_qty, GameConfig.MAX_QUANTITY)
+        while max_qty > 0 and required_cash(max_qty) > user.cash:
+            max_qty -= 1
+        while (
+            max_qty < GameConfig.MAX_QUANTITY
+            and required_cash(max_qty + 1) <= user.cash
+        ):
+            max_qty += 1
 
         if max_qty < 1:
-            return error_response(
-                ErrorCode.INSUFFICIENT_BALANCE,
-                "잔고가 부족합니다."
-            )
+            return error_response(ErrorCode.INSUFFICIENT_BALANCE, "잔고가 부족합니다.")
 
         return TradeService.buy_stock(db, kakao_id, stock_info["name"], max_qty)
 
@@ -498,27 +567,28 @@ class TradeService:
         # 먼저 포트폴리오에서 검색
         holding = TradeService.find_holding_by_name(db, kakao_id, stock_query)
         if holding:
-            return TradeService.sell_stock(db, kakao_id, holding.stock_name, holding.quantity)
+            return TradeService.sell_stock(
+                db, kakao_id, holding.stock_name, holding.quantity
+            )
 
         # 포트폴리오에 없으면 일반 검색
         stock_info = StockService.search_stock(stock_query)
         if not stock_info:
             return error_response(
-                ErrorCode.STOCK_NOT_FOUND,
-                f"'{stock_query}' 종목을 찾을 수 없습니다."
+                ErrorCode.STOCK_NOT_FOUND, f"'{stock_query}' 종목을 찾을 수 없습니다."
             )
 
         code = stock_info["code"]
 
-        holding = db.query(Holding).filter(
-            Holding.kakao_id == kakao_id,
-            Holding.stock_code == code
-        ).first()
+        holding = (
+            db.query(Holding)
+            .filter(Holding.kakao_id == kakao_id, Holding.stock_code == code)
+            .first()
+        )
 
         if not holding or holding.quantity == 0:
             return error_response(
-                ErrorCode.INSUFFICIENT_STOCK,
-                "보유 중인 종목이 아닙니다."
+                ErrorCode.INSUFFICIENT_STOCK, "보유 중인 종목이 아닙니다."
             )
 
         return TradeService.sell_stock(db, kakao_id, stock_query, holding.quantity)
@@ -532,10 +602,11 @@ class TradeService:
         if not user:
             return None
 
-        holdings = db.query(Holding).filter(
-            Holding.kakao_id == kakao_id,
-            Holding.quantity > 0
-        ).all()
+        holdings = (
+            db.query(Holding)
+            .filter(Holding.kakao_id == kakao_id, Holding.quantity > 0)
+            .all()
+        )
 
         portfolio = {
             "cash": user.cash,
@@ -544,7 +615,7 @@ class TradeService:
             "total_stock_value": 0,
             "total_asset": user.cash,
             "total_profit": 0,
-            "profit_rate": 0.0
+            "profit_rate": 0.0,
         }
 
         # 모든 종목 코드 수집 후 배치 조회
@@ -559,34 +630,40 @@ class TradeService:
             profit = current_value - cost
             profit_rate = round((profit / cost) * 100, 2) if cost > 0 else 0.0
 
-            portfolio["holdings"].append({
-                "code": h.stock_code,
-                "name": h.stock_name,
-                "quantity": h.quantity,
-                "avg_price": h.avg_price,
-                "current_price": current_price,
-                "current_value": current_value,
-                "profit": profit,
-                "profit_rate": profit_rate
-            })
+            portfolio["holdings"].append(
+                {
+                    "code": h.stock_code,
+                    "name": h.stock_name,
+                    "quantity": h.quantity,
+                    "avg_price": h.avg_price,
+                    "current_price": current_price,
+                    "current_value": current_value,
+                    "profit": profit,
+                    "profit_rate": profit_rate,
+                }
+            )
 
             portfolio["total_stock_value"] += current_value
 
         portfolio["total_asset"] = portfolio["cash"] + portfolio["total_stock_value"]
         portfolio["total_profit"] = portfolio["total_asset"] - portfolio["initial_cash"]
-        portfolio["profit_rate"] = round((portfolio["total_profit"] / portfolio["initial_cash"]) * 100, 2) if portfolio["initial_cash"] > 0 else 0.0
+        portfolio["profit_rate"] = (
+            round((portfolio["total_profit"] / portfolio["initial_cash"]) * 100, 2)
+            if portfolio["initial_cash"] > 0
+            else 0.0
+        )
 
         return portfolio
 
     @staticmethod
     def get_transactions(
-        db: Session,
-        kakao_id: str,
-        limit: int = 10
+        db: Session, kakao_id: str, limit: int = 10
     ) -> List[Transaction]:
         """최근 거래 내역 조회"""
-        return db.query(Transaction).filter(
-            Transaction.kakao_id == kakao_id
-        ).order_by(
-            Transaction.created_at.desc()
-        ).limit(limit).all()
+        return (
+            db.query(Transaction)
+            .filter(Transaction.kakao_id == kakao_id)
+            .order_by(Transaction.created_at.desc())
+            .limit(limit)
+            .all()
+        )
