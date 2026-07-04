@@ -4,6 +4,7 @@
 - N+1 쿼리 최적화 적용
 - 중복 로직 제거
 """
+
 from typing import List, Dict, Optional, Tuple, Set
 from sqlalchemy.orm import Session, joinedload
 from cachetools import TTLCache
@@ -31,10 +32,7 @@ class RankingService:
 
     @classmethod
     def _calculate_total_asset_batch(
-        cls,
-        user: User,
-        user_holdings: List[Holding],
-        stock_prices: Dict[str, int]
+        cls, user: User, user_holdings: List[Holding], stock_prices: Dict[str, int]
     ) -> Tuple[int, float]:
         """
         일괄 조회된 데이터로 총 자산 계산 (N+1 최적화)
@@ -48,7 +46,9 @@ class RankingService:
 
         # 수익률 계산 (0으로 나누기 방지, 소수점 2자리 반올림)
         if user.initial_cash > 0:
-            profit_rate = round(((total_asset - user.initial_cash) / user.initial_cash) * 100, 2)
+            profit_rate = round(
+                ((total_asset - user.initial_cash) / user.initial_cash) * 100, 2
+            )
         else:
             profit_rate = 0.0
 
@@ -90,20 +90,23 @@ class RankingService:
             )
 
             # 각성 정보
-            enhance_level = getattr(user, 'enhance_level', 0) or 0
-            seed = getattr(user, 'enhance_title_seed', 0) or 0
+            enhance_level = getattr(user, "enhance_level", 0) or 0
+            seed = getattr(user, "enhance_title_seed", 0) or 0
             title_name, title_emoji = EnhanceConfig.get_title(enhance_level, seed=seed)
 
-            rankings.append({
-                "kakao_id": user.kakao_id,
-                "nickname": cls._get_display_name(user),
-                "total_asset": total_asset,
-                "profit_rate": profit_rate,
-                "profit_amount": total_asset - (user.initial_cash or GameConfig.INITIAL_CASH),
-                "enhance_level": enhance_level,
-                "enhance_title": title_name,
-                "enhance_emoji": title_emoji,
-            })
+            rankings.append(
+                {
+                    "kakao_id": user.kakao_id,
+                    "nickname": cls._get_display_name(user),
+                    "total_asset": total_asset,
+                    "profit_rate": profit_rate,
+                    "profit_amount": total_asset
+                    - (user.initial_cash or GameConfig.INITIAL_CASH),
+                    "enhance_level": enhance_level,
+                    "enhance_title": title_name,
+                    "enhance_emoji": title_emoji,
+                }
+            )
 
         # 5. 수익률 기준 정렬 및 순위 부여
         rankings.sort(key=lambda x: x["profit_rate"], reverse=True)
@@ -120,10 +123,11 @@ class RankingService:
         total_asset = user.cash
 
         # 보유 주식 가치 계산
-        holdings = db.query(Holding).filter(
-            Holding.kakao_id == user.kakao_id,
-            Holding.quantity > 0
-        ).all()
+        holdings = (
+            db.query(Holding)
+            .filter(Holding.kakao_id == user.kakao_id, Holding.quantity > 0)
+            .all()
+        )
 
         for h in holdings:
             stock_info = StockService.get_price(h.stock_code)
@@ -135,7 +139,9 @@ class RankingService:
 
         # 수익률 계산 (0으로 나누기 방지, 소수점 2자리 반올림)
         if user.initial_cash > 0:
-            profit_rate = round(((total_asset - user.initial_cash) / user.initial_cash) * 100, 2)
+            profit_rate = round(
+                ((total_asset - user.initial_cash) / user.initial_cash) * 100, 2
+            )
         else:
             profit_rate = 0.0
 
@@ -217,7 +223,7 @@ class RankingService:
             "kakao_id": kakao_id,
             "nickname": cls._get_display_name(user),
             "total_asset": total_asset,
-            "profit_rate": profit_rate
+            "profit_rate": profit_rate,
         }
 
     @classmethod
@@ -246,23 +252,29 @@ class RankingService:
         if cache_key in cls._ranking_cache:
             return cls._ranking_cache[cache_key]
 
-        users = db.query(User).filter(
-            User.enhance_level > 0
-        ).order_by(User.enhance_level.desc()).limit(limit).all()
+        users = (
+            db.query(User)
+            .filter(User.enhance_level > 0)
+            .order_by(User.enhance_level.desc())
+            .limit(limit)
+            .all()
+        )
 
         result = []
         for i, user in enumerate(users):
             level = user.enhance_level or 0
-            seed = getattr(user, 'enhance_title_seed', 0) or 0
+            seed = getattr(user, "enhance_title_seed", 0) or 0
             title_name, title_emoji = EnhanceConfig.get_title(level, seed=seed)
-            result.append({
-                "rank": i + 1,
-                "kakao_id": user.kakao_id,
-                "nickname": cls._get_display_name(user),
-                "enhance_level": level,
-                "enhance_title": title_name,
-                "enhance_emoji": title_emoji,
-            })
+            result.append(
+                {
+                    "rank": i + 1,
+                    "kakao_id": user.kakao_id,
+                    "nickname": cls._get_display_name(user),
+                    "enhance_level": level,
+                    "enhance_title": title_name,
+                    "enhance_emoji": title_emoji,
+                }
+            )
 
         cls._ranking_cache[cache_key] = result
         return result
@@ -270,13 +282,17 @@ class RankingService:
     @classmethod
     def _get_group_member_ids(cls, db: Session, group_key: str) -> Set[str]:
         """채팅방 멤버 kakao_id 목록 조회"""
-        rows = db.query(ChatRoomMember.kakao_id).filter(
-            ChatRoomMember.group_key == group_key
-        ).all()
+        rows = (
+            db.query(ChatRoomMember.kakao_id)
+            .filter(ChatRoomMember.group_key == group_key)
+            .all()
+        )
         return {row[0] for row in rows}
 
     @classmethod
-    def get_group_ranking(cls, db: Session, group_key: str, limit: int = 10) -> List[Dict]:
+    def get_group_ranking(
+        cls, db: Session, group_key: str, limit: int = 10
+    ) -> List[Dict]:
         """
         채팅방별 수익률 랭킹 (그룹 챗봇용)
         group_key가 비어있으면 전체 랭킹 반환
@@ -310,7 +326,9 @@ class RankingService:
         return result
 
     @classmethod
-    def get_my_group_rank(cls, db: Session, kakao_id: str, group_key: str) -> Optional[Dict]:
+    def get_my_group_rank(
+        cls, db: Session, kakao_id: str, group_key: str
+    ) -> Optional[Dict]:
         """
         채팅방 내 내 순위 (그룹 챗봇용)
         group_key가 비어있으면 전체 랭킹 기준
@@ -356,7 +374,9 @@ class RankingService:
         return cls.get_my_rank(db, kakao_id)
 
     @classmethod
-    def get_group_enhance_ranking(cls, db: Session, group_key: str, limit: int = 10) -> List[Dict]:
+    def get_group_enhance_ranking(
+        cls, db: Session, group_key: str, limit: int = 10
+    ) -> List[Dict]:
         """채팅방별 각성 랭킹 (그룹 챗봇용)"""
         if not group_key:
             return cls.get_enhance_ranking(db, limit)
@@ -365,24 +385,29 @@ class RankingService:
         if not member_ids:
             return []
 
-        users = db.query(User).filter(
-            User.kakao_id.in_(member_ids),
-            User.enhance_level > 0
-        ).order_by(User.enhance_level.desc()).limit(limit).all()
+        users = (
+            db.query(User)
+            .filter(User.kakao_id.in_(member_ids), User.enhance_level > 0)
+            .order_by(User.enhance_level.desc())
+            .limit(limit)
+            .all()
+        )
 
         result = []
         for i, user in enumerate(users):
             level = user.enhance_level or 0
-            seed = getattr(user, 'enhance_title_seed', 0) or 0
+            seed = getattr(user, "enhance_title_seed", 0) or 0
             title_name, title_emoji = EnhanceConfig.get_title(level, seed=seed)
-            result.append({
-                "rank": i + 1,
-                "kakao_id": user.kakao_id,
-                "nickname": cls._get_display_name(user),
-                "enhance_level": level,
-                "enhance_title": title_name,
-                "enhance_emoji": title_emoji,
-            })
+            result.append(
+                {
+                    "rank": i + 1,
+                    "kakao_id": user.kakao_id,
+                    "nickname": cls._get_display_name(user),
+                    "enhance_level": level,
+                    "enhance_title": title_name,
+                    "enhance_emoji": title_emoji,
+                }
+            )
 
         return result
 
@@ -397,7 +422,7 @@ class RankingService:
         # 음수 수익률만 필터링 후 손실 큰 순서
         losers = sorted(
             [r for r in rankings if r["profit_rate"] < 0],
-            key=lambda x: x["profit_rate"]
+            key=lambda x: x["profit_rate"],
         )[:limit]
 
         cls._ranking_cache[cache_key] = losers

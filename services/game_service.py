@@ -3,6 +3,7 @@
 - 복권, 시장예측(역사 퀴즈), 업다운(멀티라운드)
 - 장 마감 시간에만 플레이 가능 (복권 제외)
 """
+
 import json
 import random
 from datetime import datetime
@@ -18,7 +19,7 @@ from services.common import (
     error_response,
     safe_add,
     safe_subtract,
-    safe_multiply
+    safe_multiply,
 )
 from utils import get_service_logger, log_game
 
@@ -50,7 +51,7 @@ class GameService:
         if user.lottery_count_today >= GameConfig.MAX_LOTTERY_PER_DAY:
             return error_response(
                 ErrorCode.DAILY_LIMIT_REACHED,
-                f"🎁 오늘 보물상자를 모두 열었어요! ({GameConfig.MAX_LOTTERY_PER_DAY}회)\n내일 다시 도전하세요 🍀"
+                f"🎁 오늘 보물상자를 모두 열었어요! ({GameConfig.MAX_LOTTERY_PER_DAY}회)\n내일 다시 도전하세요 🍀",
             )
 
         user.lottery_count_today += 1
@@ -62,23 +63,25 @@ class GameService:
         reward = 0
 
         tier_display = {
-            "전설":   ("🟠 전설",   "이게 실화?! 전설 등급 획득!"),
-            "영웅":   ("🟣 영웅",   "오늘 운이 폭발했어요!"),
-            "희귀":   ("🔵 희귀",   "희귀 아이템 획득!"),
-            "고급":   ("🟢 고급",   "쏠쏠하네요!"),
-            "일반":   ("⚪ 일반",   "소소한 행운!"),
-            "빈 상자":("📦 빈 상자","다음엔 꼭 뜰 거예요..."),
+            "전설": ("🟠 전설", "이게 실화?! 전설 등급 획득!"),
+            "영웅": ("🟣 영웅", "오늘 운이 폭발했어요!"),
+            "희귀": ("🔵 희귀", "희귀 아이템 획득!"),
+            "고급": ("🟢 고급", "쏠쏠하네요!"),
+            "일반": ("⚪ 일반", "소소한 행운!"),
+            "빈 상자": ("📦 빈 상자", "다음엔 꼭 뜰 거예요..."),
         }
 
         for tier_name, tier_info in GameProbability.LOTTERY.items():
             cumulative += tier_info["prob"]
             if roll < cumulative:
                 tier = tier_name
-                reward = random.randint(tier_info["min_reward"], tier_info["max_reward"])
+                reward = random.randint(
+                    tier_info["min_reward"], tier_info["max_reward"]
+                )
                 break
 
         # 각성 보너스 적용 (꽝이 아닌 경우)
-        enhance_level = getattr(user, 'enhance_level', 0) or 0
+        enhance_level = getattr(user, "enhance_level", 0) or 0
         enhance_bonus = 0
         if reward > 0 and enhance_level > 0:
             enhance_mult = EnhanceConfig.get_lottery_multiplier(enhance_level)
@@ -86,7 +89,9 @@ class GameService:
             enhance_bonus = enhanced_reward - reward
             reward = enhanced_reward
 
-        tier_text, tier_msg = tier_display.get(tier, ("📦 빈 상자", "다음엔 꼭 뜰 거예요..."))
+        tier_text, tier_msg = tier_display.get(
+            tier, ("📦 빈 상자", "다음엔 꼭 뜰 거예요...")
+        )
 
         # Near-miss 판정: 빈 상자일 때 바로 위 등급(일반) 경계에 얼마나 가까웠는지
         near_miss_tier = None
@@ -108,13 +113,19 @@ class GameService:
         except SQLAlchemyError as e:
             db.rollback()
             logger.error(f"복권 DB 커밋 실패: {e}")
-            return error_response(ErrorCode.DB_ERROR, "데이터베이스 오류가 발생했습니다.")
+            return error_response(
+                ErrorCode.DB_ERROR, "데이터베이스 오류가 발생했습니다."
+            )
 
         log_game(
-            kakao_id=kakao_id, game_type="LOTTERY",
-            bet=0, result=tier,
-            winnings=reward, profit=reward, cash_after=user.cash,
-            extra=f"tier={tier_text}"
+            kakao_id=kakao_id,
+            game_type="LOTTERY",
+            bet=0,
+            result=tier,
+            winnings=reward,
+            profit=reward,
+            cash_after=user.cash,
+            extra=f"tier={tier_text}",
         )
 
         return {
@@ -167,6 +178,7 @@ class GameService:
 
         # 랜덤 퀴즈 선택 (실제 주가 데이터 기반, 폴백: 하드코딩)
         from services.quiz_data_service import get_random_quiz
+
         quiz = get_random_quiz()
 
         user.pending_quiz = json.dumps(quiz, ensure_ascii=False)
@@ -177,7 +189,9 @@ class GameService:
         except SQLAlchemyError as e:
             db.rollback()
             logger.error(f"시장예측 출제 DB 커밋 실패: {e}")
-            return error_response(ErrorCode.DB_ERROR, "데이터베이스 오류가 발생했습니다.")
+            return error_response(
+                ErrorCode.DB_ERROR, "데이터베이스 오류가 발생했습니다."
+            )
 
         return {
             "success": True,
@@ -204,13 +218,15 @@ class GameService:
 
         choice_normalized = cls._normalize_quiz_choice(choice)
         if not choice_normalized:
-            return error_response(ErrorCode.INVALID_CHOICE, "상승 또는 하락 중 선택해주세요.")
+            return error_response(
+                ErrorCode.INVALID_CHOICE, "상승 또는 하락 중 선택해주세요."
+            )
 
         quiz = cls._load_pending_quiz(user)
         if not quiz:
             return error_response(
                 ErrorCode.INVALID_STATE,
-                "출제된 퀴즈가 없어요. /시장예측 [금액] 으로 먼저 퀴즈를 받아주세요!"
+                "출제된 퀴즈가 없어요. /시장예측 [금액] 으로 먼저 퀴즈를 받아주세요!",
             )
 
         bet = user.pending_quiz_bet or 0
@@ -226,7 +242,7 @@ class GameService:
         user.cash = safe_subtract(user.cash, bet)
 
         # 정답 확인
-        won = (choice_normalized == quiz["answer"])
+        won = choice_normalized == quiz["answer"]
 
         if won:
             multiplier = GameProbability.STOCK_QUIZ_MULTIPLIER
@@ -246,13 +262,19 @@ class GameService:
         except SQLAlchemyError as e:
             db.rollback()
             logger.error(f"시장예측 DB 커밋 실패: {e}")
-            return error_response(ErrorCode.DB_ERROR, "데이터베이스 오류가 발생했습니다.")
+            return error_response(
+                ErrorCode.DB_ERROR, "데이터베이스 오류가 발생했습니다."
+            )
 
         log_game(
-            kakao_id=kakao_id, game_type="STOCK_QUIZ",
-            bet=bet, result=f"{quiz['answer']}({'WIN' if won else 'LOSE'})",
-            winnings=winnings, profit=winnings - bet, cash_after=user.cash,
-            extra=f"stock={quiz['stock_name']} period={quiz['period']} choice={choice_normalized}"
+            kakao_id=kakao_id,
+            game_type="STOCK_QUIZ",
+            bet=bet,
+            result=f"{quiz['answer']}({'WIN' if won else 'LOSE'})",
+            winnings=winnings,
+            profit=winnings - bet,
+            cash_after=user.cash,
+            extra=f"stock={quiz['stock_name']} period={quiz['period']} choice={choice_normalized}",
         )
 
         return {
@@ -265,7 +287,7 @@ class GameService:
             "multiplier": multiplier,
             "winnings": winnings,
             "profit": winnings - bet,
-            "cash": user.cash
+            "cash": user.cash,
         }
 
     @staticmethod
@@ -315,7 +337,9 @@ class GameService:
         total = up_count + down_count
         fee_rate = cls._round_fee_rate(round_num)
         up_mult = round((total / up_count) * fee_rate, 2) if up_count > 0 else 99.0
-        down_mult = round((total / down_count) * fee_rate, 2) if down_count > 0 else 99.0
+        down_mult = (
+            round((total / down_count) * fee_rate, 2) if down_count > 0 else 99.0
+        )
         return up_mult, down_mult, up_count, down_count
 
     @classmethod
@@ -343,7 +367,7 @@ class GameService:
                 "current_number": user.updown_current_number,
                 "round": user.updown_round,
                 "multiplier": user.updown_multiplier,
-                "bet": user.updown_bet
+                "bet": user.updown_bet,
             }
 
         is_valid, bet_error = validate_bet(bet, user.cash)
@@ -368,16 +392,24 @@ class GameService:
         except SQLAlchemyError as e:
             db.rollback()
             logger.error(f"업다운 시작 DB 커밋 실패: {e}")
-            return error_response(ErrorCode.DB_ERROR, "데이터베이스 오류가 발생했습니다.")
+            return error_response(
+                ErrorCode.DB_ERROR, "데이터베이스 오류가 발생했습니다."
+            )
 
         # 다음 라운드 배율 미리 계산 (라운드 수수료 반영)
-        up_mult, down_mult, up_count, down_count = cls._preview_multipliers(first_number, 1)
+        up_mult, down_mult, up_count, down_count = cls._preview_multipliers(
+            first_number, 1
+        )
 
         log_game(
-            kakao_id=kakao_id, game_type="UPDOWN_START",
-            bet=bet, result=f"number={first_number}",
-            winnings=0, profit=0, cash_after=user.cash,
-            extra=f"first_number={first_number}"
+            kakao_id=kakao_id,
+            game_type="UPDOWN_START",
+            bet=bet,
+            result=f"number={first_number}",
+            winnings=0,
+            profit=0,
+            cash_after=user.cash,
+            extra=f"first_number={first_number}",
         )
 
         return {
@@ -407,11 +439,16 @@ class GameService:
             return error
 
         if not user.updown_active:
-            return error_response(ErrorCode.INVALID_STATE, "진행 중인 업다운 게임이 없어요. /업다운 [금액] 으로 시작하세요!")
+            return error_response(
+                ErrorCode.INVALID_STATE,
+                "진행 중인 업다운 게임이 없어요. /업다운 [금액] 으로 시작하세요!",
+            )
 
         choice_normalized = cls._normalize_updown_choice(choice)
         if not choice_normalized:
-            return error_response(ErrorCode.INVALID_CHOICE, "상승/하락 중 선택해주세요.")
+            return error_response(
+                ErrorCode.INVALID_CHOICE, "상승/하락 중 선택해주세요."
+            )
 
         current = user.updown_current_number
 
@@ -420,9 +457,13 @@ class GameService:
         down_count = current - 1
 
         if choice_normalized == "상승" and up_count == 0:
-            return error_response(ErrorCode.INVALID_CHOICE, "현재 숫자가 100이라 상승을 선택할 수 없어요!")
+            return error_response(
+                ErrorCode.INVALID_CHOICE, "현재 숫자가 100이라 상승을 선택할 수 없어요!"
+            )
         if choice_normalized == "하락" and down_count == 0:
-            return error_response(ErrorCode.INVALID_CHOICE, "현재 숫자가 1이라 하락을 선택할 수 없어요!")
+            return error_response(
+                ErrorCode.INVALID_CHOICE, "현재 숫자가 1이라 하락을 선택할 수 없어요!"
+            )
 
         # 다음 숫자 생성 (현재 숫자 제외)
         possible = [n for n in range(1, 101) if n != current]
@@ -434,7 +475,7 @@ class GameService:
         else:
             actual = "하락"
 
-        won = (choice_normalized == actual)
+        won = choice_normalized == actual
 
         # 이번 라운드 배율 계산 (공정: 1/확률)
         total = up_count + down_count
@@ -457,23 +498,30 @@ class GameService:
             user.updown_multiplier = new_multiplier
 
             # 다음 라운드 배율 미리 계산 (다음 라운드 수수료 반영 — 표시와 실제 지급 일치)
-            next_up_mult, next_down_mult, next_up_count, next_down_count = \
+            next_up_mult, next_down_mult, next_up_count, next_down_count = (
                 cls._preview_multipliers(next_number, user.updown_round)
+            )
 
             try:
                 db.commit()
             except SQLAlchemyError as e:
                 db.rollback()
                 logger.error(f"업다운 라운드 DB 커밋 실패: {e}")
-                return error_response(ErrorCode.DB_ERROR, "데이터베이스 오류가 발생했습니다.")
+                return error_response(
+                    ErrorCode.DB_ERROR, "데이터베이스 오류가 발생했습니다."
+                )
 
             potential_winnings = safe_multiply(user.updown_bet, new_multiplier)
 
             log_game(
-                kakao_id=kakao_id, game_type="UPDOWN_ROUND",
-                bet=user.updown_bet, result=f"WIN round={user.updown_round}",
-                winnings=0, profit=0, cash_after=user.cash,
-                extra=f"prev={current} next={next_number} choice={choice_normalized} mult=x{round_multiplier} total=x{new_multiplier}"
+                kakao_id=kakao_id,
+                game_type="UPDOWN_ROUND",
+                bet=user.updown_bet,
+                result=f"WIN round={user.updown_round}",
+                winnings=0,
+                profit=0,
+                cash_after=user.cash,
+                extra=f"prev={current} next={next_number} choice={choice_normalized} mult=x{round_multiplier} total=x{new_multiplier}",
             )
 
             return {
@@ -508,13 +556,19 @@ class GameService:
             except SQLAlchemyError as e:
                 db.rollback()
                 logger.error(f"업다운 실패 DB 커밋 실패: {e}")
-                return error_response(ErrorCode.DB_ERROR, "데이터베이스 오류가 발생했습니다.")
+                return error_response(
+                    ErrorCode.DB_ERROR, "데이터베이스 오류가 발생했습니다."
+                )
 
             log_game(
-                kakao_id=kakao_id, game_type="UPDOWN_LOSE",
-                bet=bet, result="LOSE",
-                winnings=0, profit=-bet, cash_after=user.cash,
-                extra=f"prev={current} next={next_number} choice={choice_normalized} actual={actual}"
+                kakao_id=kakao_id,
+                game_type="UPDOWN_LOSE",
+                bet=bet,
+                result="LOSE",
+                winnings=0,
+                profit=-bet,
+                cash_after=user.cash,
+                extra=f"prev={current} next={next_number} choice={choice_normalized} actual={actual}",
             )
 
             return {
@@ -538,12 +592,14 @@ class GameService:
             return error
 
         if not user.updown_active:
-            return error_response(ErrorCode.INVALID_STATE, "진행 중인 업다운 게임이 없어요.")
+            return error_response(
+                ErrorCode.INVALID_STATE, "진행 중인 업다운 게임이 없어요."
+            )
 
         if user.updown_round < 2:
             return error_response(
                 ErrorCode.INVALID_STATE,
-                "최소 1라운드는 맞춰야 정산할 수 있어요!\n먼저 상승/하락을 선택해주세요."
+                "최소 1라운드는 맞춰야 정산할 수 있어요!\n먼저 상승/하락을 선택해주세요.",
             )
 
         bet = user.updown_bet
@@ -566,15 +622,21 @@ class GameService:
         except SQLAlchemyError as e:
             db.rollback()
             logger.error(f"업다운 정산 DB 커밋 실패: {e}")
-            return error_response(ErrorCode.DB_ERROR, "데이터베이스 오류가 발생했습니다.")
+            return error_response(
+                ErrorCode.DB_ERROR, "데이터베이스 오류가 발생했습니다."
+            )
 
         profit = winnings - bet
 
         log_game(
-            kakao_id=kakao_id, game_type="UPDOWN_CASHOUT",
-            bet=bet, result=f"CASHOUT round={final_round} x{multiplier}",
-            winnings=winnings, profit=profit, cash_after=user.cash,
-            extra=f"multiplier=x{multiplier} rounds={final_round}"
+            kakao_id=kakao_id,
+            game_type="UPDOWN_CASHOUT",
+            bet=bet,
+            result=f"CASHOUT round={final_round} x{multiplier}",
+            winnings=winnings,
+            profit=profit,
+            cash_after=user.cash,
+            extra=f"multiplier=x{multiplier} rounds={final_round}",
         )
 
         return {
@@ -591,6 +653,7 @@ class GameService:
     def get_updown_status(cls, db: Session, kakao_id: str) -> Dict:
         """업다운 게임 현재 상태 조회"""
         from services.common import get_user_with_error
+
         user, error = get_user_with_error(db, kakao_id)
         if error:
             return error
@@ -599,8 +662,9 @@ class GameService:
             return {"success": True, "active": False}
 
         current = user.updown_current_number
-        up_mult, down_mult, up_count, down_count = \
-            cls._preview_multipliers(current, user.updown_round)
+        up_mult, down_mult, up_count, down_count = cls._preview_multipliers(
+            current, user.updown_round
+        )
 
         return {
             "success": True,
@@ -609,7 +673,9 @@ class GameService:
             "round": user.updown_round,
             "multiplier": user.updown_multiplier,
             "bet": user.updown_bet,
-            "potential_winnings": safe_multiply(user.updown_bet, user.updown_multiplier),
+            "potential_winnings": safe_multiply(
+                user.updown_bet, user.updown_multiplier
+            ),
             "cash": user.cash,
             "up_multiplier": up_mult,
             "down_multiplier": down_mult,

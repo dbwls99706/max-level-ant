@@ -6,6 +6,7 @@
 - 카드 본문은 항상 CARD_DESC_LIMIT 이하로 유지된다.
 - 가변 목록은 fit_items()로 헤더·푸터를 보존하며 줄여 담는다.
 """
+
 from utils import KakaoResponse
 
 LIMIT = KakaoResponse.CARD_DESC_LIMIT
@@ -76,8 +77,8 @@ class TestFitItems:
         )
         assert len(body) <= LIMIT
         assert body.startswith("📋 헤더")
-        assert body.endswith("요약 푸터")          # 푸터는 절대 누락 안 됨
-        assert "…외" in body and "개 더" in body   # 생략 표시 존재
+        assert body.endswith("요약 푸터")  # 푸터는 절대 누락 안 됨
+        assert "…외" in body and "개 더" in body  # 생략 표시 존재
 
     def test_footer_preserved_even_when_items_are_huge(self):
         items = ["엄청 긴 항목 " + "가" * 200 for _ in range(5)]
@@ -91,6 +92,7 @@ class TestFitItems:
         body = KakaoResponse.fit_items("H", items, "", limit=12, more_fmt="외 {n}개")
         # 남은 개수 표기가 실제 드롭된 개수와 일치
         import re
+
         m = re.search(r"외 (\d+)개", body)
         assert m is not None
         dropped = int(m.group(1))

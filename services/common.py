@@ -6,28 +6,35 @@
 - 응답 빌더: error_response, success_response
 - 금액 안전 계산: safe_add, safe_subtract, safe_multiply
 """
+
 from typing import Dict, Optional, TypeVar, Tuple
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import SQLAlchemyError
 
 from models import User
 from config import (
-    GameConfig, Messages, ErrorCode,
-    is_market_open, get_market_status_message
+    GameConfig,
+    Messages,
+    ErrorCode,
+    is_market_open,
+    get_market_status_message,
 )
 from utils import get_service_logger
 
 logger = get_service_logger()
 
 # 제네릭 타입
-T = TypeVar('T')
+T = TypeVar("T")
 
 
 # ===========================================
 # 트랜잭션 헬퍼
 # ===========================================
 
-def safe_commit(db: Session, error_message: str = "데이터베이스 오류가 발생했습니다.") -> Tuple[bool, str]:
+
+def safe_commit(
+    db: Session, error_message: str = "데이터베이스 오류가 발생했습니다."
+) -> Tuple[bool, str]:
     """
     안전한 DB 커밋 with 롤백
 
@@ -47,6 +54,7 @@ def safe_commit(db: Session, error_message: str = "데이터베이스 오류가 
 # 유저 관련 헬퍼
 # ===========================================
 
+
 def get_user_or_none(db: Session, kakao_id: str) -> Optional[User]:
     """유저 조회 (없으면 None)"""
     return db.query(User).filter(User.kakao_id == kakao_id).first()
@@ -58,12 +66,12 @@ def get_user_for_update(db: Session, kakao_id: str) -> Optional[User]:
     - 동시성 제어가 필요한 거래에서 사용
     - 트랜잭션 종료 시까지 해당 row lock 유지
     """
-    return db.query(User).filter(
-        User.kakao_id == kakao_id
-    ).with_for_update().first()
+    return db.query(User).filter(User.kakao_id == kakao_id).with_for_update().first()
 
 
-def get_user_with_error(db: Session, kakao_id: str) -> Tuple[Optional[User], Optional[Dict]]:
+def get_user_with_error(
+    db: Session, kakao_id: str
+) -> Tuple[Optional[User], Optional[Dict]]:
     """
     유저 조회 with 에러 응답
 
@@ -75,12 +83,14 @@ def get_user_with_error(db: Session, kakao_id: str) -> Tuple[Optional[User], Opt
         return None, {
             "success": False,
             "error_code": ErrorCode.USER_NOT_FOUND,
-            "message": Messages.USER_NOT_FOUND
+            "message": Messages.USER_NOT_FOUND,
         }
     return user, None
 
 
-def get_user_with_error_for_update(db: Session, kakao_id: str) -> Tuple[Optional[User], Optional[Dict]]:
+def get_user_with_error_for_update(
+    db: Session, kakao_id: str
+) -> Tuple[Optional[User], Optional[Dict]]:
     """
     유저 조회 with FOR UPDATE and 에러 응답
     - 거래 등 동시성 제어가 필요한 작업에서 사용
@@ -94,7 +104,7 @@ def get_user_with_error_for_update(db: Session, kakao_id: str) -> Tuple[Optional
         return None, {
             "success": False,
             "error_code": ErrorCode.USER_NOT_FOUND,
-            "message": Messages.USER_NOT_FOUND
+            "message": Messages.USER_NOT_FOUND,
         }
     return user, None
 
@@ -103,11 +113,9 @@ def get_user_with_error_for_update(db: Session, kakao_id: str) -> Tuple[Optional
 # 투자금 검증
 # ===========================================
 
+
 def validate_bet(
-    bet: int,
-    user_cash: int,
-    min_bet: int = None,
-    max_bet: int = None
+    bet: int, user_cash: int, min_bet: int = None, max_bet: int = None
 ) -> Tuple[bool, str]:
     """
     투자금 검증
@@ -142,9 +150,7 @@ def validate_bet(
 
 
 def validate_quantity(
-    quantity: int,
-    min_qty: int = None,
-    max_qty: int = None
+    quantity: int, min_qty: int = None, max_qty: int = None
 ) -> Tuple[bool, str]:
     """
     거래 수량 검증
@@ -178,6 +184,7 @@ def validate_quantity(
 # 시장 상태 검증
 # ===========================================
 
+
 def check_market_closed_for_game(game_emoji: str = "🎰") -> Tuple[bool, Optional[Dict]]:
     """
     게임 가능 시간 체크 (장 마감 시간에만 가능)
@@ -190,7 +197,8 @@ def check_market_closed_for_game(game_emoji: str = "🎰") -> Tuple[bool, Option
         return False, {
             "success": False,
             "error_code": ErrorCode.MARKET_CLOSED,
-            "message": f"{game_emoji} " + Messages.MARKET_CLOSED_GAME.format(status_msg=status_msg)
+            "message": f"{game_emoji} "
+            + Messages.MARKET_CLOSED_GAME.format(status_msg=status_msg),
         }
     return True, None
 
@@ -199,17 +207,10 @@ def check_market_closed_for_game(game_emoji: str = "🎰") -> Tuple[bool, Option
 # 응답 빌더
 # ===========================================
 
-def error_response(
-    error_code: str,
-    message: str,
-    **extra_data
-) -> Dict:
+
+def error_response(error_code: str, message: str, **extra_data) -> Dict:
     """에러 응답 생성"""
-    response = {
-        "success": False,
-        "error_code": error_code,
-        "message": message
-    }
+    response = {"success": False, "error_code": error_code, "message": message}
     if extra_data:
         response.update(extra_data)
     return response
@@ -217,10 +218,7 @@ def error_response(
 
 def success_response(message: str = "성공", **data) -> Dict:
     """성공 응답 생성"""
-    response = {
-        "success": True,
-        "message": message
-    }
+    response = {"success": True, "message": message}
     response.update(data)
     return response
 
@@ -228,6 +226,7 @@ def success_response(message: str = "성공", **data) -> Dict:
 # ===========================================
 # 게임 결과 계산 헬퍼
 # ===========================================
+
 
 def calculate_profit(bet: int, winnings: int) -> Dict:
     """
@@ -243,23 +242,11 @@ def calculate_profit(bet: int, winnings: int) -> Dict:
     profit = winnings - bet
 
     if profit > 0:
-        return {
-            "profit": profit,
-            "profit_text": f"+{profit:,}원",
-            "profit_emoji": "📈"
-        }
+        return {"profit": profit, "profit_text": f"+{profit:,}원", "profit_emoji": "📈"}
     elif profit < 0:
-        return {
-            "profit": profit,
-            "profit_text": f"{profit:,}원",
-            "profit_emoji": "📉"
-        }
+        return {"profit": profit, "profit_text": f"{profit:,}원", "profit_emoji": "📉"}
     else:
-        return {
-            "profit": 0,
-            "profit_text": "±0원",
-            "profit_emoji": "➖"
-        }
+        return {"profit": 0, "profit_text": "±0원", "profit_emoji": "➖"}
 
 
 # ===========================================

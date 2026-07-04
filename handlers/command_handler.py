@@ -3,6 +3,7 @@
 - 명령어 라우팅
 - 각 기능별 핸들러 믹스인 사용
 """
+
 from typing import Dict, Optional
 from sqlalchemy.orm import Session
 
@@ -29,7 +30,7 @@ class CommandHandler(
     GameHandlerMixin,
     MarketHandlerMixin,
     SocialHandlerMixin,
-    BaseHandlerMixin
+    BaseHandlerMixin,
 ):
     """
     명령어 처리 클래스
@@ -55,7 +56,6 @@ class CommandHandler(
         "/도움말자산": "handle_help_asset",
         "/도움말게임": "handle_help_game",
         "/도움말소셜": "handle_help_social",
-
         # 거래 관련
         "/시세": "handle_price",
         "/ㅅㅅ": "handle_price",
@@ -74,7 +74,6 @@ class CommandHandler(
         "/ㅍㅍ": "handle_portfolio",
         "/거래내역": "handle_transactions",
         "/ㄱㄹ": "handle_transactions",
-
         # 시장 정보
         "/검색": "handle_search",
         "/ㄱㅅ": "handle_search",
@@ -96,7 +95,6 @@ class CommandHandler(
         "/지수": "handle_market_overview",
         "/뉴스": "handle_news",
         "/ㄴㅅ": "handle_news",
-
         # 예측게임
         "/예측": "handle_game_menu",
         "/예측게임": "handle_game_menu",
@@ -112,7 +110,6 @@ class CommandHandler(
         "/ㄱㅎ": "handle_enhance",
         "/능력": "handle_enhance",
         "/강화": "handle_enhance",
-
         # 소셜/경쟁
         "/랭킹": "handle_ranking",
         "/ㄹㅋ": "handle_ranking",
@@ -124,7 +121,6 @@ class CommandHandler(
         "/ㄴㄴ": "handle_nickname",
         "/각성랭킹": "handle_enhance_ranking",
         "/ㄱㅅㄹㅋ": "handle_enhance_ranking",
-
         # 배틀
         "/배틀설명": "handle_battle_help",
         "/배틀생성": "handle_battle_create",
@@ -133,7 +129,6 @@ class CommandHandler(
         "/배틀결과": "handle_battle_result",
         "/배틀목록": "handle_battle_list",
         "/대기배틀": "handle_battle_list",
-
         # 챌린지/마일스톤
         "/챌린지": "handle_challenge",
         "/주간": "handle_challenge",
@@ -141,13 +136,19 @@ class CommandHandler(
         "/마일스톤": "handle_milestone",
         "/목표": "handle_milestone",
         "/마일스톤보상": "handle_milestone_reward",
-
         # 자산 차트
         "/차트": "handle_asset_chart",
         "/자산차트": "handle_asset_chart",
     }
 
-    def __init__(self, db: Session, kakao_id: str, utterance: str, nickname: str = None, group_key: str = ""):
+    def __init__(
+        self,
+        db: Session,
+        kakao_id: str,
+        utterance: str,
+        nickname: str = None,
+        group_key: str = "",
+    ):
         self.db = db
         self.kakao_id = kakao_id
         self.utterance = utterance.strip()
@@ -189,9 +190,7 @@ class CommandHandler(
         """정렬된 명령어 라우트 캐시"""
         if cls._SORTED_ROUTES is None:
             cls._SORTED_ROUTES = sorted(
-                cls.COMMAND_ROUTES.items(),
-                key=lambda x: len(x[0]),
-                reverse=True
+                cls.COMMAND_ROUTES.items(), key=lambda x: len(x[0]), reverse=True
             )
         return cls._SORTED_ROUTES
 
@@ -220,30 +219,52 @@ class CommandHandler(
             welcome_msg = Messages.WELCOME.format(initial_cash=GameConfig.INITIAL_CASH)
             buttons = [
                 {"label": "📅 출석 +30만", "action": "message", "messageText": "/출석"},
-                {"label": "🎁 보물상자", "action": "message", "messageText": "/보물상자"},
-                {"label": "🚀 급등주 정찰", "action": "message", "messageText": "/급등"},
+                {
+                    "label": "🎁 보물상자",
+                    "action": "message",
+                    "messageText": "/보물상자",
+                },
+                {
+                    "label": "🚀 급등주 정찰",
+                    "action": "message",
+                    "messageText": "/급등",
+                },
             ]
             return KakaoResponse.text_with_buttons(welcome_msg, buttons)
         else:
             buttons = [
                 {"label": "📅 출석", "action": "message", "messageText": "/출석"},
-                {"label": "🎁 보물상자", "action": "message", "messageText": "/보물상자"},
+                {
+                    "label": "🎁 보물상자",
+                    "action": "message",
+                    "messageText": "/보물상자",
+                },
                 {"label": "💼 포폴", "action": "message", "messageText": "/포트폴리오"},
                 {"label": "🚀 급등주", "action": "message", "messageText": "/급등"},
                 {"label": "🧬 각성", "action": "message", "messageText": "/각성"},
                 {"label": "🏆 랭킹", "action": "message", "messageText": "/랭킹"},
             ]
             name = self._display_name()
-            return KakaoResponse.text_with_buttons(f"{name}, 다시 오셨군요! 바로 시작 👇", buttons)
+            return KakaoResponse.text_with_buttons(
+                f"{name}, 다시 오셨군요! 바로 시작 👇", buttons
+            )
 
     def handle_attendance(self) -> Dict:
         """출석 체크"""
-        success, reward, streak, cash, enhance_level = UserService.check_attendance(self.db, self.kakao_id)
+        success, reward, streak, cash, enhance_level = UserService.check_attendance(
+            self.db, self.kakao_id
+        )
 
         if not success and reward == 0 and streak == 0:
             return KakaoResponse.text_with_buttons(
                 "먼저 /시작 으로 게임을 시작해주세요.",
-                [{"label": "🎮 게임 시작", "action": "message", "messageText": "/시작"}]
+                [
+                    {
+                        "label": "🎮 게임 시작",
+                        "action": "message",
+                        "messageText": "/시작",
+                    }
+                ],
             )
 
         streak_emoji = get_streak_display(streak)
@@ -259,11 +280,11 @@ class CommandHandler(
                     return "🏆 한 달 연속!!! 전설의 개미로 등극! 🏆"
                 return f"🔥 최대 보너스 유지 중! ({s}일 연속)"
             elif s >= 5:
-                return f"🎯 내일 7일 달성하면 2배 골드! ({7-s}일 남음)"
+                return f"🎯 내일 7일 달성하면 2배 골드! ({7 - s}일 남음)"
             elif s >= 3:
-                return f"📈 5일 달성하면 50% 보너스! ({5-s}일 남음)"
+                return f"📈 5일 달성하면 50% 보너스! ({5 - s}일 남음)"
             elif s >= 1:
-                return f"💪 3일 달성하면 20% 보너스! ({3-s}일 남음)"
+                return f"💪 3일 달성하면 20% 보너스! ({3 - s}일 남음)"
             return "🌱 연속 입장 시작! 보너스 골드가 커져요!"
 
         if success:
@@ -271,8 +292,11 @@ class CommandHandler(
             enhance_line = ""
             if enhance_level > 0:
                 from config import EnhanceConfig
+
                 title_name, title_emoji = EnhanceConfig.get_title(enhance_level)
-                att_bonus = int((EnhanceConfig.get_attendance_multiplier(enhance_level) - 1) * 100)
+                att_bonus = int(
+                    (EnhanceConfig.get_attendance_multiplier(enhance_level) - 1) * 100
+                )
                 enhance_line = f"\n{title_emoji} {title_name} 보너스: +{att_bonus}% (Lv.{enhance_level})"
 
             name = self._display_name()
@@ -308,7 +332,11 @@ class CommandHandler(
         buttons = [
             {"label": "📈 급등주", "action": "message", "messageText": "/급등"},
             {"label": "🎁 보물상자", "action": "message", "messageText": "/보물상자"},
-            {"label": "💼 포트폴리오", "action": "message", "messageText": "/포트폴리오"},
+            {
+                "label": "💼 포트폴리오",
+                "action": "message",
+                "messageText": "/포트폴리오",
+            },
         ]
         buttons.extend(self._get_game_buttons())
         return KakaoResponse.text_with_buttons(msg, buttons)
@@ -318,7 +346,11 @@ class CommandHandler(
         buttons = [
             {"label": "📊 주식", "action": "message", "messageText": "/도움말주식"},
             {"label": "💼 자산", "action": "message", "messageText": "/도움말자산"},
-            {"label": "🧬 게임·각성", "action": "message", "messageText": "/도움말게임"},
+            {
+                "label": "🧬 게임·각성",
+                "action": "message",
+                "messageText": "/도움말게임",
+            },
             {"label": "⚔️ 소셜", "action": "message", "messageText": "/도움말소셜"},
         ]
         return KakaoResponse.text_with_buttons(Messages.HELP, buttons)
@@ -335,7 +367,11 @@ class CommandHandler(
     def handle_help_asset(self) -> Dict:
         """도움말 - 내 자산"""
         buttons = [
-            {"label": "💼 포트폴리오", "action": "message", "messageText": "/포트폴리오"},
+            {
+                "label": "💼 포트폴리오",
+                "action": "message",
+                "messageText": "/포트폴리오",
+            },
             {"label": "🏆 랭킹", "action": "message", "messageText": "/랭킹"},
             {"label": "📖 도움말", "action": "message", "messageText": "/도움말"},
         ]
@@ -366,7 +402,7 @@ class CommandHandler(
             [
                 {"label": "🚀 시작하기", "action": "message", "messageText": "/시작"},
                 {"label": "📖 도움말", "action": "message", "messageText": "/도움말"},
-            ]
+            ],
         )
 
     def handle_unknown(self) -> Dict:
@@ -379,5 +415,5 @@ class CommandHandler(
                 {"label": "📖 도움말", "action": "message", "messageText": "/도움말"},
                 {"label": "📈 급등주", "action": "message", "messageText": "/급등"},
                 {"label": "📅 출석", "action": "message", "messageText": "/출석"},
-            ]
+            ],
         )

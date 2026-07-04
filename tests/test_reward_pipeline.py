@@ -6,6 +6,7 @@
 - 주간 챌린지 진행도 배선 (카운트형/지표형)
 - 출석 이벤트의 업적/마일스톤/챌린지 트리거
 """
+
 from unittest.mock import patch
 
 from models import Holding, Milestone, WeeklyChallenge, UserChallenge
@@ -21,7 +22,9 @@ class TestGetTotalAsset:
 
     def test_cash_only(self, db, test_user):
         """보유 주식이 없으면 현금이 곧 총자산"""
-        with patch("services.asset_service.StockService.batch_get_prices", return_value={}):
+        with patch(
+            "services.asset_service.StockService.batch_get_prices", return_value={}
+        ):
             total = AssetService.get_total_asset(db, test_user.kakao_id)
         assert total == test_user.cash
 
@@ -46,7 +49,9 @@ class TestGetTotalAsset:
         assert total == test_user.cash + 70_000 * 10
 
         # 시세 조회 실패 → 평단가 사용
-        with patch("services.asset_service.StockService.batch_get_prices", return_value={}):
+        with patch(
+            "services.asset_service.StockService.batch_get_prices", return_value={}
+        ):
             total = AssetService.get_total_asset(db, test_user.kakao_id)
         assert total == test_user.cash + 60_000 * 10
 
@@ -73,16 +78,18 @@ class TestMilestones:
 
     def test_streak_milestone_awarded(self, db, test_user):
         """연속 출석 마일스톤 자동 지급"""
-        achieved = MilestoneService.check_milestones(
-            db, test_user.kakao_id, streak=7
-        )
+        achieved = MilestoneService.check_milestones(db, test_user.kakao_id, streak=7)
         types = {m["type"] for m in achieved}
         assert "STREAK_7" in types
 
-        milestone = db.query(Milestone).filter(
-            Milestone.kakao_id == test_user.kakao_id,
-            Milestone.milestone_type == "STREAK_7",
-        ).first()
+        milestone = (
+            db.query(Milestone)
+            .filter(
+                Milestone.kakao_id == test_user.kakao_id,
+                Milestone.milestone_type == "STREAK_7",
+            )
+            .first()
+        )
         assert milestone is not None
 
 
@@ -108,6 +115,7 @@ def _force_challenge(db, challenge_type: str, target: int, reward: int = 1_000_0
     """이번 주 챌린지를 특정 타입으로 고정"""
     week_id = ChallengeService.get_current_week_id()
     from datetime import date
+
     challenge = WeeklyChallenge(
         week_id=week_id,
         challenge_type=challenge_type,
@@ -139,10 +147,14 @@ class TestChallengeWiring:
         )
         assert result is not None and result["completed"] is True
 
-        uc = db.query(UserChallenge).filter(
-            UserChallenge.kakao_id == test_user.kakao_id,
-            UserChallenge.challenge_id == challenge.id,
-        ).first()
+        uc = (
+            db.query(UserChallenge)
+            .filter(
+                UserChallenge.kakao_id == test_user.kakao_id,
+                UserChallenge.challenge_id == challenge.id,
+            )
+            .first()
+        )
         assert uc.completed == 1
 
         # 완료 후 보상 수령 가능
@@ -152,10 +164,14 @@ class TestChallengeWiring:
     def test_type_mismatch_is_noop(self, db, test_user):
         """챌린지 타입이 다르면 진행도 갱신 없음"""
         challenge = _force_challenge(db, "ATTENDANCE", target=3)
-        ChallengeService.update_challenge_progress(db, test_user.kakao_id, "TRADE_COUNT")
-        uc = db.query(UserChallenge).filter(
-            UserChallenge.challenge_id == challenge.id
-        ).first()
+        ChallengeService.update_challenge_progress(
+            db, test_user.kakao_id, "TRADE_COUNT"
+        )
+        uc = (
+            db.query(UserChallenge)
+            .filter(UserChallenge.challenge_id == challenge.id)
+            .first()
+        )
         assert uc is None or uc.current_value == 0
 
     def test_asset_growth_challenge(self, db, test_user):
@@ -169,9 +185,11 @@ class TestChallengeWiring:
         )
         assert result is not None and result["completed"] is True
 
-        uc = db.query(UserChallenge).filter(
-            UserChallenge.challenge_id == challenge.id
-        ).first()
+        uc = (
+            db.query(UserChallenge)
+            .filter(UserChallenge.challenge_id == challenge.id)
+            .first()
+        )
         assert uc.current_value >= 100
 
     def test_profit_rate_challenge(self, db, test_user):
@@ -206,8 +224,12 @@ class TestAttendanceRewardWiring:
         test_user.last_attendance = today - timedelta(days=1)
         db.commit()
 
-        with patch("services.asset_service.StockService.batch_get_prices", return_value={}), \
-             patch("services.user_service.log_attendance"):
+        with (
+            patch(
+                "services.asset_service.StockService.batch_get_prices", return_value={}
+            ),
+            patch("services.user_service.log_attendance"),
+        ):
             success, reward, streak, cash, _ = UserService.check_attendance(
                 db, test_user.kakao_id
             )
@@ -216,10 +238,14 @@ class TestAttendanceRewardWiring:
         assert streak == 7
 
         # 마일스톤 지급 확인
-        milestone = db.query(Milestone).filter(
-            Milestone.kakao_id == test_user.kakao_id,
-            Milestone.milestone_type == "STREAK_7",
-        ).first()
+        milestone = (
+            db.query(Milestone)
+            .filter(
+                Milestone.kakao_id == test_user.kakao_id,
+                Milestone.milestone_type == "STREAK_7",
+            )
+            .first()
+        )
         assert milestone is not None
 
         # 업적 지급 확인
@@ -233,13 +259,21 @@ class TestAttendanceRewardWiring:
         """출석 시 개근왕 챌린지 진행"""
         challenge = _force_challenge(db, "ATTENDANCE", target=3)
 
-        with patch("services.asset_service.StockService.batch_get_prices", return_value={}), \
-             patch("services.user_service.log_attendance"):
+        with (
+            patch(
+                "services.asset_service.StockService.batch_get_prices", return_value={}
+            ),
+            patch("services.user_service.log_attendance"),
+        ):
             UserService.check_attendance(db, test_user.kakao_id)
 
-        uc = db.query(UserChallenge).filter(
-            UserChallenge.kakao_id == test_user.kakao_id,
-            UserChallenge.challenge_id == challenge.id,
-        ).first()
+        uc = (
+            db.query(UserChallenge)
+            .filter(
+                UserChallenge.kakao_id == test_user.kakao_id,
+                UserChallenge.challenge_id == challenge.id,
+            )
+            .first()
+        )
         assert uc is not None
         assert uc.current_value == 1

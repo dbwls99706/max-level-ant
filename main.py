@@ -1,6 +1,7 @@
 """
 만렙개미 카카오톡 챗봇 - 메인 서버
 """
+
 import os
 import re
 import uuid
@@ -38,6 +39,7 @@ class RateLimiter:
     - 주기적으로 오래된 데이터 정리
     - 최대 유저 수 제한으로 메모리 폭증 방지
     """
+
     MAX_TRACKED_USERS = 10_000  # 메모리 폭증 방지
 
     def __init__(self, max_requests: int = 30, window_seconds: int = 60):
@@ -94,11 +96,11 @@ class RateLimiter:
 # Rate limiter 인스턴스 (설정값 사용)
 rate_limiter = RateLimiter(
     max_requests=SecurityConfig.RATE_LIMIT_MAX_REQUESTS,
-    window_seconds=SecurityConfig.RATE_LIMIT_WINDOW_SECONDS
+    window_seconds=SecurityConfig.RATE_LIMIT_WINDOW_SECONDS,
 )
 
 # 카카오 유저 ID 허용 패턴 (ASCII 영숫자 + 하이픈/언더스코어)
-KAKAO_ID_PATTERN = re.compile(r'[A-Za-z0-9_-]+')
+KAKAO_ID_PATTERN = re.compile(r"[A-Za-z0-9_-]+")
 
 
 # ===========================================
@@ -158,7 +160,7 @@ app = FastAPI(
     title="만렙개미 카카오톡 챗봇",
     description="주식 던전 RPG 챗봇 API — 쪼렙 개미에서 만렙 개미로",
     version="1.0.0",
-    lifespan=lifespan
+    lifespan=lifespan,
 )
 
 # CORS 설정 (카카오톡 도메인만 허용, 개발 모드에서는 전체 허용)
@@ -193,7 +195,9 @@ async def request_id_middleware(request: Request, call_next: Callable) -> Respon
 # 요청 본문 크기 제한 미들웨어
 # ===========================================
 @app.middleware("http")
-async def request_size_limit_middleware(request: Request, call_next: Callable) -> Response:
+async def request_size_limit_middleware(
+    request: Request, call_next: Callable
+) -> Response:
     """
     요청 본문 크기 제한 (DoS 방지)
     - 최대 10KB 허용
@@ -203,13 +207,18 @@ async def request_size_limit_middleware(request: Request, call_next: Callable) -
         content_length = request.headers.get("content-length")
         if content_length is None:
             return JSONResponse(
-                status_code=411,
-                content={"error": "Content-Length 헤더가 필요합니다."}
+                status_code=411, content={"error": "Content-Length 헤더가 필요합니다."}
             )
-        if not content_length.isdigit() or int(content_length) > SecurityConfig.MAX_REQUEST_SIZE:
+        if (
+            not content_length.isdigit()
+            or int(content_length) > SecurityConfig.MAX_REQUEST_SIZE
+        ):
             return JSONResponse(
                 status_code=413,
-                content={"error": "요청 크기가 너무 큽니다.", "max_size": SecurityConfig.MAX_REQUEST_SIZE}
+                content={
+                    "error": "요청 크기가 너무 큽니다.",
+                    "max_size": SecurityConfig.MAX_REQUEST_SIZE,
+                },
             )
     return await call_next(request)
 
@@ -223,7 +232,7 @@ async def root():
     return {
         "status": "ok",
         "message": "만렙개미 봇 서버가 실행 중입니다!",
-        "version": "1.0.0"
+        "version": "1.0.0",
     }
 
 
@@ -233,8 +242,7 @@ async def health_check():
     db_healthy = check_db_health()
     if not db_healthy:
         return JSONResponse(
-            status_code=503,
-            content={"status": "unhealthy", "db": "disconnected"}
+            status_code=503, content={"status": "unhealthy", "db": "disconnected"}
         )
     return {"status": "healthy", "db": "connected"}
 
@@ -270,7 +278,9 @@ async def kakao_skill(request: Request, db: Session = Depends(get_db)):
         # 디버그: 카카오에서 받은 유저 정보 로그 (민감 정보 마스킹)
         masked_id = f"{kakao_id[:4]}****" if len(kakao_id) > 4 else "****"
         request_id = getattr(request.state, "request_id", "unknown")
-        logger.debug(f"[{request_id}] 카카오 유저: id={masked_id}, has_nickname={bool(nickname)}")
+        logger.debug(
+            f"[{request_id}] 카카오 유저: id={masked_id}, has_nickname={bool(nickname)}"
+        )
 
         # 유저 ID 검증 (빈값, 너무 긴 값 방지)
         if not kakao_id or len(kakao_id) > 100:
@@ -347,8 +357,7 @@ async def debug_skill(request: Request, db: Session = Depends(get_db)):
 # ===========================================
 @app.post("/admin/reset-db")
 async def admin_reset_db(
-    request: Request,
-    authorization: Optional[str] = Header(None, alias="Authorization")
+    request: Request, authorization: Optional[str] = Header(None, alias="Authorization")
 ):
     """
     데이터베이스 초기화 (모든 데이터 삭제)
@@ -385,7 +394,7 @@ async def admin_reset_db(
         if confirm != "DELETE_ALL_DATA":
             return {
                 "success": False,
-                "message": "초기화를 확인하려면 confirm 필드에 'DELETE_ALL_DATA'를 입력하세요."
+                "message": "초기화를 확인하려면 confirm 필드에 'DELETE_ALL_DATA'를 입력하세요.",
             }
 
         # 데이터베이스 초기화
@@ -394,7 +403,7 @@ async def admin_reset_db(
 
         return {
             "success": True,
-            "message": "데이터베이스가 초기화되었습니다. 모든 유저 데이터가 삭제되었습니다."
+            "message": "데이터베이스가 초기화되었습니다. 모든 유저 데이터가 삭제되었습니다.",
         }
 
     except HTTPException:
@@ -406,8 +415,7 @@ async def admin_reset_db(
 
 @app.post("/admin/reset-seed")
 async def admin_reset_seed(
-    request: Request,
-    authorization: Optional[str] = Header(None, alias="Authorization")
+    request: Request, authorization: Optional[str] = Header(None, alias="Authorization")
 ):
     """
     기존 유저 시드머니 초기화 (보유주식/거래내역 정리 + 현금 리셋)
@@ -437,7 +445,7 @@ async def admin_reset_seed(
         if confirm != "RESET_SEED_MONEY":
             return {
                 "success": False,
-                "message": "시드머니 초기화를 확인하려면 confirm 필드에 'RESET_SEED_MONEY'를 입력하세요."
+                "message": "시드머니 초기화를 확인하려면 confirm 필드에 'RESET_SEED_MONEY'를 입력하세요.",
             }
 
         from models import User, Holding, Transaction
@@ -451,10 +459,12 @@ async def admin_reset_seed(
             deleted_transactions = db.query(Transaction).delete()
             # 모든 유저 현금 + 초기자금 리셋
             new_cash = GameConfig.INITIAL_CASH
-            updated_users = db.query(User).update({
-                User.cash: new_cash,
-                User.initial_cash: new_cash,
-            })
+            updated_users = db.query(User).update(
+                {
+                    User.cash: new_cash,
+                    User.initial_cash: new_cash,
+                }
+            )
             db.commit()
             logger.info(
                 f"시드머니 초기화 완료: {updated_users}명 유저 → {new_cash:,}원, "
@@ -468,7 +478,7 @@ async def admin_reset_seed(
                     "new_seed_money": new_cash,
                     "deleted_holdings": deleted_holdings,
                     "deleted_transactions": deleted_transactions,
-                }
+                },
             }
         except Exception as e:
             db.rollback()
@@ -492,5 +502,5 @@ if __name__ == "__main__":
         "main:app",
         host="0.0.0.0",
         port=int(os.getenv("PORT", 8000)),
-        reload=SecurityConfig.DEV_MODE
+        reload=SecurityConfig.DEV_MODE,
     )

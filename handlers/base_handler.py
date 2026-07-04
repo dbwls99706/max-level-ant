@@ -3,6 +3,7 @@
 - 공통 기능 제공
 - 투자 동기부여 요소 (연속 보상, 스트릭, 레벨업)
 """
+
 from typing import Dict, List, Optional, Tuple
 from sqlalchemy.orm import Session
 from cachetools import TTLCache
@@ -31,6 +32,7 @@ class BaseHandlerMixin:
         name = self.nickname
         if not name:
             from models import User
+
             user = self.db.query(User).filter(User.kakao_id == self.kakao_id).first()
             if user and user.nickname:
                 name = user.nickname
@@ -62,7 +64,7 @@ class BaseHandlerMixin:
         (0, "📈 수익!", ""),
         (-50_000, "😅 아쉽네요", ""),
         (-100_000, "😢 조금 많이...", ""),
-        (float('-inf'), "💸 크게 잃었네요", ""),
+        (float("-inf"), "💸 크게 잃었네요", ""),
     ]
 
     def _get_profit_message(self, profit: int) -> Tuple[str, str]:
@@ -96,6 +98,7 @@ class BaseHandlerMixin:
 
         try:
             from services import StockService
+
             stocks = StockService.get_top_trading_value(limit=1)
             if stocks and stocks[0].get("name"):
                 name = stocks[0]["name"]
@@ -109,7 +112,11 @@ class BaseHandlerMixin:
         """인기 1등 종목 Quick Reply 버튼 (실패 시 인기종목 목록 버튼)"""
         name = self._get_top_popular_stock()
         if name:
-            return {"label": f"{emoji} {name}", "action": "message", "messageText": f"{command} {name}"}
+            return {
+                "label": f"{emoji} {name}",
+                "action": "message",
+                "messageText": f"{command} {name}",
+            }
         return {"label": "📊 인기종목", "action": "message", "messageText": "/인기"}
 
     # ===========================================
@@ -128,34 +135,72 @@ class BaseHandlerMixin:
         """빠른 거래 버튼"""
         buttons = []
         if stock_name:
-            buttons.extend([
-                {"label": f"📈 {stock_name} 매수", "action": "message", "messageText": f"/매수 {stock_name} 10"},
-                {"label": f"📉 {stock_name} 매도", "action": "message", "messageText": f"/매도 {stock_name} 10"},
-            ])
-        buttons.extend([
-            {"label": "🚀 급등주", "action": "message", "messageText": "/급등"},
-            {"label": "💼 포폴", "action": "message", "messageText": "/포트폴리오"},
-        ])
+            buttons.extend(
+                [
+                    {
+                        "label": f"📈 {stock_name} 매수",
+                        "action": "message",
+                        "messageText": f"/매수 {stock_name} 10",
+                    },
+                    {
+                        "label": f"📉 {stock_name} 매도",
+                        "action": "message",
+                        "messageText": f"/매도 {stock_name} 10",
+                    },
+                ]
+            )
+        buttons.extend(
+            [
+                {"label": "🚀 급등주", "action": "message", "messageText": "/급등"},
+                {"label": "💼 포폴", "action": "message", "messageText": "/포트폴리오"},
+            ]
+        )
         return buttons
 
-    def _get_continue_game_buttons(self, game_type: str, bet: int, choice: str = None) -> List[Dict]:
+    def _get_continue_game_buttons(
+        self, game_type: str, bet: int, choice: str = None
+    ) -> List[Dict]:
         """예측게임 계속하기 버튼"""
         buttons = []
 
         if game_type == "lottery":
-            buttons.append({"label": "🎁 한번 더!", "action": "message", "messageText": "/보물상자"})
+            buttons.append(
+                {
+                    "label": "🎁 한번 더!",
+                    "action": "message",
+                    "messageText": "/보물상자",
+                }
+            )
         elif game_type == "stock_quiz":
-            buttons.extend([
-                {"label": "🔮 한번 더!", "action": "message", "messageText": f"/시장예측 {bet}"},
-                {"label": "🔮 2배!", "action": "message", "messageText": f"/시장예측 {bet * 2}"},
-            ])
+            buttons.extend(
+                [
+                    {
+                        "label": "🔮 한번 더!",
+                        "action": "message",
+                        "messageText": f"/시장예측 {bet}",
+                    },
+                    {
+                        "label": "🔮 2배!",
+                        "action": "message",
+                        "messageText": f"/시장예측 {bet * 2}",
+                    },
+                ]
+            )
         elif game_type == "updown":
-            buttons.extend([
-                {"label": "🔢 새 게임!", "action": "message", "messageText": f"/업다운 {bet}"},
-            ])
+            buttons.extend(
+                [
+                    {
+                        "label": "🔢 새 게임!",
+                        "action": "message",
+                        "messageText": f"/업다운 {bet}",
+                    },
+                ]
+            )
 
         # 다른 예측게임 추천
-        buttons.append({"label": "📈 다른 예측", "action": "message", "messageText": "/예측"})
+        buttons.append(
+            {"label": "📈 다른 예측", "action": "message", "messageText": "/예측"}
+        )
         return buttons
 
     def _get_navigation_buttons(self) -> List[Dict]:
@@ -167,24 +212,52 @@ class BaseHandlerMixin:
         buttons.extend(self._get_game_buttons())
         return buttons
 
-    def _get_after_trade_buttons(self, stock_name: str, action: str = "buy") -> List[Dict]:
+    def _get_after_trade_buttons(
+        self, stock_name: str, action: str = "buy"
+    ) -> List[Dict]:
         """거래 후 추천 버튼 (도파민 유지)"""
         buttons = []
 
         if action == "buy":
-            buttons.extend([
-                {"label": f"📈 {stock_name} 더 매수", "action": "message", "messageText": f"/전량매수 {stock_name}"},
-                {"label": f"📊 {stock_name} 시세", "action": "message", "messageText": f"/시세 {stock_name}"},
-            ])
+            buttons.extend(
+                [
+                    {
+                        "label": f"📈 {stock_name} 더 매수",
+                        "action": "message",
+                        "messageText": f"/전량매수 {stock_name}",
+                    },
+                    {
+                        "label": f"📊 {stock_name} 시세",
+                        "action": "message",
+                        "messageText": f"/시세 {stock_name}",
+                    },
+                ]
+            )
         else:
-            buttons.extend([
-                {"label": f"📊 {stock_name} 시세", "action": "message", "messageText": f"/시세 {stock_name}"},
-            ])
+            buttons.extend(
+                [
+                    {
+                        "label": f"📊 {stock_name} 시세",
+                        "action": "message",
+                        "messageText": f"/시세 {stock_name}",
+                    },
+                ]
+            )
 
-        buttons.extend([
-            {"label": "💼 포폴 확인", "action": "message", "messageText": "/포트폴리오"},
-            {"label": "🚀 다른 급등주", "action": "message", "messageText": "/급등"},
-        ])
+        buttons.extend(
+            [
+                {
+                    "label": "💼 포폴 확인",
+                    "action": "message",
+                    "messageText": "/포트폴리오",
+                },
+                {
+                    "label": "🚀 다른 급등주",
+                    "action": "message",
+                    "messageText": "/급등",
+                },
+            ]
+        )
         buttons.extend(self._get_game_buttons())
         return buttons
 
@@ -277,6 +350,7 @@ class BaseHandlerMixin:
     def _get_sell_celebration(self, profit_rate: float, profit: int = 0) -> str:
         """수익률 기반 축하 메시지 (매도 시 사용) - 도파민 극대화"""
         from utils import get_sell_exclamation
+
         return get_sell_exclamation(profit_rate, profit)
 
     def _add_celebration(self, msg: str, profit: int) -> str:
@@ -297,10 +371,22 @@ class BaseHandlerMixin:
         return KakaoResponse.text_with_buttons(
             message,
             [
-                {"label": "🎁 보물상자", "action": "message", "messageText": "/보물상자"},
-                {"label": "🔮 시장예측", "action": "message", "messageText": f"/시장예측 {GameConfig.DEFAULT_BET}"},
-                {"label": "💼 포트폴리오", "action": "message", "messageText": "/포트폴리오"}
-            ]
+                {
+                    "label": "🎁 보물상자",
+                    "action": "message",
+                    "messageText": "/보물상자",
+                },
+                {
+                    "label": "🔮 시장예측",
+                    "action": "message",
+                    "messageText": f"/시장예측 {GameConfig.DEFAULT_BET}",
+                },
+                {
+                    "label": "💼 포트폴리오",
+                    "action": "message",
+                    "messageText": "/포트폴리오",
+                },
+            ],
         )
 
     # _market_closed_with_message는 _market_closed_response(message)로 통합됨
@@ -311,7 +397,9 @@ class BaseHandlerMixin:
         Returns: (is_market_closed, response or None)
         """
         if not result.get("success") and result.get("error_code") == "MARKET_CLOSED":
-            return True, self._market_closed_response(result.get("message", "장이 마감되었습니다."))
+            return True, self._market_closed_response(
+                result.get("message", "장이 마감되었습니다.")
+            )
         return False, None
 
     def _game_failure_response(self, message: str) -> Dict:
@@ -320,9 +408,17 @@ class BaseHandlerMixin:
             message,
             [
                 {"label": "📅 출석체크", "action": "message", "messageText": "/출석"},
-                {"label": "🎁 보물상자", "action": "message", "messageText": "/보물상자"},
-                {"label": "💼 포트폴리오", "action": "message", "messageText": "/포트폴리오"}
-            ]
+                {
+                    "label": "🎁 보물상자",
+                    "action": "message",
+                    "messageText": "/보물상자",
+                },
+                {
+                    "label": "💼 포트폴리오",
+                    "action": "message",
+                    "messageText": "/포트폴리오",
+                },
+            ],
         )
 
     def _parse_bet_amount(self, default: int = None) -> Tuple[int, bool]:

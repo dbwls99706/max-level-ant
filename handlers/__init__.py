@@ -9,6 +9,7 @@
 - market_handler.py: 시장 정보 (급등주, 뉴스, 검색)
 - social_handler.py: 소셜/경쟁 (랭킹, 배틀, 챌린지)
 """
+
 from .command_handler import CommandHandler
 
 __all__ = ["CommandHandler"]

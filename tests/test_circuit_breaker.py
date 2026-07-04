@@ -1,6 +1,7 @@
 """
 CircuitBreaker 단위 테스트
 """
+
 from datetime import datetime, timezone, timedelta
 
 from services.stock_service import CircuitBreaker
@@ -38,7 +39,9 @@ class TestCircuitBreaker:
         assert cb.is_open() is True
 
         # 복구 타임아웃 이후로 시간 조작
-        old_time = datetime.now(timezone.utc) - timedelta(seconds=CircuitBreaker.RECOVERY_TIMEOUT + 1)
+        old_time = datetime.now(timezone.utc) - timedelta(
+            seconds=CircuitBreaker.RECOVERY_TIMEOUT + 1
+        )
         cb._last_failure_time = old_time
 
         # HALF_OPEN: 한 번 시도 허용
@@ -54,6 +57,7 @@ class TestCircuitBreaker:
     def test_thread_safety(self):
         """스레드 안전성 (락 확인)"""
         import threading
+
         cb = CircuitBreaker()
         errors = []
 

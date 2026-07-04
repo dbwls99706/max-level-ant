@@ -2,6 +2,7 @@
 TradeService 단위 테스트
 - 매수/매도 로직, 포트폴리오 조회
 """
+
 from unittest.mock import patch, MagicMock
 
 from services.trade_service import TradeService
@@ -34,10 +35,12 @@ class TestBuyStock:
 
     def test_buy_stock_success(self, db, test_user):
         """기본 매수 성공"""
-        with patch("services.trade_service.StockService") as MockSS, \
-             patch("services.trade_service.MissionService") as MockMS, \
-             patch("services.trade_service.is_trading_available", return_value=True), \
-             patch("services.asset_service.AssetService.record_daily_asset"):
+        with (
+            patch("services.trade_service.StockService") as MockSS,
+            patch("services.trade_service.MissionService") as MockMS,
+            patch("services.trade_service.is_trading_available", return_value=True),
+            patch("services.asset_service.AssetService.record_daily_asset"),
+        ):
             MockSS.get_price.return_value = MOCK_STOCK
             MockSS._cache_stock.return_value = None
             MockMS.increment_trade_count.return_value = None
@@ -51,8 +54,13 @@ class TestBuyStock:
 
     def test_buy_stock_market_closed(self, db, test_user):
         """장 마감 시 매수 불가"""
-        with patch("services.trade_service.is_trading_available", return_value=False), \
-             patch("services.trade_service.get_market_status_message", return_value="장 마감"):
+        with (
+            patch("services.trade_service.is_trading_available", return_value=False),
+            patch(
+                "services.trade_service.get_market_status_message",
+                return_value="장 마감",
+            ),
+        ):
             result = TradeService.buy_stock(db, test_user.kakao_id, "삼성전자", 10)
 
         assert result["success"] is False
@@ -60,8 +68,10 @@ class TestBuyStock:
 
     def test_buy_stock_insufficient_balance(self, db, poor_user):
         """잔고 부족 매수"""
-        with patch("services.trade_service.StockService") as MockSS, \
-             patch("services.trade_service.is_trading_available", return_value=True):
+        with (
+            patch("services.trade_service.StockService") as MockSS,
+            patch("services.trade_service.is_trading_available", return_value=True),
+        ):
             MockSS.get_price.return_value = MOCK_STOCK
 
             result = TradeService.buy_stock(db, poor_user.kakao_id, "삼성전자", 100)
@@ -71,8 +81,10 @@ class TestBuyStock:
 
     def test_buy_stock_not_found(self, db, test_user):
         """존재하지 않는 종목 매수 (시세 조회·종목 검색 모두 실패)"""
-        with patch("services.trade_service.StockService") as MockSS, \
-             patch("services.trade_service.is_trading_available", return_value=True):
+        with (
+            patch("services.trade_service.StockService") as MockSS,
+            patch("services.trade_service.is_trading_available", return_value=True),
+        ):
             MockSS.get_price.return_value = None
             MockSS.search_stock.return_value = None  # 종목 자체가 인식 불가
 
@@ -83,8 +95,10 @@ class TestBuyStock:
 
     def test_buy_stock_price_unavailable(self, db, test_user):
         """종목명은 인식되지만 KIS 시세 API가 일시적으로 응답하지 않는 경우"""
-        with patch("services.trade_service.StockService") as MockSS, \
-             patch("services.trade_service.is_trading_available", return_value=True):
+        with (
+            patch("services.trade_service.StockService") as MockSS,
+            patch("services.trade_service.is_trading_available", return_value=True),
+        ):
             MockSS.get_price.return_value = None  # 시세 조회 실패
             MockSS.search_stock.return_value = {"code": "005930", "name": "삼성전자"}
 
@@ -116,18 +130,22 @@ class TestBuyStock:
         fee = int(price * quantity * GameConfig.TRADE_FEE_RATE)
         expected_deduction = price * quantity + fee
 
-        with patch("services.trade_service.StockService") as MockSS, \
-             patch("services.trade_service.MissionService") as MockMS, \
-             patch("services.trade_service.MilestoneService") as MockMile, \
-             patch("services.trade_service.is_trading_available", return_value=True), \
-             patch("services.asset_service.AssetService.record_daily_asset"):
+        with (
+            patch("services.trade_service.StockService") as MockSS,
+            patch("services.trade_service.MissionService") as MockMS,
+            patch("services.trade_service.MilestoneService") as MockMile,
+            patch("services.trade_service.is_trading_available", return_value=True),
+            patch("services.asset_service.AssetService.record_daily_asset"),
+        ):
             MockSS.get_price.return_value = MOCK_STOCK
             MockSS._cache_stock.return_value = None
             MockMS.increment_trade_count.return_value = None
             MockMS.check_and_award_achievements.return_value = []
             MockMile.check_milestones.return_value = []
 
-            result = TradeService.buy_stock(db, test_user.kakao_id, "삼성전자", quantity)
+            result = TradeService.buy_stock(
+                db, test_user.kakao_id, "삼성전자", quantity
+            )
 
         assert result["success"] is True
         db.refresh(test_user)
@@ -135,10 +153,12 @@ class TestBuyStock:
 
     def test_buy_stock_creates_holding(self, db, test_user):
         """매수 후 보유 종목 생성 확인"""
-        with patch("services.trade_service.StockService") as MockSS, \
-             patch("services.trade_service.MissionService") as MockMS, \
-             patch("services.trade_service.is_trading_available", return_value=True), \
-             patch("services.asset_service.AssetService.record_daily_asset"):
+        with (
+            patch("services.trade_service.StockService") as MockSS,
+            patch("services.trade_service.MissionService") as MockMS,
+            patch("services.trade_service.is_trading_available", return_value=True),
+            patch("services.asset_service.AssetService.record_daily_asset"),
+        ):
             MockSS.get_price.return_value = MOCK_STOCK
             MockSS._cache_stock.return_value = None
             MockMS.increment_trade_count.return_value = None
@@ -146,19 +166,25 @@ class TestBuyStock:
 
             TradeService.buy_stock(db, test_user.kakao_id, "삼성전자", 10)
 
-        holding = db.query(Holding).filter(
-            Holding.kakao_id == test_user.kakao_id,
-            Holding.stock_code == MOCK_STOCK["code"]
-        ).first()
+        holding = (
+            db.query(Holding)
+            .filter(
+                Holding.kakao_id == test_user.kakao_id,
+                Holding.stock_code == MOCK_STOCK["code"],
+            )
+            .first()
+        )
         assert holding is not None
         assert holding.quantity == 10
 
     def test_buy_stock_accumulates_holding(self, db, test_user):
         """동일 종목 추가 매수 시 수량 누적"""
-        with patch("services.trade_service.StockService") as MockSS, \
-             patch("services.trade_service.MissionService") as MockMS, \
-             patch("services.trade_service.is_trading_available", return_value=True), \
-             patch("services.asset_service.AssetService.record_daily_asset"):
+        with (
+            patch("services.trade_service.StockService") as MockSS,
+            patch("services.trade_service.MissionService") as MockMS,
+            patch("services.trade_service.is_trading_available", return_value=True),
+            patch("services.asset_service.AssetService.record_daily_asset"),
+        ):
             MockSS.get_price.return_value = MOCK_STOCK
             MockSS._cache_stock.return_value = None
             MockMS.increment_trade_count.return_value = None
@@ -167,9 +193,13 @@ class TestBuyStock:
             TradeService.buy_stock(db, test_user.kakao_id, "삼성전자", 5)
             TradeService.buy_stock(db, test_user.kakao_id, "삼성전자", 3)
 
-        holding = db.query(Holding).filter(
-            Holding.kakao_id == test_user.kakao_id,
-        ).first()
+        holding = (
+            db.query(Holding)
+            .filter(
+                Holding.kakao_id == test_user.kakao_id,
+            )
+            .first()
+        )
         assert holding.quantity == 8
 
 
@@ -194,10 +224,12 @@ class TestSellStock:
         """기본 매도 성공"""
         self._create_holding(db, test_user, "005930", "삼성전자", 10, 60_000)
 
-        with patch("services.trade_service.StockService") as MockSS, \
-             patch("services.trade_service.MissionService") as MockMS, \
-             patch("services.trade_service.is_trading_available", return_value=True), \
-             patch("services.asset_service.AssetService.record_daily_asset"):
+        with (
+            patch("services.trade_service.StockService") as MockSS,
+            patch("services.trade_service.MissionService") as MockMS,
+            patch("services.trade_service.is_trading_available", return_value=True),
+            patch("services.asset_service.AssetService.record_daily_asset"),
+        ):
             MockSS.get_price.return_value = MOCK_STOCK
             MockSS._cache_stock.return_value = None
             MockMS.increment_trade_count.return_value = None
@@ -212,8 +244,10 @@ class TestSellStock:
         """보유량 초과 매도 거부"""
         self._create_holding(db, test_user, "005930", "삼성전자", 3, 60_000)
 
-        with patch("services.trade_service.StockService") as MockSS, \
-             patch("services.trade_service.is_trading_available", return_value=True):
+        with (
+            patch("services.trade_service.StockService") as MockSS,
+            patch("services.trade_service.is_trading_available", return_value=True),
+        ):
             MockSS.get_price.return_value = MOCK_STOCK
 
             result = TradeService.sell_stock(db, test_user.kakao_id, "삼성전자", 10)
@@ -228,16 +262,20 @@ class TestSellStock:
         quantity = 5
         self._create_holding(db, test_user, "005930", "삼성전자", quantity, avg_price)
 
-        with patch("services.trade_service.StockService") as MockSS, \
-             patch("services.trade_service.MissionService") as MockMS, \
-             patch("services.trade_service.is_trading_available", return_value=True), \
-             patch("services.asset_service.AssetService.record_daily_asset"):
+        with (
+            patch("services.trade_service.StockService") as MockSS,
+            patch("services.trade_service.MissionService") as MockMS,
+            patch("services.trade_service.is_trading_available", return_value=True),
+            patch("services.asset_service.AssetService.record_daily_asset"),
+        ):
             MockSS.get_price.return_value = {**MOCK_STOCK, "price": sell_price}
             MockSS._cache_stock.return_value = None
             MockMS.increment_trade_count.return_value = None
             MockMS.check_and_award_achievements.return_value = []
 
-            result = TradeService.sell_stock(db, test_user.kakao_id, "삼성전자", quantity)
+            result = TradeService.sell_stock(
+                db, test_user.kakao_id, "삼성전자", quantity
+            )
 
         data = result["data"]
         total_amount = sell_price * quantity
@@ -253,10 +291,12 @@ class TestSellStock:
         """전량 매도 후 보유 종목 삭제"""
         self._create_holding(db, test_user, "005930", "삼성전자", 5, 60_000)
 
-        with patch("services.trade_service.StockService") as MockSS, \
-             patch("services.trade_service.MissionService") as MockMS, \
-             patch("services.trade_service.is_trading_available", return_value=True), \
-             patch("services.asset_service.AssetService.record_daily_asset"):
+        with (
+            patch("services.trade_service.StockService") as MockSS,
+            patch("services.trade_service.MissionService") as MockMS,
+            patch("services.trade_service.is_trading_available", return_value=True),
+            patch("services.asset_service.AssetService.record_daily_asset"),
+        ):
             MockSS.get_price.return_value = MOCK_STOCK
             MockSS._cache_stock.return_value = None
             MockMS.increment_trade_count.return_value = None
@@ -264,9 +304,13 @@ class TestSellStock:
 
             TradeService.sell_stock(db, test_user.kakao_id, "삼성전자", 5)
 
-        holding = db.query(Holding).filter(
-            Holding.kakao_id == test_user.kakao_id,
-        ).first()
+        holding = (
+            db.query(Holding)
+            .filter(
+                Holding.kakao_id == test_user.kakao_id,
+            )
+            .first()
+        )
         assert holding is None
 
 

@@ -3,6 +3,7 @@ pytest 공통 픽스처
 - 인메모리 SQLite DB (테스트용)
 - 테스트 유저 생성 헬퍼
 """
+
 import sys
 import os
 import pytest
@@ -22,13 +23,11 @@ from config import GameConfig
 # ===========================================
 TEST_DB_URL = "sqlite:///:memory:"
 
+
 @pytest.fixture(scope="function")
 def db():
     """각 테스트마다 깨끗한 인메모리 DB 제공"""
-    engine = create_engine(
-        TEST_DB_URL,
-        connect_args={"check_same_thread": False}
-    )
+    engine = create_engine(TEST_DB_URL, connect_args={"check_same_thread": False})
     Base.metadata.create_all(engine)
     TestSession = sessionmaker(bind=engine)
     session = TestSession()

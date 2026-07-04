@@ -1,6 +1,7 @@
 """
 데이터베이스 연결 및 세션 관리
 """
+
 import re
 from datetime import datetime, timezone
 from sqlalchemy import create_engine, text, inspect
@@ -26,21 +27,19 @@ engine_kwargs = {
 
 # PostgreSQL인 경우 커넥션 풀 설정 추가
 if not is_sqlite:
-    engine_kwargs.update({
-        "pool_size": 5,  # 기본 연결 수
-        "max_overflow": 10,  # 추가 연결 허용 수 (최대 15개)
-        "pool_recycle": 1800,  # 30분마다 연결 갱신 (DB timeout 방지)
-        "pool_timeout": 30,  # 연결 대기 최대 시간 (초)
-    })
+    engine_kwargs.update(
+        {
+            "pool_size": 5,  # 기본 연결 수
+            "max_overflow": 10,  # 추가 연결 허용 수 (최대 15개)
+            "pool_recycle": 1800,  # 30분마다 연결 갱신 (DB timeout 방지)
+            "pool_timeout": 30,  # 연결 대기 최대 시간 (초)
+        }
+    )
 
 engine = create_engine(DATABASE_URL, **engine_kwargs)
 
 # 세션 팩토리
-SessionLocal = sessionmaker(
-    autocommit=False,
-    autoflush=False,
-    bind=engine
-)
+SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 # Base 클래스
 Base = declarative_base()
@@ -95,44 +94,55 @@ def _migrate_db():
     inspector = inspect(engine)
 
     # users 테이블이 존재하는지 확인
-    if 'users' not in inspector.get_table_names():
+    if "users" not in inspector.get_table_names():
         return
 
     # 현재 users 테이블의 컬럼 목록
-    existing_columns = {col['name'] for col in inspector.get_columns('users')}
+    existing_columns = {col["name"] for col in inspector.get_columns("users")}
 
     # 추가해야 할 컬럼들 정의 (컬럼명: SQL 타입 및 기본값)
     new_columns = {
-        'last_mission_date': 'DATE',
-        'daily_trade_count': 'INTEGER DEFAULT 0',
-        'mission_completed': 'INTEGER DEFAULT 0',
-        'achievements': "VARCHAR(1000) DEFAULT '[]'",
-        'total_profit_realized': 'BIGINT DEFAULT 0',
-        'total_trades': 'INTEGER DEFAULT 0',
-        'last_lottery_date': 'DATE',
-        'lottery_count_today': 'INTEGER DEFAULT 0',
-        'nickname_change_count': 'INTEGER DEFAULT 0',
-        'last_nickname_change': 'DATE',
-        'updown_active': 'INTEGER DEFAULT 0',
-        'updown_bet': 'BIGINT DEFAULT 0',
-        'updown_current_number': 'INTEGER DEFAULT 0',
-        'updown_round': 'INTEGER DEFAULT 0',
-        'updown_multiplier': 'FLOAT DEFAULT 1.0',
-        'enhance_level': 'INTEGER DEFAULT 0',
-        'enhance_title_seed': 'INTEGER DEFAULT 0',
-        'enhance_class': 'INTEGER DEFAULT 0',
-        'pending_quiz': 'VARCHAR(2000)',
-        'pending_quiz_bet': 'BIGINT DEFAULT 0',
+        "last_mission_date": "DATE",
+        "daily_trade_count": "INTEGER DEFAULT 0",
+        "mission_completed": "INTEGER DEFAULT 0",
+        "achievements": "VARCHAR(1000) DEFAULT '[]'",
+        "total_profit_realized": "BIGINT DEFAULT 0",
+        "total_trades": "INTEGER DEFAULT 0",
+        "last_lottery_date": "DATE",
+        "lottery_count_today": "INTEGER DEFAULT 0",
+        "nickname_change_count": "INTEGER DEFAULT 0",
+        "last_nickname_change": "DATE",
+        "updown_active": "INTEGER DEFAULT 0",
+        "updown_bet": "BIGINT DEFAULT 0",
+        "updown_current_number": "INTEGER DEFAULT 0",
+        "updown_round": "INTEGER DEFAULT 0",
+        "updown_multiplier": "FLOAT DEFAULT 1.0",
+        "enhance_level": "INTEGER DEFAULT 0",
+        "enhance_title_seed": "INTEGER DEFAULT 0",
+        "enhance_class": "INTEGER DEFAULT 0",
+        "pending_quiz": "VARCHAR(2000)",
+        "pending_quiz_bet": "BIGINT DEFAULT 0",
     }
 
     # 허용된 SQL 타입 화이트리스트 (SQL 인젝션 방지)
-    _VALID_COL_NAME = re.compile(r'^[a-z_][a-z0-9_]*$')
+    _VALID_COL_NAME = re.compile(r"^[a-z_][a-z0-9_]*$")
     _ALLOWED_COL_TYPES = {
-        'INTEGER', 'BIGINT', 'VARCHAR', 'TEXT', 'DATE', 'BOOLEAN', 'FLOAT', 'REAL',
-        'INTEGER DEFAULT 0', 'BIGINT DEFAULT 0', 'INTEGER DEFAULT 1',
-        'FLOAT DEFAULT 1.0',
+        "INTEGER",
+        "BIGINT",
+        "VARCHAR",
+        "TEXT",
+        "DATE",
+        "BOOLEAN",
+        "FLOAT",
+        "REAL",
+        "INTEGER DEFAULT 0",
+        "BIGINT DEFAULT 0",
+        "INTEGER DEFAULT 1",
+        "FLOAT DEFAULT 1.0",
         "VARCHAR(1000) DEFAULT '[]'",
-        'DATE', 'BOOLEAN DEFAULT FALSE', 'BOOLEAN DEFAULT TRUE',
+        "DATE",
+        "BOOLEAN DEFAULT FALSE",
+        "BOOLEAN DEFAULT TRUE",
     }
 
     def _is_safe_col_type(col_type: str) -> bool:
@@ -141,11 +151,15 @@ def _migrate_db():
             return True
         # INTEGER DEFAULT N, BIGINT DEFAULT N 패턴 허용
         import re as _re
-        return bool(_re.match(
-            r'^(INTEGER|BIGINT|VARCHAR\(\d+\)|TEXT|DATE|BOOLEAN|FLOAT|REAL)'
-            r'(\s+DEFAULT\s+(\d+|\'[^\']*\'|TRUE|FALSE|NULL))?$',
-            col_type, _re.IGNORECASE
-        ))
+
+        return bool(
+            _re.match(
+                r"^(INTEGER|BIGINT|VARCHAR\(\d+\)|TEXT|DATE|BOOLEAN|FLOAT|REAL)"
+                r"(\s+DEFAULT\s+(\d+|\'[^\']*\'|TRUE|FALSE|NULL))?$",
+                col_type,
+                _re.IGNORECASE,
+            )
+        )
 
     added_count = 0
     with engine.connect() as conn:
@@ -157,10 +171,12 @@ def _migrate_db():
                     continue
                 # 컬럼 타입 유효성 검증 (SQL 인젝션 방지 - 화이트리스트)
                 if not _is_safe_col_type(col_type):
-                    logger.error(f"유효하지 않은 컬럼 타입 건너뜀: {col_name} {col_type}")
+                    logger.error(
+                        f"유효하지 않은 컬럼 타입 건너뜀: {col_name} {col_type}"
+                    )
                     continue
                 try:
-                    sql = f'ALTER TABLE users ADD COLUMN {col_name} {col_type}'
+                    sql = f"ALTER TABLE users ADD COLUMN {col_name} {col_type}"
                     conn.execute(text(sql))
                     conn.commit()
                     logger.info(f"컬럼 추가됨: users.{col_name}")
@@ -201,7 +217,9 @@ def _widen_integer_columns(inspector):
             if "BIGINT" in str(columns[column]["type"]).upper():
                 continue
             try:
-                conn.execute(text(f'ALTER TABLE {table} ALTER COLUMN {column} TYPE BIGINT'))
+                conn.execute(
+                    text(f"ALTER TABLE {table} ALTER COLUMN {column} TYPE BIGINT")
+                )
                 conn.commit()
                 logger.info(f"컬럼 타입 확장됨: {table}.{column} → BIGINT")
             except SQLAlchemyError as e:
@@ -226,8 +244,7 @@ def reset_db():
 
 
 def cleanup_old_records(
-    transaction_days: int = 90,
-    asset_history_days: int = 365
+    transaction_days: int = 90, asset_history_days: int = 365
 ) -> dict:
     """
     오래된 레코드 정리 (데이터베이스 용량 관리)
@@ -249,17 +266,26 @@ def cleanup_old_records(
         db = SessionLocal()
 
         # 오래된 거래 내역 삭제
-        transaction_cutoff = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=transaction_days)
-        deleted_transactions = db.query(Transaction).filter(
-            Transaction.created_at < transaction_cutoff
-        ).delete(synchronize_session=False)
+        transaction_cutoff = datetime.now(timezone.utc).replace(
+            tzinfo=None
+        ) - timedelta(days=transaction_days)
+        deleted_transactions = (
+            db.query(Transaction)
+            .filter(Transaction.created_at < transaction_cutoff)
+            .delete(synchronize_session=False)
+        )
         result["transactions"] = deleted_transactions
 
         # 오래된 자산 히스토리 삭제
-        asset_cutoff = (datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=asset_history_days)).date()
-        deleted_history = db.query(AssetHistory).filter(
-            AssetHistory.record_date < asset_cutoff
-        ).delete(synchronize_session=False)
+        asset_cutoff = (
+            datetime.now(timezone.utc).replace(tzinfo=None)
+            - timedelta(days=asset_history_days)
+        ).date()
+        deleted_history = (
+            db.query(AssetHistory)
+            .filter(AssetHistory.record_date < asset_cutoff)
+            .delete(synchronize_session=False)
+        )
         result["asset_history"] = deleted_history
 
         db.commit()

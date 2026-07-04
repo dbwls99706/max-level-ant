@@ -2,6 +2,7 @@
 로깅 유틸리티
 - 표준화된 로깅 시스템
 """
+
 import logging
 import sys
 
@@ -31,8 +32,8 @@ def setup_logger(name: str, level: int = logging.INFO) -> logging.Logger:
 
     # 포맷 설정
     formatter = logging.Formatter(
-        fmt='%(asctime)s | %(levelname)-8s | %(name)s | %(message)s',
-        datefmt='%Y-%m-%d %H:%M:%S'
+        fmt="%(asctime)s | %(levelname)-8s | %(name)s | %(message)s",
+        datefmt="%Y-%m-%d %H:%M:%S",
     )
     handler.setFormatter(formatter)
 
@@ -47,9 +48,9 @@ def configure_root_logger(level: int = logging.INFO) -> None:
     """루트 로거 설정 (앱 시작 시 호출)"""
     logging.basicConfig(
         level=level,
-        format='%(asctime)s | %(levelname)-8s | %(name)s | %(message)s',
-        datefmt='%Y-%m-%d %H:%M:%S',
-        handlers=[logging.StreamHandler(sys.stdout)]
+        format="%(asctime)s | %(levelname)-8s | %(name)s | %(message)s",
+        datefmt="%Y-%m-%d %H:%M:%S",
+        handlers=[logging.StreamHandler(sys.stdout)],
     )
 
 
