@@ -14,7 +14,7 @@ import requests
 from game_config import GameProbability
 from market_calendar import KST
 from settings import PublicDataConfig
-from utils import get_service_logger
+from utils import budget, get_service_logger
 
 logger = get_service_logger()
 
@@ -86,7 +86,10 @@ def _fetch_stock_prices(
             "endBasDt": end_dt,
         }
 
-        resp = requests.get(url, params=params, timeout=PublicDataConfig.API_TIMEOUT)
+        # 카카오 스킬 SLA를 지키도록 남은 요청 예산 안에서만 기다린다
+        resp = requests.get(
+            url, params=params, timeout=budget.timeout_for(PublicDataConfig.API_TIMEOUT)
+        )
         resp.raise_for_status()
 
         data = resp.json()

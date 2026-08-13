@@ -12,6 +12,7 @@ from collections import defaultdict
 from fastapi import FastAPI, Request, Depends, HTTPException, Header, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from starlette.concurrency import run_in_threadpool
 from sqlalchemy.orm import Session
 import uvicorn
 from contextlib import asynccontextmanager
@@ -23,7 +24,8 @@ from utils import KakaoResponse, configure_root_logger, get_main_logger
 from services.stock_service import KISAPIClient, StockService
 from services.battle_service import BattleService
 from security import SecurityConfig
-from settings import validate_config
+from settings import SkillConfig, validate_config
+from utils import budget
 
 # 로깅 설정
 configure_root_logger()
@@ -308,10 +310,17 @@ async def kakao_skill(request: Request, db: Session = Depends(get_db)):
             )
 
         # 명령어 처리
-        handler = CommandHandler(db, kakao_id, utterance, nickname, group_key)
-        response = handler.handle()
+        # - 카카오 스킬 SLA(5초)를 지키기 위해 요청 전체에 시간 예산을 건다.
+        #   외부 API 호출은 남은 예산 안에서만 수행되고, 예산이 없으면
+        #   캐시/폴백 응답으로 넘어간다 (utils.budget 참고).
+        # - handle()은 동기 함수라 이벤트 루프에서 직접 호출하면 다른 요청까지
+        #   같이 멈춘다. 워커 스레드로 넘겨 한 요청의 지연이 전파되지 않게 한다.
+        def run_handler():
+            with budget.request_budget(SkillConfig.RESPONSE_BUDGET):
+                handler = CommandHandler(db, kakao_id, utterance, nickname, group_key)
+                return handler.handle()
 
-        return response
+        return await run_in_threadpool(run_handler)
 
     except Exception as e:
         logger.error(f"스킬 처리 에러: {e}", exc_info=True)

@@ -36,12 +36,38 @@ if DATABASE_URL.startswith("postgres://"):
 
 
 # ===========================================
+# 카카오 스킬 서버 SLA
+# ===========================================
+class SkillConfig:
+    """
+    카카오 스킬 응답 시간 제약.
+
+    카카오는 스킬 요청을 5초 안에 응답받지 못하면 실패로 처리한다.
+    (초과 시에는 useCallback/callbackUrl로 후속 응답을 보내야 한다.)
+
+    RESPONSE_BUDGET은 그보다 짧게 잡아, 네트워크 왕복·DB·응답 직렬화에
+    쓸 여유를 남긴다. 모든 외부 API 호출은 이 예산을 나눠 쓴다.
+    """
+
+    # 카카오가 보장하는 스킬 타임아웃 (초)
+    KAKAO_TIMEOUT = 5.0
+
+    # 요청 처리에 허용할 총 시간 (초) — 외부 호출 전체가 이 안에서 끝나야 한다
+    RESPONSE_BUDGET = float(os.getenv("SKILL_RESPONSE_BUDGET", "3.5"))
+
+    # 남은 예산이 이보다 적으면 새 외부 호출을 시작하지 않는다 (초)
+    # 어차피 응답 전에 카카오 타임아웃이므로 캐시/폴백으로 넘어간다.
+    MIN_CALL_BUDGET = 0.3
+
+
+# ===========================================
 # 공공데이터포털 API 설정 (금융위원회 주식시세정보)
 # ===========================================
 class PublicDataConfig:
     SERVICE_KEY = os.getenv("PUBLIC_DATA_SERVICE_KEY", "")
     BASE_URL = "https://apis.data.go.kr/1160100/service/GetStockSecuritiesInfoService"
-    API_TIMEOUT = 10
+    # 스킬 SLA(5초) 안에서 끝나야 하므로 개별 호출 상한도 짧게 잡는다
+    API_TIMEOUT = float(os.getenv("PUBLIC_DATA_API_TIMEOUT", "2.0"))
 
 
 # ===========================================
@@ -51,7 +77,13 @@ class KISConfig:
     APP_KEY = os.getenv("KIS_APP_KEY", "")
     APP_SECRET = os.getenv("KIS_APP_SECRET", "")
     BASE_URL = os.getenv("KIS_BASE_URL", "https://openapi.koreainvestment.com:9443")
-    API_TIMEOUT = 10  # API 요청 타임아웃 (초)
+
+    # 개별 호출 타임아웃 상한 (초).
+    # 한 요청에서 토큰 발급 + 시세 조회가 연달아 일어나므로,
+    # 2회 연속 호출해도 SkillConfig.RESPONSE_BUDGET을 넘지 않는 값이어야 한다.
+    # (deadline이 한 번 더 줄여주지만, 타임아웃만으로도 SLA를 지키게 둔다.)
+    # 실제 적용값은 min(이 값, 요청에 남은 예산)이다 (utils.budget 참고).
+    API_TIMEOUT = float(os.getenv("KIS_API_TIMEOUT", "1.5"))
 
     # KIS 유량 제한(초당 거래건수) 회피용 호출 간 최소 간격(초).
     # 단일 프로세스 기준 모든 KIS 호출을 직렬화해 초당 호출 수를 제한한다.
@@ -155,6 +187,21 @@ def validate_config() -> Tuple[bool, List[str]]:
     # 4. 게임 확률 검증
     if not GameProbability.validate_probabilities():
         errors.append("게임 확률 설정 오류 - 확률 합계가 1이 아닙니다")
+
+    # 4-1. 카카오 스킬 SLA 검증
+    # 예산이 카카오 타임아웃을 넘으면 응답해도 이미 실패로 처리된다.
+    if SkillConfig.RESPONSE_BUDGET >= SkillConfig.KAKAO_TIMEOUT:
+        errors.append(
+            f"SKILL_RESPONSE_BUDGET({SkillConfig.RESPONSE_BUDGET}초)은 "
+            f"카카오 스킬 타임아웃({SkillConfig.KAKAO_TIMEOUT}초)보다 작아야 합니다"
+        )
+    # 토큰 발급 + 실제 조회가 연달아 일어나므로 2회분이 예산에 들어가야 한다
+    if KISConfig.API_TIMEOUT * 2 > SkillConfig.RESPONSE_BUDGET:
+        warnings.append(
+            f"KIS_API_TIMEOUT({KISConfig.API_TIMEOUT}초) 2회분이 "
+            f"응답 예산({SkillConfig.RESPONSE_BUDGET}초)을 초과 - "
+            f"느린 응답 시 deadline에 의해 강제로 잘립니다"
+        )
 
     # 5. 기대값 검증 (과도하게 높거나 낮은 경우 경고)
     for game in ["lottery", "stock_quiz", "updown"]:

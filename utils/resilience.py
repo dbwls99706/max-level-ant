@@ -271,13 +271,26 @@ class CallThrottle:
         self._lock = threading.Lock()
         self._next_allowed_at = 0.0
 
-    def wait(self):
-        """직전 호출과 최소 간격을 보장 (필요 시 대기)"""
+    def wait(self, max_wait: Optional[float] = None) -> bool:
+        """
+        직전 호출과 최소 간격을 보장 (필요 시 대기).
+
+        max_wait를 주면 그보다 오래 기다리지 않는다. 카카오 스킬처럼 응답
+        시간 예산이 있는 경우, 유량 제한 대기만으로 예산을 다 쓰는 것을 막는다.
+
+        Returns:
+            True면 간격이 확보됐고 호출해도 된다. False면 대기 상한을 넘겨
+            슬롯을 잡지 않았으므로 호출하지 않아야 한다.
+        """
         with self._lock:
             now = time.monotonic()
             sleep_for = self._next_allowed_at - now
+            if max_wait is not None and sleep_for > max_wait:
+                # 예산 안에 슬롯을 못 잡는다 — 예약하지 않고 물러난다
+                return False
             # 다음 호출 허용 시각을 먼저 확정해 두면, 대기 중 들어온 다른 스레드도
             # 자기 슬롯을 예약하고 순서대로 나가게 된다 (락 유지로 직렬화).
             self._next_allowed_at = max(now, self._next_allowed_at) + self._min_interval
             if sleep_for > 0:
                 time.sleep(sleep_for)
+            return True
