@@ -9,6 +9,7 @@ uvicorn[standard]==0.27.0
 # Database
 sqlalchemy>=2.0.27,<3.0
 psycopg2-binary==2.9.9
+alembic>=1.13,<2.0
 
 # HTTP
 requests>=2.31.0,<3.0

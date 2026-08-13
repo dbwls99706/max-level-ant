@@ -16,6 +16,9 @@
 # Run server locally
 uvicorn main:app --reload --port 8000
 
+# Apply DB migrations (safe on both fresh and existing databases)
+alembic upgrade head
+
 # Run tests
 pytest
 
@@ -67,7 +70,9 @@ stock-king-bot/
 │   ├── milestone_service.py # Asset milestones
 │   ├── asset_service.py     # Asset history tracking
 │   └── quiz_data_service.py # Stock quiz data from public API
-├── .github/workflows/   # CI (ruff + pytest, PostgreSQL 동시성 job 포함)
+├── .github/workflows/   # CI (ruff + pytest, PostgreSQL 동시성/마이그레이션 job 포함)
+├── alembic.ini          # Alembic 설정 (DB URL은 env.py가 환경변수에서 읽음)
+├── migrations/          # Alembic 리비전 (env.py, versions/)
 ├── utils/
 │   ├── kakao_response.py    # Kakao chatbot response format builder (spec limits)
 │   ├── budget.py            # Per-request time budget for the 5s Kakao skill SLA
@@ -194,7 +199,12 @@ TEST_DATABASE_URL=postgresql://user:pw@localhost/dbname pytest -m postgres
 - **Error handling**: Use `ErrorCode` constants and the `error_response()` / `success_response()` format
 - **Logging**: Use module-specific loggers from `utils.logger` (`get_main_logger`, `get_handler_logger`, `get_service_logger`)
 - **Money safety**: Always use `safe_add()` / `safe_subtract()` from `services.common` for financial calculations
-- **No Alembic**: Schema migrations are manual via `_migrate_db()` in `database.py`
+- **Alembic**: schema changes live in `migrations/versions/`. `0001_baseline` is deliberately
+  **idempotent** (creates only missing tables/columns, widens int4 money columns) because the
+  production DB predates Alembic — so `alembic upgrade head` works on both a fresh and an
+  existing DB, with no `stamp` step. Never edit `0001_baseline` when models change; add a new
+  revision. `init_db()`'s `create_all()` + `_migrate_db()` are still in place on purpose and
+  are removed only after the Alembic path has run against production — see `docs/MIGRATIONS.md`
 - **Imports**: Relative imports within packages (handlers, services, utils), absolute from root
 
 ## Linting

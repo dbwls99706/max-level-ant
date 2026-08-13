@@ -164,6 +164,19 @@ KIS_SLOT_WAIT_CAP=1.0            # 동시 호출 슬롯 대기 상한 (초)
 
 전체 목록은 `.env.example` 참고.
 
+### 데이터베이스 마이그레이션
+
+스키마 변경은 Alembic으로 관리한다.
+
+```bash
+alembic upgrade head     # 최신 스키마 적용 (새 DB / 기존 DB 모두 안전)
+alembic check            # models.py와 실제 스키마 차이 확인
+```
+
+`0001_baseline`은 이미 테이블이 있는 기존 운영 DB에서도 그대로 돌도록
+멱등하게 작성돼 있다 (`stamp` 불필요). 운영 적용 절차와 자동 마이그레이션
+제거 시점은 [docs/MIGRATIONS.md](docs/MIGRATIONS.md) 참고.
+
 ### ⚠️ 스킬 인증 적용 시 배포 순서
 
 `/skill`은 공유 비밀키 헤더로 인증한다. **키를 설정하지 않으면 서버가 기동하지 않으므로**
@@ -229,6 +242,8 @@ stock-king-bot/
 ├── constants.py             # 배틀/거래 상태 상수
 ├── database.py              # DB 연결 + 자동 마이그레이션
 ├── models.py                # DB 모델 (11개 테이블)
+├── alembic.ini              # Alembic 설정
+├── migrations/              # Alembic 리비전 (env.py, versions/)
 ├── requirements.txt
 ├── Dockerfile               # 멀티스테이지 빌드
 ├── Procfile                 # PaaS 기동 명령 (uvicorn, $PORT 바인딩)
