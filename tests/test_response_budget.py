@@ -9,6 +9,7 @@
   - 예산 소진 시 새 호출을 시작하지 않는다
   - 유량 제한 대기가 예산을 넘기지 않는다
   - 워커 스레드로 deadline이 전파된다
+  - 배치 조회가 timeout 후 실행 중인 worker 종료를 기다리지 않는다
 
 검증하지 않는 것 (구현상 보장되지 않음):
   - DB 쿼리 실행 시간
@@ -161,6 +162,32 @@ class TestKisRespectsBudget:
             "워커 스레드에 요청 deadline이 전달되지 않았다"
         )
 
+    def test_batch_timeout_does_not_wait_for_running_workers(self, valid_token):
+        """
+        배치 대기 시간이 끝나면 실행 중인 worker를 기다리지 않고 반환해야 한다.
+
+        ThreadPoolExecutor를 with로 쓰면 블록 탈출 시 shutdown(wait=True)라
+        as_completed에 timeout을 걸어도 실행 중 worker가 끝날 때까지 붙잡힌다.
+        (수정 전에는 예산 0.8초에 worker 2초면 2.2초가 걸렸다)
+        """
+        worker_seconds = 2.0
+
+        def slow_get(url, headers=None, params=None, timeout=None):
+            time.sleep(worker_seconds)
+            raise stock_service.Timeout("느린 서버")
+
+        StockService._price_cache.clear()
+        started = time.monotonic()
+        with patch.object(stock_service.requests, "get", side_effect=slow_get):
+            with budget.request_budget(0.8):
+                StockService.batch_get_prices({"005930", "000660", "035420"})
+        elapsed = time.monotonic() - started
+
+        assert elapsed < worker_seconds, (
+            f"배치 조회가 {elapsed:.2f}초 걸렸다 — "
+            f"실행 중인 worker({worker_seconds}초) 종료를 기다리고 있다"
+        )
+
     def test_repeated_calls_stay_within_budget(self, valid_token):
         """
         외부 API가 응답하지 않아도 KIS 호출 반복은 예산 안에서 멈춰야 한다.
@@ -306,4 +333,61 @@ class TestSkillEndpointBudget:
 
         assert seen["on_event_loop"] is False, (
             "동기 handler가 이벤트 루프에서 실행됐다 — 다른 요청까지 멈춘다"
+        )
+
+
+class TestSessionPerWorkerThread:
+    """
+    SQLAlchemy Session은 스레드 간 공유를 전제로 하지 않는다.
+    handler를 워커 스레드로 옮겼으므로 Session 생성·사용·close도
+    모두 그 스레드 안에서 끝나야 한다.
+    """
+
+    def test_session_is_created_and_closed_in_handler_thread(self, monkeypatch):
+        from fastapi.testclient import TestClient
+
+        import main
+
+        seen = {}
+        real_session_local = main.SessionLocal
+
+        def tracking_session_local(*args, **kwargs):
+            seen["created_in"] = threading.get_ident()
+            session = real_session_local(*args, **kwargs)
+            real_close = session.close
+
+            def tracked_close():
+                seen["closed_in"] = threading.get_ident()
+                return real_close()
+
+            session.close = tracked_close
+            return session
+
+        def fake_handle(self):
+            seen["handled_in"] = threading.get_ident()
+            return main.KakaoResponse.simple_text("ok")
+
+        monkeypatch.setattr(main, "SessionLocal", tracking_session_local)
+        monkeypatch.setattr(main.CommandHandler, "handle", fake_handle)
+
+        with TestClient(main.app) as client:
+            resp = client.post(
+                "/skill",
+                json={
+                    "userRequest": {
+                        "user": {"id": "sessionthread"},
+                        "utterance": "/잔고",
+                    }
+                },
+            )
+
+        assert resp.status_code == 200
+        assert seen["created_in"] == seen["handled_in"], (
+            "Session이 handler와 다른 스레드에서 생성됐다"
+        )
+        assert seen["closed_in"] == seen["handled_in"], (
+            "Session이 handler와 다른 스레드에서 닫혔다"
+        )
+        assert seen["handled_in"] != threading.main_thread().ident, (
+            "handler가 메인(이벤트 루프) 스레드에서 실행됐다"
         )

@@ -912,27 +912,28 @@ class StockService:
                 return code, cls.get_price(code)
 
         # 병렬로 API 호출 (최대 5개 동시)
-        with ThreadPoolExecutor(max_workers=min(5, len(uncached_codes))) as executor:
-            futures = {
-                executor.submit(fetch_price, code): code for code in uncached_codes
-            }
+        # ThreadPoolExecutor를 with로 쓰면 블록을 나갈 때 shutdown(wait=True)라,
+        # 예산이 끝나도 실행 중인 worker가 끝날 때까지 요청 스레드가 붙잡힌다.
+        # 직접 관리하며 wait=False로 내려 곧바로 반환시킨다.
+        executor = ThreadPoolExecutor(max_workers=min(5, len(uncached_codes)))
+        futures = {executor.submit(fetch_price, code): code for code in uncached_codes}
+        try:
             # 대기 상한은 as_completed에 건다. future.result(timeout=)에 걸면
             # as_completed가 이미 완료까지 기다린 뒤라 아무 효과가 없다.
-            try:
-                for future in as_completed(futures, timeout=cls._batch_wait()):
-                    try:
-                        code, stock_info = future.result()
-                        if stock_info:
-                            prices[code] = stock_info["price"]
-                    except Exception as e:
-                        logger.warning(f"배치 시세 조회 실패 ({futures[future]}): {e}")
-            except FuturesTimeout:
-                pending = [futures[f] for f in futures if not f.done()]
-                logger.warning(
-                    f"배치 시세 조회 예산 초과 - 미완료 {len(pending)}건 포기"
-                )
-                for f in futures:
-                    f.cancel()
+            for future in as_completed(futures, timeout=cls._batch_wait()):
+                try:
+                    code, stock_info = future.result()
+                    if stock_info:
+                        prices[code] = stock_info["price"]
+                except Exception as e:
+                    logger.warning(f"배치 시세 조회 실패 ({futures[future]}): {e}")
+        except FuturesTimeout:
+            pending = [futures[f] for f in futures if not f.done()]
+            logger.warning(f"배치 시세 조회 예산 초과 - 미완료 {len(pending)}건 포기")
+        finally:
+            # 아직 시작하지 않은 작업은 취소하고, 실행 중인 worker는 기다리지 않는다.
+            # (파이썬 스레드는 강제 종료할 수 없어 백그라운드에서 마저 끝난다)
+            executor.shutdown(wait=False, cancel_futures=True)
 
         return prices
 
@@ -957,24 +958,23 @@ class StockService:
             with budget.adopt(deadline):
                 return code, cls.get_price(code)
 
-        with ThreadPoolExecutor(max_workers=min(5, len(stock_codes))) as executor:
-            futures = {executor.submit(fetch_info, code): code for code in stock_codes}
-            try:
-                for future in as_completed(futures, timeout=cls._batch_wait()):
-                    try:
-                        code, stock_info = future.result()
-                        if stock_info:
-                            result[code] = stock_info
-                    except Exception as e:
-                        logger.warning(
-                            f"배치 종목 정보 조회 실패 ({futures[future]}): {e}"
-                        )
-            except FuturesTimeout:
-                pending = [futures[f] for f in futures if not f.done()]
-                logger.warning(
-                    f"배치 종목 정보 조회 예산 초과 - 미완료 {len(pending)}건 포기"
-                )
-                for f in futures:
-                    f.cancel()
+        # with 대신 직접 관리 — 이유는 batch_get_prices의 주석 참고
+        executor = ThreadPoolExecutor(max_workers=min(5, len(stock_codes)))
+        futures = {executor.submit(fetch_info, code): code for code in stock_codes}
+        try:
+            for future in as_completed(futures, timeout=cls._batch_wait()):
+                try:
+                    code, stock_info = future.result()
+                    if stock_info:
+                        result[code] = stock_info
+                except Exception as e:
+                    logger.warning(f"배치 종목 정보 조회 실패 ({futures[future]}): {e}")
+        except FuturesTimeout:
+            pending = [futures[f] for f in futures if not f.done()]
+            logger.warning(
+                f"배치 종목 정보 조회 예산 초과 - 미완료 {len(pending)}건 포기"
+            )
+        finally:
+            executor.shutdown(wait=False, cancel_futures=True)
 
         return result

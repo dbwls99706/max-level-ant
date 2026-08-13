@@ -9,16 +9,15 @@ import secrets
 import time
 import threading
 from collections import defaultdict
-from fastapi import FastAPI, Request, Depends, HTTPException, Header, Response
+from fastapi import FastAPI, Request, HTTPException, Header, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from starlette.concurrency import run_in_threadpool
-from sqlalchemy.orm import Session
 import uvicorn
 from contextlib import asynccontextmanager
 from typing import Optional, Callable
 
-from database import get_db, init_db, reset_db, check_db_health, SessionLocal
+from database import init_db, reset_db, check_db_health, SessionLocal
 from handlers import CommandHandler
 from utils import KakaoResponse, configure_root_logger, get_main_logger
 from services.stock_service import KISAPIClient, StockService
@@ -254,7 +253,7 @@ async def health_check():
 # 카카오 스킬 엔드포인트
 # ===========================================
 @app.post("/skill")
-async def kakao_skill(request: Request, db: Session = Depends(get_db)):
+async def kakao_skill(request: Request):
     """
     카카오톡 챗봇 스킬 엔드포인트
 
@@ -319,10 +318,20 @@ async def kakao_skill(request: Request, db: Session = Depends(get_db)):
         #   남은 예산 안에서만 수행되게 한다 (협조적 예산, utils.budget 참고).
         # - handle()은 동기 함수라 이벤트 루프에서 직접 호출하면 다른 요청까지
         #   같이 멈춘다. 워커 스레드로 넘겨 한 요청의 지연이 전파되지 않게 한다.
+        # DB Session은 워커 스레드 안에서 만들고 그 안에서 닫는다.
+        # SQLAlchemy Session은 스레드 간 공유를 전제로 하지 않으므로,
+        # 생성·쿼리·commit/rollback·close가 모두 같은 스레드에서 끝나야 한다.
+        # (그래서 이 엔드포인트는 Depends(get_db)를 쓰지 않는다)
         def run_handler():
             with budget.adopt(deadline):
-                handler = CommandHandler(db, kakao_id, utterance, nickname, group_key)
-                return handler.handle()
+                db = SessionLocal()
+                try:
+                    handler = CommandHandler(
+                        db, kakao_id, utterance, nickname, group_key
+                    )
+                    return handler.handle()
+                finally:
+                    db.close()
 
         return await run_in_threadpool(run_handler)
 
@@ -338,7 +347,7 @@ async def kakao_skill(request: Request, db: Session = Depends(get_db)):
 # 디버그용 엔드포인트
 # ===========================================
 @app.post("/debug/skill")
-async def debug_skill(request: Request, db: Session = Depends(get_db)):
+async def debug_skill(request: Request):
     """
     디버그용 스킬 테스트 엔드포인트 (DEV_MODE에서만 활성화)
 
@@ -356,10 +365,14 @@ async def debug_skill(request: Request, db: Session = Depends(get_db)):
         kakao_id = body.get("kakao_id", "test_user")
         message = body.get("message", "/도움말")
 
-        handler = CommandHandler(db, kakao_id, message)
-        response = handler.handle()
+        def run_handler():
+            db = SessionLocal()
+            try:
+                return CommandHandler(db, kakao_id, message).handle()
+            finally:
+                db.close()
 
-        return response
+        return await run_in_threadpool(run_handler)
 
     except Exception as e:
         logger.error(f"디버그 엔드포인트 에러: {e}", exc_info=True)
