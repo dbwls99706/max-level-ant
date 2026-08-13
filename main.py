@@ -22,7 +22,8 @@ from handlers import CommandHandler
 from utils import KakaoResponse, configure_root_logger, get_main_logger
 from services.stock_service import KISAPIClient, StockService
 from services.battle_service import BattleService
-from config import SecurityConfig, validate_config
+from security import SecurityConfig
+from settings import validate_config
 
 # 로깅 설정
 configure_root_logger()
@@ -449,7 +450,7 @@ async def admin_reset_seed(
             }
 
         from models import User, Holding, Transaction
-        from config import GameConfig
+        from game_config import GameConfig
 
         db = SessionLocal()
         try:

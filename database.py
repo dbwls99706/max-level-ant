@@ -7,7 +7,7 @@ from datetime import datetime, timezone
 from sqlalchemy import create_engine, text, inspect
 from sqlalchemy.orm import sessionmaker, declarative_base
 from sqlalchemy.exc import SQLAlchemyError
-from config import DATABASE_URL
+from settings import DATABASE_URL
 from utils import get_handler_logger
 
 logger = get_handler_logger()

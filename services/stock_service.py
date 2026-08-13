@@ -16,7 +16,8 @@ import requests
 from requests.exceptions import RequestException, Timeout
 from sqlalchemy.exc import SQLAlchemyError
 
-from config import CacheConfig, KISConfig, GameConfig
+from game_config import GameConfig
+from settings import CacheConfig, KISConfig
 from database import SessionLocal
 from utils import get_service_logger
 

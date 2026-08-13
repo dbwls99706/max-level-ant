@@ -11,7 +11,10 @@ from typing import Dict, Optional
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import SQLAlchemyError
 
-from config import GameConfig, GameProbability, EnhanceConfig, ErrorCode, KST
+from enhance_config import EnhanceConfig
+from errors import ErrorCode
+from game_config import GameConfig, GameProbability
+from market_calendar import KST
 from services.common import (
     get_user_with_error_for_update,
     validate_bet,

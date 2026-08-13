@@ -31,9 +31,20 @@ ruff format --check .
 ```
 stock-king-bot/
 ├── main.py              # FastAPI app, endpoints, rate limiter, lifespan
-├── config.py            # All game config, constants, error codes, messages
 ├── database.py          # DB engine, session, migration, cleanup
 ├── models.py            # SQLAlchemy models (10 tables)
+│   # ── Configuration & shared contracts (formerly one config.py) ──
+├── settings.py          # DB URL, KIS/공공데이터 API, cache TTL, validate_config()
+├── security.py          # Admin token, CORS origins, request size & rate limits
+├── game_config.py       # GameConfig (balance) + GameProbability (odds, EV checks)
+├── quiz_history.py      # 시장예측 quiz dataset (pure data)
+├── enhance_config.py    # EnhanceConfig: 각성 cost/odds/multipliers, title lookup
+├── enhance_titles.py    # 각성 title trees & flavor text (pure data)
+├── market_calendar.py   # KST, holidays, market hours → 장 상태 판정
+├── messages.py          # Kakao response message templates
+├── errors.py            # ErrorCode constants
+├── responses.py         # success_response() / error_response() builders
+├── constants.py         # BattleStatus, TradeType
 ├── handlers/            # Command routing & response formatting
 │   ├── command_handler.py   # Main router (COMMAND_ROUTES dict → method dispatch)
 │   ├── base_handler.py      # Common utilities mixin
@@ -59,6 +70,7 @@ stock-king-bot/
 ├── utils/
 │   ├── kakao_response.py    # Kakao chatbot response format builder
 │   ├── visual_helpers.py    # Text-based charts, progress bars
+│   ├── resilience.py        # CircuitBreaker, CallThrottle (external API guards)
 │   ├── logger.py            # Logging configuration
 │   └── audit_logger.py      # Audit log for sensitive operations
 ├── tests/               # pytest tests (SQLite in-memory)
@@ -88,8 +100,8 @@ stock-king-bot/
 - All services take `db: Session` as first parameter
 - Use `safe_commit()` for DB writes (auto-rollback on failure)
 - Use `safe_add()` / `safe_subtract()` for money operations (overflow protection)
-- Return `ApiResponse.success()` or `ApiResponse.error()` dicts
-- Error codes defined in `config.ErrorCode`
+- Return `success_response()` / `error_response()` dicts (from `responses.py`, re-exported by `services.common`)
+- Error codes defined in `errors.ErrorCode`
 
 ### Database
 - Models in `models.py`, 10 tables: `users`, `holdings`, `transactions`, `battles`, `weekly_challenges`, `user_challenges`, `milestones`, `asset_history`, `chatroom_members`, `stock_cache`
@@ -110,6 +122,14 @@ DATABASE_URL=sqlite:///./stock_king.db    # Local dev
 KIS_APP_KEY=<한국투자증권 API key>
 KIS_APP_SECRET=<한국투자증권 API secret>
 KIS_BASE_URL=https://openapi.koreainvestment.com:9443
+
+# Optional
+ADMIN_TOKEN=<관리자 API 토큰>              # 미설정 시 임시 토큰 생성 + 경고
+DEV_MODE=false                            # true면 CORS 전체 허용 + 디버그 엔드포인트
+KIS_MIN_CALL_INTERVAL=0.1                 # KIS 호출 간 최소 간격 (초)
+KIS_CIRCUIT_FAILURE_THRESHOLD=5           # 서킷 차단 임계 실패 횟수
+KIS_CIRCUIT_RECOVERY_TIMEOUT=60           # 차단 후 복구 프로브까지 대기 (초)
+PUBLIC_DATA_SERVICE_KEY=<공공데이터포털 key>
 ```
 
 ## Testing
@@ -128,8 +148,8 @@ pytest -k "test_buy"      # Run tests matching pattern
 ## Code Conventions
 
 - **Language**: Code and comments in Korean; variable/function names in English
-- **Config**: All game balance values, messages, and constants in `config.py` — never hardcode
-- **Error handling**: Use `ErrorCode` constants and `ApiResponse` format
+- **Config**: Never hardcode game balance, messages, or limits in services/handlers. Balance → `game_config.py`, 각성 → `enhance_config.py`, messages → `messages.py`, infra/API → `settings.py`, security/limits → `security.py`
+- **Error handling**: Use `ErrorCode` constants and the `error_response()` / `success_response()` format
 - **Logging**: Use module-specific loggers from `utils.logger` (`get_main_logger`, `get_handler_logger`, `get_service_logger`)
 - **Money safety**: Always use `safe_add()` / `safe_subtract()` from `services.common` for financial calculations
 - **No Alembic**: Schema migrations are manual via `_migrate_db()` in `database.py`
@@ -148,4 +168,5 @@ ruff format --check .     # Format check
 - KIS API requires token refresh; handled in `stock_service.py`
 - Group chat support: `chatroom_members` table tracks which users are in which chat rooms for per-room rankings
 - Rate limiting is in-memory (not Redis) — resets on restart
-- `config.py` is large (~50K) — contains all game balance, messages, enhancement tables, etc.
+- Configuration is split by responsibility (see Project Structure). Large pure-data tables live in their own modules (`quiz_history.py`, `enhance_titles.py`) so the config modules stay readable
+- KIS API calls are wrapped by `utils.resilience.CircuitBreaker.guard()`; in `HALF_OPEN` only a single recovery probe is allowed through at a time

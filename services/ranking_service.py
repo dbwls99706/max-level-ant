@@ -11,7 +11,9 @@ from cachetools import TTLCache
 
 from models import User, Holding, ChatRoomMember
 from services.stock_service import StockService
-from config import CacheConfig, EnhanceConfig, GameConfig
+from enhance_config import EnhanceConfig
+from game_config import GameConfig
+from settings import CacheConfig
 from utils import get_service_logger
 
 logger = get_service_logger()

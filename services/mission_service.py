@@ -13,7 +13,8 @@ from sqlalchemy.orm import Session
 from sqlalchemy.exc import SQLAlchemyError
 
 from models import User
-from config import GameConfig, KST
+from game_config import GameConfig
+from market_calendar import KST
 from services.common import safe_add, get_user_for_update
 from utils import get_service_logger
 

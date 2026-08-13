@@ -4,7 +4,7 @@ MissionService 단위 테스트
 """
 
 from services.mission_service import MissionService, ACHIEVEMENTS
-from config import GameConfig
+from game_config import GameConfig
 
 
 class TestDailyMission:

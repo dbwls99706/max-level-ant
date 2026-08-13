@@ -15,7 +15,7 @@ from services.common import (
     success_response,
     MAX_SAFE_AMOUNT,
 )
-from config import GameConfig
+from game_config import GameConfig
 
 
 class TestSafeMath:

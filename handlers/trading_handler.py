@@ -8,7 +8,8 @@ from typing import Dict
 
 from services import UserService, TradeService, StockService
 from utils import KakaoResponse, get_profit_bar, get_tier_title, format_money
-from config import Messages, GameConfig
+from game_config import GameConfig
+from messages import Messages
 
 from .base_handler import BaseHandlerMixin
 

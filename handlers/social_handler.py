@@ -16,7 +16,7 @@ from services import (
     AssetService,
 )
 from utils import KakaoResponse, get_rival_msg
-from config import GameConfig
+from game_config import GameConfig
 
 from .base_handler import BaseHandlerMixin
 

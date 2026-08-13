@@ -15,7 +15,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 from models import Base, User
-from config import GameConfig
+from game_config import GameConfig
 
 
 # ===========================================

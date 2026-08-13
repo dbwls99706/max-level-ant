@@ -10,7 +10,8 @@ from sqlalchemy.orm import Session
 from services import UserService
 from services.user_service import register_chatroom_member
 from utils import KakaoResponse, get_streak_display, get_handler_logger
-from config import GameConfig, Messages
+from game_config import GameConfig
+from messages import Messages
 
 from .base_handler import BaseHandlerMixin
 from .trading_handler import TradingHandlerMixin
@@ -291,7 +292,7 @@ class CommandHandler(
             motivation = get_streak_motivation(streak, True)
             enhance_line = ""
             if enhance_level > 0:
-                from config import EnhanceConfig
+                from enhance_config import EnhanceConfig
 
                 title_name, title_emoji = EnhanceConfig.get_title(enhance_level)
                 att_bonus = int(

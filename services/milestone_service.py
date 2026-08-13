@@ -16,7 +16,7 @@ from services.common import (
     success_response,
     safe_add,
 )
-from config import ErrorCode
+from errors import ErrorCode
 from utils import get_service_logger
 
 logger = get_service_logger()

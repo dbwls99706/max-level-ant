@@ -6,7 +6,8 @@ import pytest
 from unittest.mock import patch
 
 from services.enhance_service import EnhanceService
-from config import EnhanceConfig, GameConfig
+from enhance_config import EnhanceConfig
+from game_config import GameConfig
 
 
 class TestEnhanceInfo:

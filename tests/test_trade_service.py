@@ -7,7 +7,8 @@ from unittest.mock import patch, MagicMock
 
 from services.trade_service import TradeService
 from models import Holding
-from config import GameConfig, ErrorCode
+from errors import ErrorCode
+from game_config import GameConfig
 
 
 # 테스트용 가짜 주식 데이터

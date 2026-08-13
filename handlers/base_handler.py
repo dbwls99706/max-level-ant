@@ -8,7 +8,8 @@ from typing import Dict, List, Optional, Tuple
 from sqlalchemy.orm import Session
 from cachetools import TTLCache
 
-from config import is_market_closed, GameConfig
+from game_config import GameConfig
+from market_calendar import is_market_closed
 from utils import get_handler_logger, KakaoResponse
 
 logger = get_handler_logger()

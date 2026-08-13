@@ -20,13 +20,9 @@ from services.common import (
     error_response,
     success_response,
 )
-from config import (
-    is_market_open,
-    is_market_closed,
-    get_market_status_message,
-    ErrorCode,
-    BattleStatus,
-)
+from constants import BattleStatus
+from errors import ErrorCode
+from market_calendar import is_market_open, is_market_closed, get_market_status_message
 from utils import get_service_logger, log_battle
 
 logger = get_service_logger()

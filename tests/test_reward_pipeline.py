@@ -224,7 +224,7 @@ class TestAttendanceRewardWiring:
     def test_attendance_awards_streak_rewards(self, db, test_user):
         """7일 연속 출석 도달 시 업적(streak_7)과 마일스톤(STREAK_7) 지급"""
         from datetime import datetime, timedelta
-        from config import KST
+        from market_calendar import KST
 
         today = datetime.now(KST).date()
         test_user.attendance_streak = 6
