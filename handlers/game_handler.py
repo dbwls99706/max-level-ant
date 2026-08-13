@@ -134,7 +134,7 @@ class GameHandlerMixin(BaseHandlerMixin):
         if remaining > 0:
             buttons.append(
                 {
-                    "label": f"🎁 한번 더! ({remaining}회 남음)",
+                    "label": "🎁 한번 더",
                     "action": "message",
                     "messageText": "/보물상자",
                 }
@@ -825,7 +825,7 @@ class GameHandlerMixin(BaseHandlerMixin):
             else:
                 buttons.append(
                     {
-                        "label": f"🧬 각성하기 ({cost:,}원)",
+                        "label": "🧬 각성하기",
                         "action": "message",
                         "messageText": "/각성 시도",
                     }
@@ -969,9 +969,12 @@ class GameHandlerMixin(BaseHandlerMixin):
         if new_lv < EnhanceConfig.MAX_LEVEL:
             next_cost = EnhanceConfig.get_cost(new_lv)
             if result["cash"] >= next_cost and can_enhance:
+                # 비용은 본문에 적는다. 버튼 라벨은 14자 한도라
+                # 금액을 붙이면 잘려서 오히려 안 보인다.
+                msg += f"\n\n📋 다음 각성 비용: {next_cost:,}원"
                 buttons.append(
                     {
-                        "label": f"🧬 다시 각성! ({next_cost:,}원)",
+                        "label": "🧬 다시 각성",
                         "action": "message",
                         "messageText": "/각성 시도",
                     }

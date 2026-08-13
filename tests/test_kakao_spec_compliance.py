@@ -11,7 +11,7 @@
 - textCard: title 50자, title+description 합산 400자, title/description 중 하나 필수
 - basicCard: title 50자, description 230자, thumbnail 필수
 - listCard: header 필수, items 최대 5개
-- 버튼: 세로 3 / 가로 2
+- 버튼: 세로 3 / 가로 2, label 최대 14자
 
 한계: 핸들러 검증 대상은 외부 API가 필요 없는 OFFLINE_COMMANDS 뿐이다.
 /시세·/검색·/급등 같은 KIS 의존 경로는 여기서 다루지 않는다.
@@ -32,6 +32,7 @@ SPEC_BASIC_CARD_CHARS = 230
 SPEC_LIST_ITEMS = 5
 SPEC_BUTTONS_VERTICAL = 3
 SPEC_BUTTONS_HORIZONTAL = 2
+SPEC_BUTTON_LABEL_CHARS = 14
 
 
 def assert_valid_skill_response(resp: dict, label: str = ""):
@@ -105,6 +106,11 @@ def assert_valid_skill_response(resp: dict, label: str = ""):
         )
         for btn in buttons:
             assert "label" in btn and "action" in btn, f"{where}버튼 필드 누락: {btn}"
+            btn_label = btn.get("label", "")
+            assert len(btn_label) <= SPEC_BUTTON_LABEL_CHARS, (
+                f"{where}버튼 라벨 {len(btn_label)}자 > {SPEC_BUTTON_LABEL_CHARS}자: "
+                f"{btn_label!r} — 카카오가 말없이 잘라 뒷부분이 사라진다"
+            )
 
 
 class TestComponentLimits:
@@ -117,6 +123,47 @@ class TestComponentLimits:
         ]
         resp = KakaoResponse.text_with_buttons("본문", btns)
         assert_valid_skill_response(resp, "text_with_buttons")
+
+    def test_long_button_label_is_trimmed(self):
+        """
+        14자를 넘는 라벨은 헬퍼가 잘라야 한다.
+
+        그대로 두면 카카오가 말없이 잘라 "각성하기 (500,00…"처럼
+        정작 중요한 정보가 사라진다.
+        """
+        btns = [
+            {
+                "label": "🧬 각성하기 (5,000,000원)",
+                "action": "message",
+                "messageText": "/각성 시도",
+            }
+        ]
+        resp = KakaoResponse.text_with_buttons("본문", btns)
+        assert_valid_skill_response(resp, "long label")
+
+        out = resp["template"]["outputs"][0]
+        rendered = next(iter(out.values()))["buttons"][0]["label"]
+        assert len(rendered) <= SPEC_BUTTON_LABEL_CHARS
+        assert rendered.endswith("…"), "잘렸다는 표시가 없다"
+
+    def test_button_label_at_limit_is_untouched(self):
+        """정확히 14자면 손대지 않는다 (경계값)"""
+        exact = "가" * SPEC_BUTTON_LABEL_CHARS
+        resp = KakaoResponse.text_with_buttons(
+            "본문", [{"label": exact, "action": "message", "messageText": "/x"}]
+        )
+        out = resp["template"]["outputs"][0]
+        assert next(iter(out.values()))["buttons"][0]["label"] == exact
+
+    def test_trimming_does_not_mutate_caller_dict(self):
+        """호출부가 넘긴 dict을 그대로 바꿔버리면 안 된다"""
+        original = {
+            "label": "🧬 각성하기 (5,000,000원)",
+            "action": "message",
+            "messageText": "/각성 시도",
+        }
+        KakaoResponse.text_with_buttons("본문", [original])
+        assert original["label"] == "🧬 각성하기 (5,000,000원)"
 
     def test_text_card_title_counts_toward_limit(self):
         """textCard는 title+description 합산 400자이므로 title도 예산을 쓴다"""
