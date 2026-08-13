@@ -204,6 +204,9 @@ def run(combos, args) -> int:
     # 429는 generate_one이 지수 백오프로 이미 처리한다.
     done = 0
     lock = threading.Lock()
+    # 결과를 여기 바로 쌓는다. pool.map의 반환값을 끝까지 모은 뒤 기록하면
+    # 긴 실행을 Ctrl+C로 끊었을 때 그때까지의 기록이 통째로 사라진다.
+    manifest = []
 
     def work(combo):
         nonlocal done
@@ -221,41 +224,94 @@ def run(combos, args) -> int:
             head = f"[{done}/{len(todo)}] {label}"
             if image is None:
                 print(f"{head}\n    -> 실패")
-                return None
+                return
             path.write_bytes(image)
             print(f"{head}\n    -> {path.name} ({len(image) // 1024}KB)")
+            manifest.append(
+                {
+                    "file": path.name,
+                    "class": class_key,
+                    "family": family,
+                    "name": name,
+                    "rarity": rarity,
+                    "growth": growth,
+                    "prompt": prompt,
+                }
+            )
 
-        return {
-            "file": path.name,
-            "class": class_key,
-            "family": family,
-            "name": name,
-            "rarity": rarity,
-            "growth": growth,
-            "prompt": prompt,
-        }
+    interrupted = False
+    try:
+        with ThreadPoolExecutor(max_workers=args.concurrency) as pool:
+            list(pool.map(work, todo))
+    except KeyboardInterrupt:
+        # 중단해도 여기까지 받은 이미지와 기록은 지키고 나간다.
+        # (진행 중이던 요청이 끝날 때까지 잠깐 걸린다)
+        interrupted = True
+        print("\n중단했습니다. 여기까지 받은 것은 그대로 둡니다.")
 
-    with ThreadPoolExecutor(max_workers=args.concurrency) as pool:
-        results = list(pool.map(work, todo))
-
-    manifest = [r for r in results if r]
     ok = len(manifest)
-    fail = len(results) - ok
+    fail = done - ok
 
     if manifest:
-        mpath = outdir / "manifest.json"
-        existing = []
-        if mpath.exists():
-            existing = json.loads(mpath.read_text())
-        merged = {m["file"]: m for m in existing}
-        merged.update({m["file"]: m for m in manifest})
-        mpath.write_text(
-            json.dumps(list(merged.values()), ensure_ascii=False, indent=2)
-        )
-        print(f"\nmanifest 갱신: {mpath}")
+        write_manifest(outdir, manifest)
 
     print(f"\n완료: 성공 {ok} / 실패 {fail}")
-    return 0 if fail == 0 else 1
+    return 1 if (fail or interrupted) else 0
+
+
+def write_manifest(outdir: Path, entries) -> None:
+    """기존 manifest에 이번 결과를 덮어써서 병합한다"""
+    mpath = outdir / "manifest.json"
+    existing = []
+    if mpath.exists():
+        existing = json.loads(mpath.read_text(encoding="utf-8"))
+    merged = {m["file"]: m for m in existing}
+    merged.update({m["file"]: m for m in entries})
+    mpath.write_text(
+        json.dumps(list(merged.values()), ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+    print(f"\nmanifest 갱신: {mpath} ({len(merged)}건)")
+
+
+def rebuild_manifest(outdir: Path) -> int:
+    """이미 받아 둔 PNG 파일명으로 manifest를 복구한다.
+
+    파일명이 (직군, 종, 성장)을 그대로 담고 있고 프롬프트 조합은 결정적이라,
+    중간에 끊겨 기록이 빠진 이미지도 파일만 있으면 되살릴 수 있다.
+    """
+    entries = []
+    unknown = 0
+    for path in sorted(outdir.glob("*.png")):
+        parts = path.stem.split("__")
+        if len(parts) != 3 or not parts[2].startswith("g"):
+            unknown += 1
+            continue
+        class_key, rarity, growth_raw = parts
+        growth = int(growth_raw[1:])
+        if class_key not in CLASS_ART or rarity not in RARITY_ART:
+            unknown += 1
+            continue
+        family, name, _emoji, _desc, _body = CLASS_ART[class_key]
+        entries.append(
+            {
+                "file": path.name,
+                "class": class_key,
+                "family": family,
+                "name": name,
+                "rarity": rarity,
+                "growth": growth,
+                "prompt": build_prompt(class_key, rarity, growth),
+            }
+        )
+
+    if unknown:
+        print(f"이름 규칙에 안 맞아 건너뛴 파일 {unknown}개")
+    if not entries:
+        print(f"{outdir}에 복구할 png가 없습니다.")
+        return 1
+    write_manifest(outdir, entries)
+    return 0
 
 
 def main() -> int:
@@ -283,8 +339,17 @@ def main() -> int:
         help="동시 생성 수. 429가 자주 뜨면 낮춰라",
     )
     p.add_argument("--force", action="store_true", help="이미 있는 파일도 다시 생성")
+    p.add_argument(
+        "--rebuild-manifest",
+        action="store_true",
+        help="생성 없이, 이미 받아 둔 png 파일명으로 manifest만 복구",
+    )
     p.add_argument("-y", "--yes", action="store_true", help="확인 없이 진행")
     args = p.parse_args()
+
+    # 복구는 API를 쓰지 않으므로 키 검사보다 먼저 처리한다
+    if args.rebuild_manifest:
+        return rebuild_manifest(Path(args.outdir))
 
     if not os.environ.get("OPENAI_API_KEY"):
         print("OPENAI_API_KEY 환경변수가 필요합니다.")
