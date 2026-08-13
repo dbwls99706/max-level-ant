@@ -89,6 +89,15 @@ def _run_concurrently(fn, count: int):
         t.start()
     for t in threads:
         t.join(timeout=30)
+
+    # 일부 worker가 살아 있으면 results가 불완전한 채로 단정하게 된다.
+    # (예: lock 경합으로 멈춘 스레드의 성공 건수가 집계에서 빠짐)
+    alive = [t for t in threads if t.is_alive()]
+    assert not alive, f"{len(alive)}개 worker가 30초 안에 종료되지 않음"
+
+    assert len(results) == count, (
+        f"결과 {len(results)}건 / 요청 {count}건 — 일부 worker 결과가 누락됐다"
+    )
     return results
 
 

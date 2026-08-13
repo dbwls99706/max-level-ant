@@ -143,9 +143,36 @@ KIS_APP_KEY=your_app_key
 KIS_APP_SECRET=your_app_secret
 KIS_BASE_URL=https://openapi.koreainvestment.com:9443
 
+# 스킬 서버 인증 (운영 필수 — 미설정 시 서버가 기동하지 않음)
+SKILL_API_KEY=<긴 랜덤 문자열>    # 카카오 관리자센터 스킬 헤더에 등록할 값
+SKILL_API_KEY_HEADER=X-Skill-Key # 헤더 이름 (기본값)
+
 # 선택
 ADMIN_TOKEN=your_secure_token    # /admin/* 엔드포인트 인증 (미설정 시 자동 생성)
-DEV_MODE=false                   # true 시 /debug/skill 엔드포인트 활성화
+DEV_MODE=false                   # true 시 /debug/skill 활성화 + 스킬 인증 생략 (로컬 전용)
+DB_POOL_TIMEOUT=2.0              # DB 커넥션 풀 대기 상한 (초)
+SKILL_RESPONSE_BUDGET=3.5        # 요청 시간 예산 (카카오 5초 SLA 대비)
+```
+
+전체 목록은 `.env.example` 참고.
+
+### ⚠️ 스킬 인증 적용 시 배포 순서
+
+`/skill`은 공유 비밀키 헤더로 인증한다. **키를 설정하지 않으면 서버가 기동하지 않으므로**
+아래 순서를 지켜야 무중단으로 넘어갈 수 있다.
+
+1. **Railway 등 운영 환경에 `SKILL_API_KEY` 먼저 설정** (아직 배포하지 않음)
+2. **카카오 챗봇 관리자센터 > 스킬 설정에 같은 헤더/값 등록**
+3. **스킬 설정 배포** — 관리자센터에서 배포해야 운영 봇에 반영된다
+4. **서버 코드 배포**
+
+3번을 먼저 하는 이유: 구버전 서버는 모르는 헤더를 그냥 무시하므로 카카오 쪽을 먼저
+바꿔도 안전하다. 반대로 서버를 먼저 배포하면 헤더 없는 요청이 전부 403이 된다.
+
+키 생성:
+
+```bash
+python -c "import secrets; print(secrets.token_urlsafe(32))"
 ```
 
 ### 테스트

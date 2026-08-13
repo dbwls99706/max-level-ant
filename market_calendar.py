@@ -98,6 +98,7 @@ PUBLIC_HOLIDAYS = {
     date(2026, 2, 18),  # 설날 연휴
     date(2026, 3, 1),  # 삼일절
     date(2026, 3, 2),  # 대체공휴일
+    date(2026, 5, 1),  # 노동절 (2026년부터 법정공휴일)
     date(2026, 5, 5),  # 어린이날
     date(2026, 5, 24),  # 부처님오신날
     date(2026, 5, 25),  # 대체공휴일
@@ -118,13 +119,21 @@ PUBLIC_HOLIDAYS = {
 # 공휴일 데이터가 커버하는 연도
 COVERED_YEARS = frozenset(d.year for d in PUBLIC_HOLIDAYS)
 
-# 근로자의 날(5/1)은 법정공휴일이 아니지만 KRX는 휴장한다
+# 근로자의 날(5/1)
+# 2026년 5월 1일부터 법정공휴일로 편입됐다. 그 이전에는 법정공휴일이 아니지만
+# KRX는 휴장했으므로 KRX 전용 휴장일로 분류한다.
+# (결과적인 휴장 여부는 같지만, PUBLIC/KRX_ONLY의 의미를 정확히 유지한다)
 LABOR_DAY_MONTH_DAY = (5, 1)
+LABOR_DAY_PUBLIC_HOLIDAY_FROM = 2026
 
 
-def _labor_days() -> set:
-    """커버 연도의 근로자의 날"""
-    return {date(y, *LABOR_DAY_MONTH_DAY) for y in COVERED_YEARS}
+def _krx_only_labor_days() -> set:
+    """법정공휴일이 되기 전(2026 이전)의 근로자의 날"""
+    return {
+        date(y, *LABOR_DAY_MONTH_DAY)
+        for y in COVERED_YEARS
+        if y < LABOR_DAY_PUBLIC_HOLIDAY_FROM
+    }
 
 
 def _year_end_closure(year: int) -> date:
@@ -145,7 +154,7 @@ def _year_end_closures() -> set:
 
 
 # KRX 전용 휴장일 (법정공휴일은 아니지만 증시는 쉬는 날)
-KRX_ONLY_CLOSURES = _labor_days() | _year_end_closures()
+KRX_ONLY_CLOSURES = _krx_only_labor_days() | _year_end_closures()
 
 # 최종 휴장일 = 법정공휴일 + KRX 전용 휴장일
 HOLIDAYS = PUBLIC_HOLIDAYS | KRX_ONLY_CLOSURES

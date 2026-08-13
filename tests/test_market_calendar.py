@@ -4,7 +4,7 @@
 휴장일 데이터는 손으로 관리하므로 회귀가 나기 쉽다.
 알려진 날짜를 고정해 두고, 데이터 갱신 시 깨지도록 한다.
 
-증시 휴장일 = 법정공휴일 + KRX 전용 휴장일(근로자의 날, 연말 휴장)
+증시 휴장일 = 법정공휴일 + KRX 전용 휴장일(2026 이전 근로자의 날, 연말 휴장)
 """
 
 from datetime import date
@@ -30,7 +30,7 @@ class TestKrxOnlyClosures:
         [date(2024, 5, 1), date(2025, 5, 1), date(2026, 5, 1)],
     )
     def test_labor_day_is_closed(self, day):
-        """근로자의 날(5/1)은 법정공휴일이 아니지만 KRX는 휴장한다"""
+        """근로자의 날(5/1)은 연도와 무관하게 휴장한다"""
         assert is_trading_day(day) is False, f"{day} 근로자의 날이 영업일로 판정됐다"
 
     @pytest.mark.parametrize(
@@ -41,10 +41,21 @@ class TestKrxOnlyClosures:
         """연말 휴장일(그 해 마지막 영업일)"""
         assert is_trading_day(day) is False, f"{day} 연말 휴장일이 영업일로 판정됐다"
 
-    def test_labor_day_is_not_a_public_holiday(self):
-        """분류가 섞이면 연말 휴장 계산이 어긋난다"""
-        assert date(2025, 5, 1) not in PUBLIC_HOLIDAYS
-        assert date(2025, 5, 1) in KRX_ONLY_CLOSURES
+    def test_labor_day_before_2026_is_krx_only(self):
+        """2026년 전까지 근로자의 날은 법정공휴일이 아니었다"""
+        for year in (2024, 2025):
+            day = date(year, 5, 1)
+            assert day not in PUBLIC_HOLIDAYS, f"{day}가 법정공휴일로 분류됐다"
+            assert day in KRX_ONLY_CLOSURES, f"{day}가 KRX 휴장일에 없다"
+
+    def test_labor_day_from_2026_is_a_public_holiday(self):
+        """
+        2026년 5월 1일부터 노동절이 법정공휴일로 편입됐다.
+        휴장 여부는 같지만 분류가 틀리면 두 집합의 의미가 깨진다.
+        """
+        day = date(2026, 5, 1)
+        assert day in PUBLIC_HOLIDAYS, f"{day}가 법정공휴일로 분류되지 않았다"
+        assert day not in KRX_ONLY_CLOSURES, f"{day}가 KRX 전용 휴장일에 남아 있다"
 
     def test_year_end_is_not_a_public_holiday(self):
         """
