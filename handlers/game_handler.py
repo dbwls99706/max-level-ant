@@ -7,7 +7,8 @@ from typing import Dict
 
 from services import GameService
 from services.enhance_service import EnhanceService
-from config import GameConfig, EnhanceConfig
+from enhance_config import EnhanceConfig
+from game_config import GameConfig
 from utils import KakaoResponse
 
 from .base_handler import BaseHandlerMixin
@@ -232,7 +233,7 @@ class GameHandlerMixin(BaseHandlerMixin):
         if len(parts) < 3:
             result = GameService.issue_stock_quiz(self.db, self.kakao_id, bet)
             if not result["success"]:
-                from config import ErrorCode
+                from errors import ErrorCode
 
                 if result.get("error_code") == ErrorCode.MARKET_CLOSED:
                     return self._market_closed_response(result["message"])
@@ -245,7 +246,7 @@ class GameHandlerMixin(BaseHandlerMixin):
         result = GameService.answer_stock_quiz(self.db, self.kakao_id, choice)
 
         if not result["success"]:
-            from config import ErrorCode
+            from errors import ErrorCode
 
             # 출제된 퀴즈가 없으면 새로 출제해서 안내
             if result.get("error_code") == ErrorCode.INVALID_STATE:
@@ -523,7 +524,7 @@ class GameHandlerMixin(BaseHandlerMixin):
             # 수수료 안내
             fee_notice = ""
             if current_round >= 4:
-                from config import GameProbability
+                from game_config import GameProbability
 
                 for (start_r, end_r), rate in GameProbability.UPDOWN_ROUND_FEE.items():
                     if start_r <= current_round <= end_r:

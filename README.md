@@ -181,7 +181,17 @@ docker run -p 8000:8000 --env-file .env stock-king-bot:latest
 ```
 stock-king-bot/
 ├── main.py                  # FastAPI 메인 서버 + 엔드포인트
-├── config.py                # 설정 (게임 밸런스, 각성, 메시지 등)
+├── settings.py              # DB/API/캐시 설정 + 기동 시 검증
+├── security.py              # 관리자 토큰, CORS, 요청 크기·레이트 제한
+├── game_config.py           # 게임 밸런스·확률
+├── quiz_history.py          # 시장예측 퀴즈 데이터
+├── enhance_config.py        # 각성 비용·확률·칭호 조회
+├── enhance_titles.py        # 각성 칭호·문구 데이터
+├── market_calendar.py       # 공휴일·장 운영시간
+├── messages.py              # 응답 메시지 템플릿
+├── errors.py                # 에러 코드
+├── responses.py             # 서비스 응답 빌더
+├── constants.py             # 배틀/거래 상태 상수
 ├── database.py              # DB 연결 + 자동 마이그레이션
 ├── models.py                # DB 모델 (10개 테이블)
 ├── requirements.txt

@@ -6,7 +6,8 @@ GameService 단위 테스트
 from unittest.mock import patch
 
 from services.game_service import GameService
-from config import GameConfig, ErrorCode
+from errors import ErrorCode
+from game_config import GameConfig
 
 
 class TestLottery:

@@ -13,7 +13,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from models import AssetHistory, User, Holding
 from services.stock_service import StockService
 from services.common import safe_add
-from config import KST
+from market_calendar import KST
 from utils import get_service_logger
 
 logger = get_service_logger()

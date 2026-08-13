@@ -11,115 +11,27 @@ from typing import Optional, Dict, List
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from cachetools import TTLCache
 import threading
-import time
 import requests
 from requests.exceptions import RequestException, Timeout
 from sqlalchemy.exc import SQLAlchemyError
 
-from config import CacheConfig, KISConfig, GameConfig
+from game_config import GameConfig
+from settings import CacheConfig, KISConfig
 from database import SessionLocal
-from utils import get_service_logger
+from utils import CallThrottle, CircuitBreaker, CircuitOpenError, get_service_logger
 
 logger = get_service_logger()
 
-
-# ===========================================
-# 서킷 브레이커 (KIS API 장애 대응)
-# ===========================================
-class CircuitBreaker:
-    """
-    KIS API 연속 실패 시 일시 차단 (서킷 브레이커 패턴)
-    - CLOSED: 정상 운영
-    - OPEN: 차단 중 (실패 임계값 초과 후)
-    - HALF_OPEN: 복구 시도 중
-    """
-
-    FAILURE_THRESHOLD = 5  # 연속 실패 N회 시 차단
-    RECOVERY_TIMEOUT = 60  # 차단 후 N초 뒤 복구 시도
-
-    def __init__(self):
-        self._failure_count = 0
-        self._last_failure_time: Optional[datetime] = None
-        self._state = "CLOSED"
-        self._lock = threading.Lock()
-
-    def is_open(self) -> bool:
-        """서킷이 열려있으면(차단) True"""
-        with self._lock:
-            if self._state == "CLOSED":
-                return False
-            if self._state == "OPEN":
-                # 복구 타임아웃 확인
-                if (
-                    self._last_failure_time
-                    and (
-                        datetime.now(timezone.utc) - self._last_failure_time
-                    ).total_seconds()
-                    >= self.RECOVERY_TIMEOUT
-                ):
-                    self._state = "HALF_OPEN"
-                    logger.info("KIS API 서킷 브레이커: HALF_OPEN (복구 시도)")
-                    return False
-                return True
-            return False  # HALF_OPEN: 한 번 시도 허용
-
-    def record_success(self):
-        """성공 기록 - 서킷 닫기"""
-        with self._lock:
-            if self._state != "CLOSED":
-                logger.info("KIS API 서킷 브레이커: CLOSED (복구 완료)")
-            self._failure_count = 0
-            self._state = "CLOSED"
-
-    def record_failure(self):
-        """실패 기록 - 임계값 초과 시 서킷 열기"""
-        with self._lock:
-            self._failure_count += 1
-            self._last_failure_time = datetime.now(timezone.utc)
-            if self._failure_count >= self.FAILURE_THRESHOLD:
-                if self._state != "OPEN":
-                    logger.warning(
-                        f"KIS API 서킷 브레이커: OPEN "
-                        f"(연속 {self._failure_count}회 실패, {self.RECOVERY_TIMEOUT}초 후 복구 시도)"
-                    )
-                self._state = "OPEN"
-
-
-# 전역 서킷 브레이커 인스턴스
-_circuit_breaker = CircuitBreaker()
-
-
-# ===========================================
-# KIS 유량 제한기 (초당 거래건수 초과 방지)
-# ===========================================
-class _KISThrottle:
-    """
-    KIS REST 유량(초당 거래건수) 초과로 인한 HTTP 500(EGW00201)을 예방하기 위한
-    프로세스 내 호출 간격 제한기.
-
-    배포 환경이 단일 프로세스(WEB_CONCURRENCY=1)이므로, 모든 KIS 호출을
-    최소 간격으로 직렬화하면 앱키 기준 초당 호출 수를 안전 한도 이내로 유지할 수 있다.
-    급등/급락(순위 API)은 통과하는데 종목별 현재가(inquire-price)만 자주·병렬로
-    호출돼 한도를 넘던 증상을 완화한다.
-    """
-
-    def __init__(self, min_interval: float):
-        self._min_interval = min_interval
-        self._lock = threading.Lock()
-        self._last = 0.0
-
-    def wait(self):
-        """직전 호출과 최소 간격을 보장 (필요 시 대기)"""
-        with self._lock:
-            now = time.monotonic()
-            delta = now - self._last
-            if delta < self._min_interval:
-                time.sleep(self._min_interval - delta)
-            self._last = time.monotonic()
-
+# 전역 서킷 브레이커 (KIS API 장애 시 호출 차단)
+_circuit_breaker = CircuitBreaker(
+    failure_threshold=KISConfig.CIRCUIT_FAILURE_THRESHOLD,
+    recovery_timeout=KISConfig.CIRCUIT_RECOVERY_TIMEOUT,
+)
 
 # 전역 KIS 유량 제한기 (초당 ~1/min_interval 건)
-_kis_throttle = _KISThrottle(KISConfig.MIN_CALL_INTERVAL)
+# 급등/급락(순위 API)은 통과하는데 종목별 현재가(inquire-price)만 자주·병렬로
+# 호출돼 한도를 넘던 증상을 완화한다.
+_kis_throttle = CallThrottle(KISConfig.MIN_CALL_INTERVAL)
 
 
 class KISAPIClient:
@@ -147,12 +59,9 @@ class KISAPIClient:
             logger.warning("KIS API 설정이 없습니다. 환경변수를 확인하세요.")
             return None
 
-        # 서킷 브레이커 확인
-        if _circuit_breaker.is_open():
-            logger.warning("KIS API 서킷 브레이커 열림 - 토큰 발급 스킵")
-            return None
-
         # 토큰이 아직 유효하면 재사용 (락 없이 빠른 확인)
+        # 서킷 브레이커는 실제 HTTP 호출 직전에만 확인한다. 캐시된 토큰 반환 경로에서
+        # 서킷을 통과시키면 HALF_OPEN 프로브 슬롯을 잡고도 반납하지 않게 된다.
         if cls._access_token and cls._token_expires_at:
             if datetime.now(timezone.utc) < cls._token_expires_at:
                 return cls._access_token
@@ -166,20 +75,25 @@ class KISAPIClient:
                     return cls._access_token
 
             try:
-                url = f"{KISConfig.BASE_URL}/oauth2/tokenP"
-                headers = {"Content-Type": "application/json"}
-                body = {
-                    "grant_type": "client_credentials",
-                    "appkey": KISConfig.APP_KEY,
-                    "appsecret": KISConfig.APP_SECRET,
-                }
+                with _circuit_breaker.guard() as call:
+                    url = f"{KISConfig.BASE_URL}/oauth2/tokenP"
+                    headers = {"Content-Type": "application/json"}
+                    body = {
+                        "grant_type": "client_credentials",
+                        "appkey": KISConfig.APP_KEY,
+                        "appsecret": KISConfig.APP_SECRET,
+                    }
 
-                _kis_throttle.wait()  # 토큰 발급도 유량 제한 대상
-                resp = requests.post(
-                    url, headers=headers, json=body, timeout=KISConfig.API_TIMEOUT
-                )
+                    _kis_throttle.wait()  # 토큰 발급도 유량 제한 대상
+                    resp = requests.post(
+                        url, headers=headers, json=body, timeout=KISConfig.API_TIMEOUT
+                    )
 
-                if resp.status_code == 200:
+                    if resp.status_code != 200:
+                        logger.error(f"KIS 토큰 발급 실패: {resp.status_code}")
+                        call.failure()
+                        return None
+
                     data = resp.json()
                     cls._access_token = data.get("access_token")
                     # 토큰 만료시간 설정 (23시간 - 여유 1시간)
@@ -187,20 +101,16 @@ class KISAPIClient:
                         hours=23
                     )
                     logger.info("KIS API 토큰 발급 성공")
-                    _circuit_breaker.record_success()
                     return cls._access_token
-                else:
-                    logger.error(f"KIS 토큰 발급 실패: {resp.status_code}")
-                    _circuit_breaker.record_failure()
-                    return None
 
+            except CircuitOpenError:
+                logger.warning("KIS API 서킷 브레이커 열림 - 토큰 발급 스킵")
+                return None
             except Timeout:
                 logger.error("KIS 토큰 발급 타임아웃")
-                _circuit_breaker.record_failure()
                 return None
             except RequestException as e:
                 logger.error(f"KIS 토큰 발급 네트워크 에러: {e}")
-                _circuit_breaker.record_failure()
                 return None
 
     @classmethod
@@ -217,6 +127,15 @@ class KISAPIClient:
             "appsecret": KISConfig.APP_SECRET,
             "tr_id": tr_id,
         }
+
+    @staticmethod
+    def _describe_error_body(resp) -> str:
+        """실패 응답 본문에서 KIS 에러 코드/메시지를 추출 (로그용)"""
+        try:
+            body = resp.json()
+        except ValueError:
+            return f"body={(resp.text or '')[:200]}"
+        return f"msg_cd={body.get('msg_cd')} msg={body.get('msg1')}"
 
     @staticmethod
     def _safe_int(value, default: int = 0) -> int:
@@ -251,48 +170,37 @@ class KISAPIClient:
         주식 현재가 조회
         tr_id: FHKST01010100
         """
-        # 서킷 브레이커 확인
-        if _circuit_breaker.is_open():
-            logger.debug(f"KIS API 서킷 브레이커 열림 - 시세 조회 스킵 ({stock_code})")
-            return None
-
+        # 토큰 발급은 자체적으로 서킷을 통과 판정한다.
+        # 아래 guard() 안에서 호출하면 프로브 슬롯을 중첩 요청하게 되므로 먼저 처리한다.
         headers = cls._get_headers(cls.TR_ID_STOCK_PRICE)
         if not headers:
             return None
 
         try:
-            url = (
-                f"{KISConfig.BASE_URL}/uapi/domestic-stock/v1/quotations/inquire-price"
-            )
-            params = {
-                "FID_COND_MRKT_DIV_CODE": "J",  # 주식
-                "FID_INPUT_ISCD": stock_code,
-            }
+            with _circuit_breaker.guard() as call:
+                url = f"{KISConfig.BASE_URL}/uapi/domestic-stock/v1/quotations/inquire-price"
+                params = {
+                    "FID_COND_MRKT_DIV_CODE": "J",  # 주식
+                    "FID_INPUT_ISCD": stock_code,
+                }
 
-            _kis_throttle.wait()  # 초당 거래건수 초과 방지
-            resp = requests.get(
-                url, headers=headers, params=params, timeout=KISConfig.API_TIMEOUT
-            )
+                _kis_throttle.wait()  # 초당 거래건수 초과 방지
+                resp = requests.get(
+                    url, headers=headers, params=params, timeout=KISConfig.API_TIMEOUT
+                )
 
-            if resp.status_code == 200:
+                if resp.status_code != 200:
+                    # KIS는 HTTP 500에도 본문(msg_cd/msg1)에 실패 사유를 담아준다.
+                    # (예: EGW00201 초당 거래건수 초과, 권한/헤더 문제 등)
+                    call.failure()
+                    logger.warning(
+                        f"KIS 시세 조회 HTTP 에러 ({stock_code}): "
+                        f"status={resp.status_code} {cls._describe_error_body(resp)}"
+                    )
+                    return None
+
                 data = resp.json()
-                if data.get("rt_cd") == "0":  # 성공
-                    output = data.get("output", {})
-                    # 필드값이 None/빈값/콤마/소수점이어도 안전하게 변환
-                    # (한 필드 파싱 실패로 전체 시세가 버려지지 않도록 방어)
-                    result = {
-                        "code": stock_code,
-                        "name": output.get("hts_kor_isnm") or stock_code,
-                        "price": cls._safe_int(output.get("stck_prpr")),
-                        "change": cls._safe_float(output.get("prdy_ctrt")),
-                        "open": cls._safe_int(output.get("stck_oprc")),
-                        "high": cls._safe_int(output.get("stck_hgpr")),
-                        "low": cls._safe_int(output.get("stck_lwpr")),
-                        "volume": cls._safe_int(output.get("acml_vol")),
-                    }
-                    _circuit_breaker.record_success()
-                    return result
-                else:
+                if data.get("rt_cd") != "0":
                     # rt_cd != "0"은 잘못된 종목코드 등 "데이터 없음" 응답 —
                     # API 자체는 정상 동작 중이므로 서킷 실패로 집계하지 않는다
                     # (존재하지 않는 종목 몇 번 조회로 전체 시세가 차단되는 오탐 방지)
@@ -300,29 +208,28 @@ class KISAPIClient:
                         f"KIS 시세 조회 응답 에러 ({stock_code}): "
                         f"rt_cd={data.get('rt_cd')} msg={data.get('msg1')}"
                     )
-                    _circuit_breaker.record_success()
-            else:
-                # KIS는 HTTP 500에도 본문(msg_cd/msg1)에 실패 사유를 담아준다.
-                # (예: EGW00201 초당 거래건수 초과, 권한/헤더 문제 등)
-                msg_cd = msg1 = None
-                try:
-                    body = resp.json()
-                    msg_cd = body.get("msg_cd")
-                    msg1 = body.get("msg1")
-                except ValueError:
-                    msg1 = (resp.text or "")[:200]
-                logger.warning(
-                    f"KIS 시세 조회 HTTP 에러 ({stock_code}): "
-                    f"status={resp.status_code} msg_cd={msg_cd} msg={msg1}"
-                )
-                _circuit_breaker.record_failure()
+                    return None
 
+                output = data.get("output", {})
+                # 필드값이 None/빈값/콤마/소수점이어도 안전하게 변환
+                # (한 필드 파싱 실패로 전체 시세가 버려지지 않도록 방어)
+                return {
+                    "code": stock_code,
+                    "name": output.get("hts_kor_isnm") or stock_code,
+                    "price": cls._safe_int(output.get("stck_prpr")),
+                    "change": cls._safe_float(output.get("prdy_ctrt")),
+                    "open": cls._safe_int(output.get("stck_oprc")),
+                    "high": cls._safe_int(output.get("stck_hgpr")),
+                    "low": cls._safe_int(output.get("stck_lwpr")),
+                    "volume": cls._safe_int(output.get("acml_vol")),
+                }
+
+        except CircuitOpenError:
+            logger.debug(f"KIS API 서킷 브레이커 열림 - 시세 조회 스킵 ({stock_code})")
         except Timeout:
             logger.warning(f"주식 시세 조회 타임아웃 ({stock_code})")
-            _circuit_breaker.record_failure()
         except RequestException as e:
             logger.error(f"주식 시세 조회 네트워크 에러 ({stock_code}): {e}")
-            _circuit_breaker.record_failure()
         except (ValueError, KeyError) as e:
             logger.error(f"주식 시세 응답 파싱 실패 ({stock_code}): {e}")
 
@@ -342,54 +249,70 @@ class KISAPIClient:
             return []
 
         try:
-            url = f"{KISConfig.BASE_URL}/uapi/domestic-stock/v1/quotations/volume-rank"
-            params = {
-                "FID_COND_MRKT_DIV_CODE": market,
-                "FID_COND_SCR_DIV_CODE": "20171",
-                "FID_INPUT_ISCD": "0000",
-                "FID_DIV_CLS_CODE": "0",
-                "FID_BLNG_CLS_CODE": blng_cls_code,
-                "FID_TRGT_CLS_CODE": "111111111",
-                "FID_TRGT_EXLS_CLS_CODE": "000000",
-                "FID_INPUT_PRICE_1": "",
-                "FID_INPUT_PRICE_2": "",
-                "FID_VOL_CNT": "",
-                "FID_INPUT_DATE_1": "",
-            }
+            with _circuit_breaker.guard() as call:
+                url = f"{KISConfig.BASE_URL}/uapi/domestic-stock/v1/quotations/volume-rank"
+                params = {
+                    "FID_COND_MRKT_DIV_CODE": market,
+                    "FID_COND_SCR_DIV_CODE": "20171",
+                    "FID_INPUT_ISCD": "0000",
+                    "FID_DIV_CLS_CODE": "0",
+                    "FID_BLNG_CLS_CODE": blng_cls_code,
+                    "FID_TRGT_CLS_CODE": "111111111",
+                    "FID_TRGT_EXLS_CLS_CODE": "000000",
+                    "FID_INPUT_PRICE_1": "",
+                    "FID_INPUT_PRICE_2": "",
+                    "FID_VOL_CNT": "",
+                    "FID_INPUT_DATE_1": "",
+                }
 
-            _kis_throttle.wait()  # 초당 거래건수 초과 방지
-            resp = requests.get(
-                url, headers=headers, params=params, timeout=KISConfig.API_TIMEOUT
-            )
+                _kis_throttle.wait()  # 초당 거래건수 초과 방지
+                resp = requests.get(
+                    url, headers=headers, params=params, timeout=KISConfig.API_TIMEOUT
+                )
 
-            if resp.status_code == 200:
+                if resp.status_code != 200:
+                    call.failure()
+                    logger.warning(
+                        f"{label} 순위 조회 HTTP 에러: status={resp.status_code} "
+                        f"{cls._describe_error_body(resp)}"
+                    )
+                    return []
+
                 data = resp.json()
-                if data.get("rt_cd") == "0":
-                    output = data.get("output", [])
-                    results = []
-                    for item in output[: cls.VOLUME_RANK_FETCH_SIZE]:
-                        try:
-                            results.append(
-                                {
-                                    "code": item.get("mksc_shrn_iscd", "")
-                                    or item.get("stck_shrn_iscd", ""),
-                                    "name": item.get("hts_kor_isnm", ""),
-                                    "price": int(item.get("stck_prpr", 0) or 0),
-                                    "change": float(item.get("prdy_ctrt", 0) or 0),
-                                    "volume": int(item.get("acml_vol", 0) or 0),
-                                    "trading_value": int(
-                                        item.get("acml_tr_pbmn", 0) or 0
-                                    ),
-                                }
-                            )
-                        except (ValueError, TypeError, KeyError):
-                            continue
-                    return results
+                if data.get("rt_cd") != "0":
+                    # 데이터 없음 응답 — API는 정상이므로 서킷 실패로 집계하지 않는다
+                    logger.warning(
+                        f"{label} 순위 조회 응답 에러: "
+                        f"rt_cd={data.get('rt_cd')} msg={data.get('msg1')}"
+                    )
+                    return []
 
+                results = []
+                for item in data.get("output", [])[: cls.VOLUME_RANK_FETCH_SIZE]:
+                    try:
+                        results.append(
+                            {
+                                "code": item.get("mksc_shrn_iscd", "")
+                                or item.get("stck_shrn_iscd", ""),
+                                "name": item.get("hts_kor_isnm", ""),
+                                "price": int(item.get("stck_prpr", 0) or 0),
+                                "change": float(item.get("prdy_ctrt", 0) or 0),
+                                "volume": int(item.get("acml_vol", 0) or 0),
+                                "trading_value": int(item.get("acml_tr_pbmn", 0) or 0),
+                            }
+                        )
+                    except (ValueError, TypeError, KeyError):
+                        continue
+                return results
+
+        except CircuitOpenError:
+            logger.debug(f"KIS API 서킷 브레이커 열림 - {label} 순위 조회 스킵")
         except Timeout:
             logger.warning(f"{label} 순위 조회 타임아웃")
         except RequestException as e:
             logger.error(f"{label} 순위 조회 네트워크 에러: {e}")
+        except ValueError as e:
+            logger.error(f"{label} 순위 응답 파싱 실패: {e}")
 
         return []
 
@@ -458,23 +381,40 @@ class KISAPIClient:
             return None
 
         try:
-            url = f"{KISConfig.BASE_URL}/uapi/domestic-stock/v1/quotations/inquire-index-price"
-            params = {"FID_COND_MRKT_DIV_CODE": "U", "FID_INPUT_ISCD": index_code}
+            with _circuit_breaker.guard() as call:
+                url = f"{KISConfig.BASE_URL}/uapi/domestic-stock/v1/quotations/inquire-index-price"
+                params = {"FID_COND_MRKT_DIV_CODE": "U", "FID_INPUT_ISCD": index_code}
 
-            _kis_throttle.wait()  # 초당 거래건수 초과 방지
-            resp = requests.get(
-                url, headers=headers, params=params, timeout=KISConfig.API_TIMEOUT
-            )
+                _kis_throttle.wait()  # 초당 거래건수 초과 방지
+                resp = requests.get(
+                    url, headers=headers, params=params, timeout=KISConfig.API_TIMEOUT
+                )
 
-            if resp.status_code == 200:
+                if resp.status_code != 200:
+                    call.failure()
+                    logger.warning(
+                        f"지수 조회 HTTP 에러 ({index_code}): status={resp.status_code} "
+                        f"{cls._describe_error_body(resp)}"
+                    )
+                    return None
+
                 data = resp.json()
-                if data.get("rt_cd") == "0":
-                    output = data.get("output", {})
-                    return {
-                        "price": float(output.get("bstp_nmix_prpr", 0)),
-                        "change": float(output.get("bstp_nmix_prdy_ctrt", 0)),
-                    }
+                if data.get("rt_cd") != "0":
+                    # 데이터 없음 응답 — API는 정상이므로 서킷 실패로 집계하지 않는다
+                    logger.warning(
+                        f"지수 조회 응답 에러 ({index_code}): "
+                        f"rt_cd={data.get('rt_cd')} msg={data.get('msg1')}"
+                    )
+                    return None
 
+                output = data.get("output", {})
+                return {
+                    "price": cls._safe_float(output.get("bstp_nmix_prpr")),
+                    "change": cls._safe_float(output.get("bstp_nmix_prdy_ctrt")),
+                }
+
+        except CircuitOpenError:
+            logger.debug(f"KIS API 서킷 브레이커 열림 - 지수 조회 스킵 ({index_code})")
         except Timeout:
             logger.warning(f"지수 조회 타임아웃 ({index_code})")
         except RequestException as e:

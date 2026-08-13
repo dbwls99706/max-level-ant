@@ -22,7 +22,8 @@ from handlers import CommandHandler
 from utils import KakaoResponse, configure_root_logger, get_main_logger
 from services.stock_service import KISAPIClient, StockService
 from services.battle_service import BattleService
-from config import SecurityConfig, validate_config
+from security import SecurityConfig
+from settings import validate_config
 
 # 로깅 설정
 configure_root_logger()
@@ -40,7 +41,7 @@ class RateLimiter:
     - 최대 유저 수 제한으로 메모리 폭증 방지
     """
 
-    MAX_TRACKED_USERS = 10_000  # 메모리 폭증 방지
+    MAX_TRACKED_USERS = SecurityConfig.RATE_LIMIT_MAX_TRACKED_USERS
 
     def __init__(self, max_requests: int = 30, window_seconds: int = 60):
         self.max_requests = max_requests
@@ -449,7 +450,7 @@ async def admin_reset_seed(
             }
 
         from models import User, Holding, Transaction
-        from config import GameConfig
+        from game_config import GameConfig
 
         db = SessionLocal()
         try:

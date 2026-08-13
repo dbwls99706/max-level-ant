@@ -11,7 +11,9 @@ from typing import Dict, List, Optional
 from cachetools import TTLCache
 import requests
 
-from config import PublicDataConfig, GameProbability, KST
+from game_config import GameProbability
+from market_calendar import KST
+from settings import PublicDataConfig
 from utils import get_service_logger
 
 logger = get_service_logger()

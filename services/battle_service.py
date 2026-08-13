@@ -20,13 +20,10 @@ from services.common import (
     error_response,
     success_response,
 )
-from config import (
-    is_market_open,
-    is_market_closed,
-    get_market_status_message,
-    ErrorCode,
-    BattleStatus,
-)
+from constants import BattleStatus
+from errors import ErrorCode
+from game_config import GameConfig
+from market_calendar import is_market_open, is_market_closed, get_market_status_message
 from utils import get_service_logger, log_battle
 
 logger = get_service_logger()
@@ -35,10 +32,10 @@ logger = get_service_logger()
 class BattleService:
     """배틀 시스템 서비스"""
 
-    # 기본 투자금
-    DEFAULT_BET = 100_000
-    MIN_BET = 10_000
-    MAX_BET = 100_000_000  # 1억
+    # 투자금 한도 (게임 밸런스 값은 game_config에서 관리)
+    DEFAULT_BET = GameConfig.DEFAULT_BATTLE_BET
+    MIN_BET = GameConfig.BATTLE_MIN_BET
+    MAX_BET = GameConfig.BATTLE_MAX_BET
 
     # 배틀 지속 시간 (분)
     DEFAULT_DURATION = 60

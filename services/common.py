@@ -3,8 +3,10 @@
 - 트랜잭션 헬퍼: safe_commit
 - 검증 유틸: validate_bet, validate_quantity
 - 유저 헬퍼: get_user_with_error
-- 응답 빌더: error_response, success_response
 - 금액 안전 계산: safe_add, safe_subtract, safe_multiply
+
+응답 빌더(success_response/error_response)는 responses 모듈에 있으며,
+기존 호출부 호환을 위해 여기서도 재노출한다.
 """
 
 from typing import Dict, Optional, TypeVar, Tuple
@@ -12,14 +14,30 @@ from sqlalchemy.orm import Session
 from sqlalchemy.exc import SQLAlchemyError
 
 from models import User
-from config import (
-    GameConfig,
-    Messages,
-    ErrorCode,
-    is_market_open,
-    get_market_status_message,
-)
+from errors import ErrorCode
+from game_config import GameConfig
+from market_calendar import is_market_open, get_market_status_message
+from messages import Messages
+from responses import error_response, success_response
 from utils import get_service_logger
+
+__all__ = [
+    "safe_commit",
+    "get_user_or_none",
+    "get_user_for_update",
+    "get_user_with_error",
+    "get_user_with_error_for_update",
+    "validate_bet",
+    "validate_quantity",
+    "check_market_closed_for_game",
+    "error_response",
+    "success_response",
+    "calculate_profit",
+    "MAX_SAFE_AMOUNT",
+    "safe_add",
+    "safe_multiply",
+    "safe_subtract",
+]
 
 logger = get_service_logger()
 
@@ -124,7 +142,7 @@ def validate_bet(
         bet: 투자 금액
         user_cash: 유저 보유 현금
         min_bet: 최소 투자금 (기본: GameConfig.MIN_BET)
-        max_bet: 최대 투자금 (기본: 100억)
+        max_bet: 최대 투자금 (기본: GameConfig.DEFAULT_BET_CAP)
 
     Returns:
         (is_valid: bool, error_message: str)
@@ -132,7 +150,7 @@ def validate_bet(
     if min_bet is None:
         min_bet = GameConfig.MIN_BET
     if max_bet is None:
-        max_bet = 10_000_000_000  # 100억 (오버플로우 방지)
+        max_bet = GameConfig.DEFAULT_BET_CAP  # 오버플로우 방지
 
     if bet <= 0:
         return False, "투자금은 0보다 커야 합니다."
@@ -204,26 +222,6 @@ def check_market_closed_for_game(game_emoji: str = "🎰") -> Tuple[bool, Option
 
 
 # ===========================================
-# 응답 빌더
-# ===========================================
-
-
-def error_response(error_code: str, message: str, **extra_data) -> Dict:
-    """에러 응답 생성"""
-    response = {"success": False, "error_code": error_code, "message": message}
-    if extra_data:
-        response.update(extra_data)
-    return response
-
-
-def success_response(message: str = "성공", **data) -> Dict:
-    """성공 응답 생성"""
-    response = {"success": True, "message": message}
-    response.update(data)
-    return response
-
-
-# ===========================================
 # 게임 결과 계산 헬퍼
 # ===========================================
 
@@ -253,7 +251,8 @@ def calculate_profit(bet: int, winnings: int) -> Dict:
 # 금액 안전 계산 (오버플로우 방지)
 # ===========================================
 
-MAX_SAFE_AMOUNT = 10_000_000_000_000  # 10조 (Python int는 무제한이지만 합리적 상한)
+# Python int는 무제한이지만 DB(BigInteger)와 게임 밸런스상 합리적 상한을 둔다
+MAX_SAFE_AMOUNT = GameConfig.MAX_CASH
 
 
 def safe_add(a: int, b: int) -> int:

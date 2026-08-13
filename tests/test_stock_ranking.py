@@ -6,7 +6,7 @@
 
 from unittest.mock import patch
 
-from config import KISConfig
+from settings import KISConfig
 from services.stock_service import KISAPIClient
 
 

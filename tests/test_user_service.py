@@ -7,7 +7,7 @@ from datetime import timedelta
 from unittest.mock import patch
 
 from services.user_service import UserService
-from config import GameConfig
+from game_config import GameConfig
 
 
 class TestUserCreation:
@@ -124,7 +124,7 @@ class TestAttendance:
 
     def test_attendance_streak_continues(self, db, test_user):
         """연속 출석 스트릭 계산"""
-        from config import KST
+        from market_calendar import KST
         from datetime import datetime
 
         # 어제 출석한 것으로 세팅
@@ -147,7 +147,7 @@ class TestAttendance:
     def test_attendance_streak_reset(self, db, test_user):
         """연속 출석 스트릭 리셋 (2일 이상 빠짐)"""
         from datetime import datetime
-        from config import KST
+        from market_calendar import KST
 
         # 3일 전 출석한 것으로 세팅
         old_date = datetime.now(KST).date() - timedelta(days=3)
@@ -229,7 +229,7 @@ class TestNicknameChange:
     def test_change_nickname_exhausted(self, db, test_user):
         """닉네임 변경 횟수 소진"""
         from datetime import datetime
-        from config import KST
+        from market_calendar import KST
 
         # 변경 횟수를 최대로 설정
         test_user.nickname_change_count = 2
