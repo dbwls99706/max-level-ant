@@ -83,6 +83,20 @@ TEST_COMBOS = [
 ]
 
 
+def family_sample():
+    """계열마다 첫 직군 한 장씩. 조건을 고정해 계열 간 그림체만 비교한다.
+
+    TEST_COMBOS로는 8계열 중 2개밖에 못 본다. 전량을 돌리기 전에
+    나머지 계열이 같은 세트로 붙는지 싸게 확인하는 용도다.
+    """
+    seen = set()
+    for class_key, (family, *_rest) in CLASS_ART.items():
+        if family in seen:
+            continue
+        seen.add(family)
+        yield class_key, "normal", 2
+
+
 def out_path(outdir: Path, class_key: str, rarity: str, growth: int) -> Path:
     return outdir / f"{class_key}__{rarity}__g{growth}.png"
 
@@ -228,7 +242,12 @@ def run(combos, args) -> int:
 
 def main() -> int:
     p = argparse.ArgumentParser(description=__doc__)
-    p.add_argument("--test", action="store_true", help="맛보기 조합만 생성 (기본 3장)")
+    p.add_argument("--test", action="store_true", help="맛보기 조합만 생성 (4장)")
+    p.add_argument(
+        "--sample-families",
+        action="store_true",
+        help="계열마다 한 장씩 생성 (8장). 전량 전 그림체 일관성 확인용",
+    )
     p.add_argument("--all", action="store_true", help="전체 조합 생성")
     p.add_argument("--class", dest="class_key", help="특정 직군만 생성")
     p.add_argument(
@@ -251,6 +270,8 @@ def main() -> int:
 
     if args.test:
         combos = list(TEST_COMBOS)
+    elif args.sample_families:
+        combos = list(family_sample())
     elif args.class_key:
         combos = [c for c in all_combinations() if c[0] == args.class_key]
         if not combos:
