@@ -9,6 +9,7 @@
 from datetime import datetime, timedelta, timezone
 from typing import Optional, Dict, List
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import TimeoutError as FuturesTimeout
 from cachetools import TTLCache
 import threading
 import requests
@@ -915,14 +916,23 @@ class StockService:
             futures = {
                 executor.submit(fetch_price, code): code for code in uncached_codes
             }
-            for future in as_completed(futures):
-                try:
-                    code, stock_info = future.result(timeout=cls._batch_wait())
-                    if stock_info:
-                        prices[code] = stock_info["price"]
-                except Exception as e:
-                    code = futures[future]
-                    logger.warning(f"배치 시세 조회 실패 ({code}): {e}")
+            # 대기 상한은 as_completed에 건다. future.result(timeout=)에 걸면
+            # as_completed가 이미 완료까지 기다린 뒤라 아무 효과가 없다.
+            try:
+                for future in as_completed(futures, timeout=cls._batch_wait()):
+                    try:
+                        code, stock_info = future.result()
+                        if stock_info:
+                            prices[code] = stock_info["price"]
+                    except Exception as e:
+                        logger.warning(f"배치 시세 조회 실패 ({futures[future]}): {e}")
+            except FuturesTimeout:
+                pending = [futures[f] for f in futures if not f.done()]
+                logger.warning(
+                    f"배치 시세 조회 예산 초과 - 미완료 {len(pending)}건 포기"
+                )
+                for f in futures:
+                    f.cancel()
 
         return prices
 
@@ -949,13 +959,22 @@ class StockService:
 
         with ThreadPoolExecutor(max_workers=min(5, len(stock_codes))) as executor:
             futures = {executor.submit(fetch_info, code): code for code in stock_codes}
-            for future in as_completed(futures):
-                try:
-                    code, stock_info = future.result(timeout=cls._batch_wait())
-                    if stock_info:
-                        result[code] = stock_info
-                except Exception as e:
-                    code = futures[future]
-                    logger.warning(f"배치 종목 정보 조회 실패 ({code}): {e}")
+            try:
+                for future in as_completed(futures, timeout=cls._batch_wait()):
+                    try:
+                        code, stock_info = future.result()
+                        if stock_info:
+                            result[code] = stock_info
+                    except Exception as e:
+                        logger.warning(
+                            f"배치 종목 정보 조회 실패 ({futures[future]}): {e}"
+                        )
+            except FuturesTimeout:
+                pending = [futures[f] for f in futures if not f.done()]
+                logger.warning(
+                    f"배치 종목 정보 조회 예산 초과 - 미완료 {len(pending)}건 포기"
+                )
+                for f in futures:
+                    f.cancel()
 
         return result

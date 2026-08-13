@@ -1,9 +1,19 @@
 """
-요청 시간 예산(SLA) 테스트
+요청 시간 예산(협조적 budget) 테스트
 
-카카오 스킬은 5초 안에 응답해야 한다. 한 요청에서 외부 호출이 여러 번
-일어나도 전체가 예산 안에서 끝나야 하며, 예산이 없으면 호출을 시작하지
-않고 폴백해야 한다.
+카카오 스킬은 5초 안에 응답해야 한다. 여기서 검증하는 것은
+**예산을 조회하는 경로들이 남은 예산을 지키는지**다.
+
+검증 범위:
+  - 외부 HTTP 호출 timeout에 남은 예산이 반영된다
+  - 예산 소진 시 새 호출을 시작하지 않는다
+  - 유량 제한 대기가 예산을 넘기지 않는다
+  - 워커 스레드로 deadline이 전파된다
+
+검증하지 않는 것 (구현상 보장되지 않음):
+  - DB 쿼리 실행 시간
+  - requests timeout의 wall-clock 총량 (connect/read 각각에 적용됨)
+  → utils/budget.py 모듈 docstring 참고
 """
 
 import threading
@@ -151,10 +161,12 @@ class TestKisRespectsBudget:
             "워커 스레드에 요청 deadline이 전달되지 않았다"
         )
 
-    def test_whole_request_stays_within_budget(self, valid_token):
+    def test_repeated_calls_stay_within_budget(self, valid_token):
         """
-        외부 API가 응답하지 않아도 요청 처리는 예산 안에서 끝나야 한다.
-        (예전에는 개별 타임아웃 10초라 카카오 5초를 넘길 수 있었다)
+        외부 API가 응답하지 않아도 KIS 호출 반복은 예산 안에서 멈춰야 한다.
+        (예전에는 개별 타임아웃 10초라 1회 호출로도 카카오 5초를 넘겼다)
+
+        주의: 이건 KIS 호출 경로에 대한 검증이지 /skill의 hard SLA 보장이 아니다.
         """
 
         def hanging_get(url, headers=None, params=None, timeout=None):
@@ -225,3 +237,73 @@ class TestConcurrentRequestsAreIsolated:
             t.join()
 
         assert results["short"] < results["long"]
+
+
+class TestSkillEndpointBudget:
+    """
+    /skill 엔드포인트 자체를 호출해 예산이 실제로 걸리는지 확인한다.
+    (기존 테스트는 KIS 메서드만 반복 호출해서 엔드포인트 경로를 못 봤다)
+    """
+
+    def test_skill_endpoint_applies_budget_to_handler(self, monkeypatch):
+        from fastapi.testclient import TestClient
+
+        import main
+
+        seen = {}
+
+        def fake_handle(self):
+            # 핸들러 실행 시점에 요청 deadline이 살아 있어야 한다
+            dl = budget.current_deadline()
+            seen["deadline"] = dl
+            seen["remaining"] = dl.remaining() if dl else None
+            return main.KakaoResponse.simple_text("ok")
+
+        monkeypatch.setattr(main.CommandHandler, "handle", fake_handle)
+
+        with TestClient(main.app) as client:
+            resp = client.post(
+                "/skill",
+                json={
+                    "userRequest": {
+                        "user": {"id": "budgettester"},
+                        "utterance": "/잔고",
+                    }
+                },
+            )
+
+        assert resp.status_code == 200
+        assert seen["deadline"] is not None, "/skill이 요청 예산을 걸지 않았다"
+        assert 0 < seen["remaining"] <= SkillConfig.RESPONSE_BUDGET
+
+    def test_skill_endpoint_does_not_block_event_loop(self, monkeypatch):
+        """동기 handler가 이벤트 루프가 아닌 워커 스레드에서 실행돼야 한다"""
+        import asyncio
+
+        from fastapi.testclient import TestClient
+
+        import main
+
+        seen = {}
+
+        def fake_handle(self):
+            try:
+                asyncio.get_running_loop()
+                seen["on_event_loop"] = True
+            except RuntimeError:
+                seen["on_event_loop"] = False
+            return main.KakaoResponse.simple_text("ok")
+
+        monkeypatch.setattr(main.CommandHandler, "handle", fake_handle)
+
+        with TestClient(main.app) as client:
+            client.post(
+                "/skill",
+                json={
+                    "userRequest": {"user": {"id": "loopcheck"}, "utterance": "/잔고"}
+                },
+            )
+
+        assert seen["on_event_loop"] is False, (
+            "동기 handler가 이벤트 루프에서 실행됐다 — 다른 요청까지 멈춘다"
+        )

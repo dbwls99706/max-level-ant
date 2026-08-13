@@ -261,6 +261,11 @@ async def kakao_skill(request: Request, db: Session = Depends(get_db)):
     카카오 챗봇 관리자센터에서 이 URL을 스킬 서버로 등록합니다.
     예: https://your-domain.com/skill
     """
+    # 예산은 요청 처리의 가장 앞에서 시작한다. 파싱·검증·rate limit도
+    # 카카오가 재는 5초 안에 포함되기 때문이다.
+    # (worker 스레드는 thread-local을 물려받지 않으므로 아래에서 adopt로 전달)
+    deadline = budget.Deadline(SkillConfig.RESPONSE_BUDGET)
+
     try:
         # 요청 파싱
         body = await request.json()
@@ -310,13 +315,12 @@ async def kakao_skill(request: Request, db: Session = Depends(get_db)):
             )
 
         # 명령어 처리
-        # - 카카오 스킬 SLA(5초)를 지키기 위해 요청 전체에 시간 예산을 건다.
-        #   외부 API 호출은 남은 예산 안에서만 수행되고, 예산이 없으면
-        #   캐시/폴백 응답으로 넘어간다 (utils.budget 참고).
+        # - 요청 시작 시점의 deadline을 워커 스레드로 넘겨, 외부 API 호출이
+        #   남은 예산 안에서만 수행되게 한다 (협조적 예산, utils.budget 참고).
         # - handle()은 동기 함수라 이벤트 루프에서 직접 호출하면 다른 요청까지
         #   같이 멈춘다. 워커 스레드로 넘겨 한 요청의 지연이 전파되지 않게 한다.
         def run_handler():
-            with budget.request_budget(SkillConfig.RESPONSE_BUDGET):
+            with budget.adopt(deadline):
                 handler = CommandHandler(db, kakao_id, utterance, nickname, group_key)
                 return handler.handle()
 

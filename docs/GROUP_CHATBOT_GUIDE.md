@@ -269,6 +269,10 @@
 그룹 챗봇이 사용 가능한 말풍선:
 텍스트 / 텍스트(링크) / 이미지 / 리스트 / 피드 / **리스트(랭킹)**
 
+> ⚠️ **미검증 항목**: '리스트(랭킹)' 말풍선의 존재는 확인됐으나, 이를 지정하는
+> JSON 필드명(`listLayout: "ranking"`)은 공개 명세에 없고 beta 문서의 JSON 예제로도
+> 확인하지 못했다. **개발 채널에서 실제 렌더링 검증이 필요하다.**
+
 | 컴포넌트 | 한도 |
 |---|---|
 | `template.outputs` | 1~3개 |
@@ -283,13 +287,21 @@
 
 ### 4-5-2. 스킬 응답 시간 (SLA)
 
-카카오 스킬은 **5초** 안에 응답해야 하며, 초과 시 `useCallback`/`callbackUrl`로
-후속 응답을 보내야 한다 (callbackUrl은 5분간 1회 유효).
+카카오 스킬은 **5초** 안에 응답해야 한다. 초과가 불가피하면
+`useCallback`/`callbackUrl`로 선응답 후 후속 응답을 보내는 방식이 있다.
+콜백 URL은 발급 후 정해진 시간 동안 **1회만** 유효하며, 사용 조건과 유효 시간은
+[콜백 개발 가이드](https://kakaobusiness.gitbook.io/main/tool/chatbot/skill_guide/ai_chatbot_callback_guide)를
+반드시 확인해야 한다. (Callback API는 별도 권한/신청 절차가 필요할 수 있다.)
 
-만렙개미는 콜백 대신 **요청 시간 예산**으로 대응한다:
-- `/skill` 진입 시 `SKILL_RESPONSE_BUDGET`(기본 3.5초) 예산을 건다
-- 모든 외부 API 호출은 `min(개별 타임아웃, 남은 예산)`으로 제한된다
+만렙개미는 콜백 대신 **협조적 요청 시간 예산**으로 대응한다:
+- `/skill` 진입 즉시 `SKILL_RESPONSE_BUDGET`(기본 3.5초) 예산을 건다
+- 외부 API 호출은 `min(개별 타임아웃, 남은 예산)`으로 제한된다
 - 예산이 소진되면 호출을 시작하지 않고 캐시/폴백 응답으로 넘어간다
+- DB 커넥션 풀 대기는 `DB_POOL_TIMEOUT`(기본 2초)으로 따로 제한한다
+
+> ⚠️ 이것은 hard timeout이 **아니다**. DB 쿼리 실행 시간에는 예산이 전파되지 않고,
+> `requests`의 timeout도 connect/read 각각의 값이지 전체 경과시간 상한이 아니다.
+> 자세한 보장 범위는 `utils/budget.py` docstring 참고.
 
 ### 4-6. 그룹 챗봇에서의 만렙개미 스킬 서버 설정
 
