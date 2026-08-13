@@ -1,0 +1,12 @@
+# ===========================================
+# 개발/테스트 전용 의존성
+# ===========================================
+# 운영 이미지에는 포함하지 않는다.
+#   pip install -r requirements.txt -r requirements-dev.txt
+
+pytest>=8.0
+ruff>=0.6
+
+# FastAPI TestClient용 (스킬 엔드포인트 통합 테스트)
+# starlette 0.35의 TestClient는 httpx의 app= 단축 인자를 쓰므로 <0.28 필요
+httpx>=0.24,<0.28
