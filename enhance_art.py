@@ -14,9 +14,13 @@
 COMMON_STYLE = (
     "cinematic 3D render, photorealistic materials, anthropomorphic ant hero, "
     "single subject centered, dynamic full-body action pose, "
-    "empty dark void background with only abstract light streaks, "
-    "strictly two-color palette plus black, dramatic rim lighting, "
-    "shallow depth of field, high detail, wide cinematic 16:9 composition, "
+    "dark uncluttered background with only abstract light streaks, "
+    "two dominant colors, "
+    # 강한 key light가 없으면 어두운 색 직군이 배경에 묻혀 형체가 안 보인다.
+    # 카카오 카드에서는 작게 표시되므로 실루엣이 또렷해야 한다.
+    "strong key light on the subject plus rim lighting, "
+    "subject clearly readable and well separated from the background, "
+    "high detail, wide cinematic 16:9 composition, "
     "absolutely no text, no numbers, no letters, no logos, no watermark"
 )
 
@@ -31,10 +35,13 @@ RARITY_ART = {
         "🟧",
         "radiant energy corona, shattered debris suspended mid-air",
     ),
+    # "reality warping / the frame fractures" 같은 표현은 moderation에 걸렸다.
+    # 파괴·왜곡을 연상시키는 단어를 빼고 '빛과 신성함'으로 최고 등급을 표현한다.
     "myth": (
         "신화",
         "🟨",
-        "reality warping, impossible geometry, the frame itself fractures",
+        "brilliant golden light bending around the figure, luminous halo, "
+        "swirling cosmic energy, transcendent divine presence",
     ),
 }
 
@@ -81,10 +88,12 @@ CLASS_ART = {
         "스캘퍼",
         "⚡",
         "1초를 세 번 쪼갠다. 남들이 클릭할 때 그는 이미 나왔다.",
-        "A razor-thin ant in a skintight matte-black bodysuit with crimson "
-        "circuit lines, edges blurred from sheer speed, holding a single "
-        "needle-like stiletto. Light trails streak past. "
-        "Palette: matte black and crimson only.",
+        # 순검정 팔레트는 어두운 배경에 묻혀 형체가 안 보였다.
+        # 밝은 회색을 주색으로 올리고 크림슨을 강조색으로 남긴다.
+        "A lean swift ant courier in sleek charcoal-grey armor with glowing "
+        "crimson accent lines, edges blurred from sheer speed, holding a "
+        "slender light-blade. Bright light trails streak past. "
+        "Palette: charcoal grey and crimson.",
     ),
     "swinger": (
         "trader",

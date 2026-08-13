@@ -118,10 +118,28 @@ def generate_one(prompt: str, model: str, quality: str, size: str, retries: int)
             time.sleep(wait)
             continue
 
+        # moderation 차단은 재시도해도 같은 결과다. 프롬프트 단어를 바꿔야 하므로
+        # 다른 4xx와 구분해서 알려준다.
+        if _is_moderation_block(resp):
+            print("    차단: moderation - 프롬프트 단어를 바꿔야 합니다")
+            print(f"      {prompt[-160:]}")
+            return None
+
         print(f"    실패 {resp.status_code}: {resp.text[:300]}")
         return None
 
     return None
+
+
+def _is_moderation_block(resp) -> bool:
+    """안전 시스템에 막힌 응답인지"""
+    if resp.status_code != 400:
+        return False
+    try:
+        code = (resp.json().get("error") or {}).get("code") or ""
+    except ValueError:
+        return False
+    return "moderation" in code
 
 
 def run(combos, args) -> int:
