@@ -53,6 +53,13 @@ class GameConfig:
     LOTTERY_COST = 0  # 복권 가격 (무료)
     MAX_LOTTERY_PER_DAY = 5  # 복권 1일 최대 횟수
 
+    # 배틀 투자금 한도 (1:1 대결)
+    BATTLE_MIN_BET = 10_000  # 1만원
+    BATTLE_MAX_BET = 100_000_000  # 1억
+
+    # 투자금 검증 기본 상한 (호출부가 별도 한도를 주지 않을 때)
+    DEFAULT_BET_CAP = 10_000_000_000  # 100억
+
     # 거래 설정
     MAX_QUANTITY = 1_000_000  # 1회 최대 거래 수량
     MAX_CASH = 10_000_000_000_000  # 최대 현금 10조 (오버플로우 방지)

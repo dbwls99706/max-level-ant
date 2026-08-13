@@ -41,7 +41,7 @@ class RateLimiter:
     - 최대 유저 수 제한으로 메모리 폭증 방지
     """
 
-    MAX_TRACKED_USERS = 10_000  # 메모리 폭증 방지
+    MAX_TRACKED_USERS = SecurityConfig.RATE_LIMIT_MAX_TRACKED_USERS
 
     def __init__(self, max_requests: int = 30, window_seconds: int = 60):
         self.max_requests = max_requests

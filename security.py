@@ -52,6 +52,7 @@ class SecurityConfig:
     RATE_LIMIT_MAX_REQUESTS = 30  # 윈도우당 최대 요청 수
     RATE_LIMIT_WINDOW_SECONDS = 60  # 윈도우 크기 (초)
     RATE_LIMIT_CLEANUP_INTERVAL = 300  # 클린업 간격 (초)
+    RATE_LIMIT_MAX_TRACKED_USERS = 10_000  # 추적 유저 수 상한 (메모리 폭증 방지)
 
     @classmethod
     def get_allowed_origins(cls) -> list:
