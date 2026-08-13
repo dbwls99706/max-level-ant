@@ -44,9 +44,16 @@ TRADING_STATUSES = frozenset(
 
 
 # ===========================================
-# 공휴일 목록 (2024-2026)
+# 휴장일 데이터
 # ===========================================
-HOLIDAYS = {
+# 증시 휴장일 = 한국 법정공휴일 + KRX 전용 휴장일
+#
+# ⚠️ 이 데이터는 손으로 관리한다. 공휴일법 개정·임시공휴일·선거일이 생기면
+#    반드시 갱신해야 하며, COVERED_YEARS 밖의 날짜는 판정이 부정확하다.
+#    (기동 시 has_holiday_data()가 현재 연도 커버 여부를 경고한다)
+#
+# 법정공휴일 (대체공휴일·임시공휴일·선거일 포함)
+PUBLIC_HOLIDAYS = {
     # 2024년
     date(2024, 1, 1),  # 신정
     date(2024, 2, 9),  # 설날 연휴
@@ -66,7 +73,6 @@ HOLIDAYS = {
     date(2024, 10, 3),  # 개천절
     date(2024, 10, 9),  # 한글날
     date(2024, 12, 25),  # 성탄절
-    date(2024, 12, 31),  # 연말 휴장
     # 2025년
     date(2025, 1, 1),  # 신정
     date(2025, 1, 28),  # 설날 연휴
@@ -95,7 +101,9 @@ HOLIDAYS = {
     date(2026, 5, 5),  # 어린이날
     date(2026, 5, 24),  # 부처님오신날
     date(2026, 5, 25),  # 대체공휴일
+    date(2026, 6, 3),  # 제9회 전국동시지방선거일
     date(2026, 6, 6),  # 현충일
+    date(2026, 7, 17),  # 제헌절 (공휴일 재지정)
     date(2026, 8, 15),  # 광복절
     date(2026, 8, 17),  # 대체공휴일
     date(2026, 9, 24),  # 추석 연휴
@@ -107,8 +115,43 @@ HOLIDAYS = {
     date(2026, 12, 25),  # 성탄절
 }
 
-# 공휴일 데이터가 커버하는 연도 범위 (경고 판정용)
-HOLIDAY_YEARS = frozenset(d.year for d in HOLIDAYS)
+# 공휴일 데이터가 커버하는 연도
+COVERED_YEARS = frozenset(d.year for d in PUBLIC_HOLIDAYS)
+
+# 근로자의 날(5/1)은 법정공휴일이 아니지만 KRX는 휴장한다
+LABOR_DAY_MONTH_DAY = (5, 1)
+
+
+def _labor_days() -> set:
+    """커버 연도의 근로자의 날"""
+    return {date(y, *LABOR_DAY_MONTH_DAY) for y in COVERED_YEARS}
+
+
+def _year_end_closure(year: int) -> date:
+    """
+    연말 휴장일 — 그 해의 마지막 영업일.
+
+    12/31부터 거꾸로 내려가며 주말·공휴일이 아닌 첫 날을 찾는다.
+    (예: 2024·2025·2026년은 12/31이 평일이라 12/31이 휴장일)
+    """
+    day = date(year, 12, 31)
+    while day.weekday() >= 5 or day in PUBLIC_HOLIDAYS:
+        day = day.replace(day=day.day - 1)
+    return day
+
+
+def _year_end_closures() -> set:
+    return {_year_end_closure(y) for y in COVERED_YEARS}
+
+
+# KRX 전용 휴장일 (법정공휴일은 아니지만 증시는 쉬는 날)
+KRX_ONLY_CLOSURES = _labor_days() | _year_end_closures()
+
+# 최종 휴장일 = 법정공휴일 + KRX 전용 휴장일
+HOLIDAYS = PUBLIC_HOLIDAYS | KRX_ONLY_CLOSURES
+
+# 하위 호환 (기존 이름)
+HOLIDAY_YEARS = COVERED_YEARS
 
 
 def now_kst() -> datetime:
@@ -127,7 +170,19 @@ def has_holiday_data(year: Optional[int] = None) -> bool:
     """해당 연도의 공휴일 데이터가 등록돼 있는지"""
     if year is None:
         year = now_kst().year
-    return year in HOLIDAY_YEARS
+    return year in COVERED_YEARS
+
+
+def is_trading_day(check_date: Optional[date] = None) -> bool:
+    """
+    해당 날짜가 증시 영업일인지 (주말·휴장일이 아닌지).
+
+    시각과 무관하게 '날짜' 기준으로만 판정한다.
+    장 운영시간까지 보려면 get_market_status()를 쓴다.
+    """
+    if check_date is None:
+        check_date = now_kst().date()
+    return check_date.weekday() < 5 and check_date not in HOLIDAYS
 
 
 def get_market_status() -> str:
