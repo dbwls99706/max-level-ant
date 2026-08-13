@@ -19,6 +19,10 @@ pytest>=8.0
 # 올릴 때는 이 줄을 바꾸고 lint·format을 함께 확인한 뒤 커밋한다.
 ruff==0.16.2
 
+# scripts/optimize_images.py용 (원본 PNG -> 서빙용 WebP)
+# 운영 코드는 쓰지 않는다. 이미지는 미리 변환해 두고 정적으로 서빙한다.
+pillow>=10.0
+
 # FastAPI TestClient용 (스킬 엔드포인트 통합 테스트)
 # starlette 0.35의 TestClient는 httpx의 app= 단축 인자를 쓰므로 <0.28 필요
 httpx>=0.24,<0.28

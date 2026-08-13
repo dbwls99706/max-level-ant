@@ -42,5 +42,9 @@ Thumbs.db
 .coverage
 htmlcov/
 
-# 생성된 직군 이미지 (용량이 커서 저장소에 넣지 않는다)
-art/
+# 생성된 직군 이미지
+# 원본 PNG는 장당 2MB가 넘어 600장이면 1.4GB다. 저장소에 넣지 않고
+# 로컬 마스터로만 둔다 (다시 만들려면 돈이 든다).
+# 실제로 서빙하는 것은 optimize_images.py가 만든 art/web/*.webp이고,
+# manifest.json과 함께 그쪽만 커밋한다.
+art/*.png

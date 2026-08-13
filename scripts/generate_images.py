@@ -22,6 +22,9 @@
 
 이미 파일이 있으면 건너뛰므로, 중단해도 다시 실행하면 이어서 받는다.
 비용이 실제로 청구되므로 실행 전에 예상 금액을 보여주고 확인을 받는다.
+
+원본 PNG는 장당 2MB가 넘어 저장소에 넣지 않는다(.gitignore).
+서빙용으로 줄이려면 생성이 끝난 뒤 scripts/optimize_images.py를 돌린다.
 """
 
 import argparse
@@ -29,7 +32,9 @@ import base64
 import json
 import os
 import sys
+import threading
 import time
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import requests
@@ -194,38 +199,48 @@ def run(combos, args) -> int:
             print("취소했습니다.")
             return 1
 
-    manifest = []
-    ok = fail = 0
-    for i, (class_key, rarity, growth) in enumerate(todo, 1):
-        family, name, emoji, _desc, _body = CLASS_ART[class_key]
-        rarity_ko = RARITY_ART[rarity][0]
-        growth_ko = GROWTH_ART[growth][0]
-        label = f"{emoji} {name} / {rarity_ko} / {growth_ko}"
-        print(f"[{i}/{len(todo)}] {label}")
+    # 장당 30초가 넘게 걸려서 직렬로 600장을 돌리면 5시간이다.
+    # API는 동시 요청을 받으므로 직렬로 기다릴 이유가 없다.
+    # 429는 generate_one이 지수 백오프로 이미 처리한다.
+    done = 0
+    lock = threading.Lock()
 
+    def work(combo):
+        nonlocal done
+        class_key, rarity, growth = combo
+        family, name, emoji, _desc, _body = CLASS_ART[class_key]
+        label = f"{emoji} {name} / {RARITY_ART[rarity][0]} / {GROWTH_ART[growth][0]}"
         prompt = build_prompt(class_key, rarity, growth)
         image = generate_one(prompt, args.model, args.quality, args.size, args.retries)
         path = out_path(outdir, class_key, rarity, growth)
 
-        if image is None:
-            print("    -> 실패")
-            fail += 1
-            continue
+        # 진행 출력과 파일 쓰기는 한 번에 하나씩. 여러 스레드가 섞여 찍히면
+        # 어느 줄이 어느 장의 결과인지 읽을 수 없다.
+        with lock:
+            done += 1
+            head = f"[{done}/{len(todo)}] {label}"
+            if image is None:
+                print(f"{head}\n    -> 실패")
+                return None
+            path.write_bytes(image)
+            print(f"{head}\n    -> {path.name} ({len(image) // 1024}KB)")
 
-        path.write_bytes(image)
-        print(f"    -> {path.name} ({len(image) // 1024}KB)")
-        ok += 1
-        manifest.append(
-            {
-                "file": path.name,
-                "class": class_key,
-                "family": family,
-                "name": name,
-                "rarity": rarity,
-                "growth": growth,
-                "prompt": prompt,
-            }
-        )
+        return {
+            "file": path.name,
+            "class": class_key,
+            "family": family,
+            "name": name,
+            "rarity": rarity,
+            "growth": growth,
+            "prompt": prompt,
+        }
+
+    with ThreadPoolExecutor(max_workers=args.concurrency) as pool:
+        results = list(pool.map(work, todo))
+
+    manifest = [r for r in results if r]
+    ok = len(manifest)
+    fail = len(results) - ok
 
     if manifest:
         mpath = outdir / "manifest.json"
@@ -261,6 +276,12 @@ def main() -> int:
     p.add_argument("--size", default=DEFAULT_SIZE)
     p.add_argument("--outdir", default="art")
     p.add_argument("--retries", type=int, default=3)
+    p.add_argument(
+        "--concurrency",
+        type=int,
+        default=6,
+        help="동시 생성 수. 429가 자주 뜨면 낮춰라",
+    )
     p.add_argument("--force", action="store_true", help="이미 있는 파일도 다시 생성")
     p.add_argument("-y", "--yes", action="store_true", help="확인 없이 진행")
     args = p.parse_args()
