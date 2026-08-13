@@ -124,6 +124,55 @@ class TestComponentLimits:
         resp = KakaoResponse.text_with_buttons("본문", btns)
         assert_valid_skill_response(resp, "text_with_buttons")
 
+    def test_two_buttons_use_horizontal_layout(self):
+        """
+        버튼 2개는 가로로 배치한다. 짧은 라벨을 세로로 쌓으면
+        응답 높이만 늘어나 그룹방 대화창을 가린다.
+        """
+        btns = [
+            {
+                "label": "💼 포트폴리오",
+                "action": "message",
+                "messageText": "/포트폴리오",
+            },
+            {"label": "📈 인기종목", "action": "message", "messageText": "/인기"},
+        ]
+        resp = KakaoResponse.text_with_buttons("본문", btns)
+        assert_valid_skill_response(resp, "2 buttons")
+
+        card = resp["template"]["outputs"][0]["textCard"]
+        assert card["buttonLayout"] == "horizontal"
+        assert len(card["buttons"]) == 2, "가로 배치에서 버튼이 잘리면 안 된다"
+
+    @pytest.mark.parametrize("count", [1, 3])
+    def test_other_counts_stay_vertical(self, count):
+        """1개는 가로로 둘 이유가 없고, 3개는 가로 한도(2개)를 넘는다"""
+        btns = [
+            {"label": f"버튼{i}", "action": "message", "messageText": f"/{i}"}
+            for i in range(count)
+        ]
+        resp = KakaoResponse.text_with_buttons("본문", btns)
+        assert_valid_skill_response(resp, f"{count} buttons")
+
+        card = resp["template"]["outputs"][0]["textCard"]
+        assert card["buttonLayout"] == "vertical"
+        assert len(card["buttons"]) == count
+
+    def test_horizontal_layout_never_drops_a_button(self):
+        """
+        버튼 4개를 넘겨도 가로(2개 한도)로 잘라 2개만 남기면 안 된다.
+        세로를 유지해 3개를 보여주는 쪽이 정보 손실이 적다.
+        """
+        btns = [
+            {"label": f"버튼{i}", "action": "message", "messageText": f"/{i}"}
+            for i in range(4)
+        ]
+        card = KakaoResponse.text_with_buttons("본문", btns)["template"]["outputs"][0][
+            "textCard"
+        ]
+        assert card["buttonLayout"] == "vertical"
+        assert len(card["buttons"]) == SPEC_BUTTONS_VERTICAL
+
     def test_long_button_label_is_trimmed(self):
         """
         14자를 넘는 라벨은 헬퍼가 잘라야 한다.
