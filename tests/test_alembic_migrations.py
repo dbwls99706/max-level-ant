@@ -79,6 +79,28 @@ class TestBaselineScript:
         for table in _expected_tables():
             assert f'"{table}"' in source, f"baseline에 {table} 테이블이 없다"
 
+    def test_baseline_downgrade_is_forbidden(self):
+        """
+        baseline은 기존 운영 스키마를 '채택'하는 용도로도 쓰이므로,
+        되돌리기는 자기가 만들지 않은 테이블까지 DROP한다.
+        스크립트 차원에서 막혀 있어야 한다.
+        """
+        import ast
+
+        tree = ast.parse(BASELINE.read_text())
+        downgrade = next(
+            node
+            for node in tree.body
+            if isinstance(node, ast.FunctionDef) and node.name == "downgrade"
+        )
+        source = ast.unparse(downgrade)
+
+        assert "drop_table" not in source, (
+            "baseline downgrade에 DROP TABLE이 남아 있다 — 운영 데이터가 삭제될 수 있다"
+        )
+        raises = [n for n in ast.walk(downgrade) if isinstance(n, ast.Raise)]
+        assert raises, "baseline downgrade가 실행을 막지 않는다"
+
     def test_single_head_revision(self):
         """head가 여러 개면 `upgrade head`가 실패한다"""
         result = _alembic("sqlite:///:memory:", "heads")
@@ -247,4 +269,55 @@ class TestPostgresUpgrade:
         check = _alembic(TEST_DATABASE_URL, "check")
         assert check.returncode == 0, (
             f"수렴 후에도 models.py와 다르다:\n{check.stdout}\n{check.stderr}"
+        )
+
+    def test_downgrade_base_refuses_and_keeps_legacy_data(self, clean_pg):
+        """
+        Alembic 이전부터 있던 운영 DB를 채택한 뒤 `downgrade base`를 치면,
+        baseline은 자기가 만들지 않은 테이블까지 DROP하게 된다.
+        명령이 실패하고 테이블·데이터가 그대로 남아야 한다.
+        """
+        from models import Base
+
+        engine = clean_pg
+        Base.metadata.create_all(engine)
+
+        # Alembic 도입 전부터 있던 실제 유저
+        with engine.connect() as conn:
+            conn.execute(
+                text(
+                    "INSERT INTO users (kakao_id, nickname, cash, initial_cash) "
+                    "VALUES ('sentinel', '옛날유저', 424242, 10000000)"
+                )
+            )
+            conn.commit()
+
+        assert _alembic(TEST_DATABASE_URL, "upgrade", "head").returncode == 0
+
+        result = _alembic(TEST_DATABASE_URL, "downgrade", "base")
+
+        assert result.returncode != 0, (
+            "baseline downgrade가 성공했다 — 운영 데이터가 삭제될 수 있다"
+        )
+        assert "downgrade할 수 없습니다" in (result.stdout + result.stderr), (
+            f"거부 이유가 드러나지 않는다:\n{result.stdout}\n{result.stderr}"
+        )
+
+        # 테이블도 데이터도 그대로여야 한다
+        inspector = inspect(engine)
+        tables = set(inspector.get_table_names())
+        missing = _expected_tables() - tables
+        assert not missing, f"downgrade 시도로 테이블이 삭제됐다: {missing}"
+
+        with engine.connect() as conn:
+            cash = conn.execute(
+                text("SELECT cash FROM users WHERE kakao_id = 'sentinel'")
+            ).scalar()
+            version = conn.execute(
+                text("SELECT version_num FROM alembic_version")
+            ).scalar()
+
+        assert cash == 424242, "downgrade 시도로 기존 유저 데이터가 사라졌다"
+        assert version == "0001_baseline", (
+            f"downgrade가 실패했는데 리비전이 바뀌었다: {version}"
         )

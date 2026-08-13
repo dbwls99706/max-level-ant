@@ -16,7 +16,10 @@
 """
 
 import pytest
+from contextlib import contextmanager
+
 from sqlalchemy import create_engine
+from sqlalchemy.exc import IntegrityError, OperationalError
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
@@ -48,6 +51,28 @@ def shared_db(monkeypatch):
     session = TestSession()
     yield session
     session.close()
+
+
+@contextmanager
+def _commit_raises(monkeypatch, exc_type):
+    """
+    commit 시점에만 지정한 DB 예외가 나도록 만든다.
+
+    실제 제약 위반을 재현하는 대신 예외 종류로 분기 동작을 검증한다.
+    (SELECT는 그대로 동작해야 하므로 commit만 갈아끼운다)
+    """
+    import sqlalchemy.orm as orm
+
+    real_commit = orm.Session.commit
+
+    def failing_commit(self):
+        raise exc_type("INSERT INTO chatroom_members", {}, Exception("제약 위반"))
+
+    monkeypatch.setattr(orm.Session, "commit", failing_commit)
+    try:
+        yield
+    finally:
+        monkeypatch.setattr(orm.Session, "commit", real_commit)
 
 
 def _members(session, group_key=GROUP_KEY):
@@ -165,44 +190,39 @@ class TestRegisterHelper:
 
         assert len(_members(shared_db)) == 1
 
-    def test_unique_violation_is_treated_as_success(self, shared_db, monkeypatch):
+    def test_unique_race_returns_true_only_when_row_exists(
+        self, shared_db, monkeypatch
+    ):
         """
         동시 요청으로 다른 쪽이 먼저 INSERT하면 unique(group_key, kakao_id)에
-        걸려 IntegrityError가 난다. 멤버십은 이미 존재하므로 실패로 보고하면
-        안 된다 — False를 돌려주면 호출부가 없는 문제를 고치려 든다.
+        걸려 IntegrityError가 난다. 이때는 멤버십이 실제로 존재하므로 True다.
         """
         _make_user(shared_db, "member_3")
 
-        import sqlalchemy.orm as orm
-        from sqlalchemy.exc import IntegrityError
+        # 경쟁 요청이 먼저 넣어 둔 상태 (commit을 막기 전에 만들어 둔다)
+        other = database.SessionLocal()
+        other.add(ChatRoomMember(group_key=GROUP_KEY, kakao_id="member_3"))
+        other.commit()
+        other.close()
 
-        real_commit = orm.Session.commit
-
-        def commit_conflict(self):
-            raise IntegrityError(
-                "INSERT INTO chatroom_members", {}, Exception("unique_chatroom_member")
-            )
-
-        monkeypatch.setattr(orm.Session, "commit", commit_conflict)
-        try:
+        with _commit_raises(monkeypatch, IntegrityError):
             assert register_chatroom_member(shared_db, GROUP_KEY, "member_3") is True
-        finally:
-            monkeypatch.setattr(orm.Session, "commit", real_commit)
+
+    def test_integrity_error_without_row_reports_failure(self, shared_db, monkeypatch):
+        """
+        IntegrityError는 unique 충돌만 뜻하지 않는다 (FK 위반 등도 같은 예외다).
+        행이 실제로 생기지 않았는데 True를 돌려주면, 호출부는 멤버십이 확보된
+        줄 알고 재시도하지 않는다 — 그 유저는 방 랭킹에서 영영 빠진다.
+        """
+        _make_user(shared_db, "member_5")
+        assert _members(shared_db) == []
+
+        with _commit_raises(monkeypatch, IntegrityError):
+            assert register_chatroom_member(shared_db, GROUP_KEY, "member_5") is False
 
     def test_other_db_errors_are_reported_as_failure(self, shared_db, monkeypatch):
-        """unique 충돌이 아닌 진짜 실패는 True로 감추면 안 된다"""
+        """무결성 오류가 아닌 진짜 실패는 True로 감추면 안 된다"""
         _make_user(shared_db, "member_4")
 
-        import sqlalchemy.orm as orm
-        from sqlalchemy.exc import OperationalError
-
-        real_commit = orm.Session.commit
-
-        def commit_broken(self):
-            raise OperationalError("INSERT", {}, Exception("디스크 오류"))
-
-        monkeypatch.setattr(orm.Session, "commit", commit_broken)
-        try:
+        with _commit_raises(monkeypatch, OperationalError):
             assert register_chatroom_member(shared_db, GROUP_KEY, "member_4") is False
-        finally:
-            monkeypatch.setattr(orm.Session, "commit", real_commit)

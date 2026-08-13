@@ -23,6 +23,18 @@ from utils import get_service_logger, log_attendance
 logger = get_service_logger()
 
 
+def _find_member(session: Session, group_key: str, kakao_id: str):
+    """해당 방의 멤버십 행 조회 (없으면 None)"""
+    return (
+        session.query(ChatRoomMember)
+        .filter(
+            ChatRoomMember.group_key == group_key,
+            ChatRoomMember.kakao_id == kakao_id,
+        )
+        .first()
+    )
+
+
 def register_chatroom_member(db: Session, group_key: str, kakao_id: str) -> bool:
     """
     채팅방 멤버 등록/갱신 (그룹 챗봇용) - 별도 세션 사용하여 메인 세션 오염 방지
@@ -50,14 +62,7 @@ def register_chatroom_member(db: Session, group_key: str, kakao_id: str) -> bool
         if not user_exists:
             return False
 
-        existing = (
-            separate_db.query(ChatRoomMember)
-            .filter(
-                ChatRoomMember.group_key == group_key,
-                ChatRoomMember.kakao_id == kakao_id,
-            )
-            .first()
-        )
+        existing = _find_member(separate_db, group_key, kakao_id)
         if existing:
             from models import _utcnow
 
@@ -68,11 +73,21 @@ def register_chatroom_member(db: Session, group_key: str, kakao_id: str) -> bool
         separate_db.commit()
         return True
     except IntegrityError:
-        # 같은 유저의 요청이 동시에 들어와 다른 쪽이 먼저 INSERT한 경우.
-        # unique(group_key, kakao_id)에 걸린 것이므로 멤버십은 이미 존재한다.
-        if separate_db:
+        # IntegrityError는 unique 충돌만 뜻하지 않는다. FK 위반 등 다른 무결성
+        # 오류도 같은 예외로 온다. 그래서 "동시 요청이 먼저 넣었겠지"라고
+        # 단정하면, 실제로는 멤버십이 없는데 성공을 보고하게 된다.
+        #
+        # constraint 이름으로 구분하는 방법은 DB·드라이버마다 달라 깨지기 쉽다.
+        # rollback 후 행이 실제로 있는지 다시 확인하는 쪽이 DB 독립적이고 정확하다.
+        if separate_db is None:
+            return False
+        try:
             separate_db.rollback()
-        return True
+            return _find_member(separate_db, group_key, kakao_id) is not None
+        except SQLAlchemyError:
+            # 재확인조차 실패하면 확보됐다고 볼 근거가 없다
+            logger.debug(f"채팅방 멤버 재확인 실패: group={group_key[:8]}...")
+            return False
     except Exception:
         if separate_db:
             separate_db.rollback()

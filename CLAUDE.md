@@ -158,7 +158,7 @@ SKILL_API_KEY_HEADER=X-Skill-Key          # 카카오 관리자센터에 등록�
 ADMIN_TOKEN=<관리자 API 토큰>              # 미설정 시 임시 토큰 생성 + 경고
 DB_POOL_TIMEOUT=2.0                       # DB 커넥션 풀 대기 상한 (초)
 DEV_MODE=false                            # true면 CORS 전체 허용 + 디버그 엔드포인트
-KIS_MIN_CALL_INTERVAL=0.1                 # KIS 호출 간 최소 간격 (초)
+KIS_MIN_CALL_INTERVAL=0.1                 # KIS 호출 간 최소 간격 (초). 모의투자면 1.0 이상
 KIS_API_TIMEOUT=1.5                       # KIS 개별 호출 타임아웃 (초)
 KIS_TOKEN_TIMEOUT=5.0                     # KIS 토큰 발급 전용 타임아웃 (초)
 KIS_MAX_CONCURRENT_CALLS=5                # 프로세스 전역 동시 KIS 호출 상한
@@ -205,6 +205,10 @@ TEST_DATABASE_URL=postgresql://user:pw@localhost/dbname pytest -m postgres
   existing DB, with no `stamp` step. Never edit `0001_baseline` when models change; add a new
   revision. `init_db()`'s `create_all()` + `_migrate_db()` are still in place on purpose and
   are removed only after the Alembic path has run against production — see `docs/MIGRATIONS.md`
+- **`0001_baseline` cannot be downgraded** and raises if you try. It doubles as an *adoption*
+  step for the pre-Alembic production schema, so it cannot tell which tables it created —
+  `downgrade base` would DROP `users`/`holdings`/`transactions` and destroy real user data.
+  Downgrades between `0002`+ revisions are fine; write their `downgrade()` normally
 - **Imports**: Relative imports within packages (handlers, services, utils), absolute from root
 
 ## Linting

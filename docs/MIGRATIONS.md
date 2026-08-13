@@ -26,6 +26,32 @@ Alembic 도입 전에는 서버 기동 시 `database.init_db()`가
 > 모델을 바꿀 때 baseline을 수정하면 안 된다 — 새 리비전을 만들어야 한다.
 > (`tests/test_alembic_migrations.py`가 baseline의 `models`/`database` import를 막는다)
 
+## ⚠️ `0001_baseline`은 되돌릴 수 없다
+
+`alembic downgrade base`(또는 `downgrade -1`을 0001에서 실행)는 **금지**다.
+스크립트가 `RuntimeError`로 실행 자체를 막는다.
+
+이유는 baseline이 두 역할을 겸하기 때문이다.
+
+1. 새 DB에 전체 스키마를 **생성**한다
+2. Alembic 이전부터 있던 운영 DB의 스키마를 그대로 **채택(adopt)**한다
+
+2번으로 적용된 DB에서는 이 리비전이 만든 테이블이 **하나도 없다**. 그런데
+되돌리기는 `users`, `holdings`, `transactions`, `chatroom_members`,
+`api_tokens`를 통째로 `DROP TABLE`한다. 즉 Alembic 도입 전부터 쌓인 실제
+유저 데이터가 전부 사라진다. 리비전은 어떤 테이블을 자기가 만들었는지
+구분할 수 없으므로, 안전한 되돌리기가 **원리적으로 불가능**하다.
+
+- **허용**: `0002` 이상 리비전 사이의 downgrade (예: `0003` → `0002`)
+- **금지**: `0001` → `base`
+
+스키마를 정말 비워야 한다면 마이그레이션이 아니라, 백업을 확인한 뒤
+의도를 명시한 별도 작업(`/admin/reset-db` 등)으로 해야 한다.
+
+`tests/test_alembic_migrations.py`가 실제 PostgreSQL에서 이를 회귀 검증한다:
+기존 데이터가 있는 DB를 채택시킨 뒤 `downgrade base`를 시도해, 명령이 실패하고
+테이블·데이터·리비전이 모두 그대로인지 확인한다.
+
 ## 운영 DB 적용 절차 (최초 1회)
 
 1. **백업.** Render 관리형 PostgreSQL이면 대시보드에서 백업/스냅샷을 먼저 만든다.
@@ -85,14 +111,17 @@ DATABASE_URL="sqlite:///./stock_king.db" alembic upgrade head
 CI(PostgreSQL job)가 새 DB에서 `alembic upgrade head` → `alembic check`을
 돌리므로, 모델만 고치고 리비전을 빼먹으면 빌드가 실패한다.
 
+새 리비전의 `downgrade()`는 정상적으로 작성한다. 되돌리기가 막혀 있는 것은
+`0001_baseline` 하나뿐이다.
+
 ## 자주 쓰는 명령
 
 ```bash
 alembic current              # 현재 리비전
 alembic history              # 리비전 이력
 alembic upgrade head         # 최신까지 적용
-alembic downgrade -1         # 한 단계 되돌리기
 alembic check                # 모델과 DB 스키마 차이 확인
+alembic downgrade <revision> # 되돌리기 — 0002 이상 사이에서만 (위 ⚠️ 절 참고)
 ```
 
 DB URL은 `alembic.ini`가 아니라 환경변수 `DATABASE_URL`에서 읽는다
