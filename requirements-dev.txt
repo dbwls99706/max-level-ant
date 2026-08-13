@@ -5,7 +5,19 @@
 #   pip install -r requirements.txt -r requirements-dev.txt
 
 pytest>=8.0
-ruff>=0.6
+
+# ruff는 정확한 버전으로 고정한다 (범위 지정 아님).
+#
+# 이유: ruff의 버전 정책상 minor에서는 기본 규칙 추가·삭제와 stable 포매터
+# 스타일 변경이, patch에서도 버그 수정에 따른 동작 변화가 허용된다. 범위로
+# 두면 코드를 한 줄도 안 고쳤는데 도구가 올라갔다는 이유만으로 CI 결과가
+# 달라진다. 실제로 0.16이 기본 규칙을 59개에서 413개로 확장하면서 빌드가
+# 깨졌고, 같은 0.16부터 Markdown 안의 파이썬 코드 블록도 포매터 대상이 됐다.
+# 즉 ruff.toml이 같아도 `ruff format --check`의 검사 대상이 minor 간에 다르다.
+#
+# 규칙 집합은 ruff.toml이, 도구 동작은 이 핀이 고정한다. 둘 다 필요하다.
+# 올릴 때는 이 줄을 바꾸고 lint·format을 함께 확인한 뒤 커밋한다.
+ruff==0.16.2
 
 # FastAPI TestClient용 (스킬 엔드포인트 통합 테스트)
 # starlette 0.35의 TestClient는 httpx의 app= 단축 인자를 쓰므로 <0.28 필요
