@@ -47,16 +47,19 @@ from enhance_art import (  # noqa: E402
 API_URL = "https://api.openai.com/v1/images/generations"
 
 # 1536x1024 기준 장당 단가 (USD).
-# mini/low는 실측값이다 (3장 $0.016 -> 장당 $0.0053). 나머지는 그 비율로
+# 실측 표시가 붙은 것만 실제 청구액에서 역산한 값이다. 나머지는 그 비율로
 # 공개 가격표를 보정한 추정치라 실제 청구액과 다를 수 있다.
 # 예상 비용을 보여주기 위한 용도이지 정산용이 아니다.
+#
+# 추정치는 실제로 30%까지 빗나갔다 (1.5/medium을 0.034로 잡았는데 0.044였다).
+# 큰 배치를 돌리기 전에 50장쯤에서 대시보드로 한 번 검산하는 게 안전하다.
 PRICE_TABLE = {
-    ("gpt-image-1-mini", "low"): 0.0053,  # 실측
+    ("gpt-image-1-mini", "low"): 0.0053,  # 실측 (3장 $0.016)
     ("gpt-image-1-mini", "medium"): 0.011,
     ("gpt-image-1-mini", "high"): 0.036,
-    ("gpt-image-1.5", "low"): 0.009,
-    ("gpt-image-1.5", "medium"): 0.034,
-    ("gpt-image-1.5", "high"): 0.133,
+    ("gpt-image-1.5", "low"): 0.012,
+    ("gpt-image-1.5", "medium"): 0.044,  # 실측 (66장 $2.91)
+    ("gpt-image-1.5", "high"): 0.172,
 }
 
 # 카카오 basicCard 썸네일은 가로형이다. 정사각형으로 뽑으면 위아래가 잘린다.
