@@ -27,7 +27,11 @@ jobs:
           pip install -r requirements.txt -r requirements-dev.txt
 
       - name: Ruff lint
-        run: ruff check .
+        # 버전을 로그에 남긴다. 린터 버전이 올라가 규칙이 달라졌을 때
+        # 코드 변경과 구분해서 원인을 짚을 수 있어야 한다.
+        run: |
+          ruff --version
+          ruff check .
 
       - name: Ruff format check
         run: ruff format --check .
