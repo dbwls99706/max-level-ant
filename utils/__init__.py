@@ -23,10 +23,12 @@ from .logger import (
     get_api_logger,
 )
 from .resilience import (
+    BoundedConcurrency,
     CallThrottle,
     CircuitBreaker,
     CircuitOpenError,
     CircuitState,
+    ConcurrencyLimitError,
 )
 from .audit_logger import (
     log_trade,
@@ -54,10 +56,12 @@ __all__ = [
     "get_handler_logger",
     "get_service_logger",
     "get_api_logger",
+    "BoundedConcurrency",
     "CallThrottle",
     "CircuitBreaker",
     "CircuitOpenError",
     "CircuitState",
+    "ConcurrencyLimitError",
     "log_trade",
     "log_game",
     "log_battle",

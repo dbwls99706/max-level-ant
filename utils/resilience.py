@@ -257,6 +257,89 @@ class CircuitBreaker:
         return (time.monotonic() - self._opened_at) >= self._recovery_timeout
 
 
+class ConcurrencyLimitError(RuntimeError):
+    """동시 실행 상한에 걸려 호출 슬롯을 얻지 못함"""
+
+
+class BoundedConcurrency:
+    """
+    프로세스 전체에서 동시에 실행 가능한 외부 호출 수를 제한한다.
+
+    CallThrottle은 호출이 '시작되는 간격'만 제어하므로, 상류 API가 느려지면
+    이미 시작된 호출이 계속 쌓인다. 요청 예산이 끝나 응답을 먼저 돌려줘도
+    (executor.shutdown(wait=False)) 그 worker와 소켓은 백그라운드에 남는다.
+    이 클래스는 '동시에 떠 있는 호출 수' 자체에 상한을 걸어 그 누적을 막는다.
+
+    슬롯을 얻지 못하면 ConcurrencyLimitError를 던진다. 호출자는 이를
+    '아직 시작하지 않은 호출'로 보고 캐시/폴백 경로로 빠져야 한다.
+    (외부 API 실패가 아니므로 서킷 브레이커 실패로 집계하면 안 된다)
+    """
+
+    def __init__(self, limit: int):
+        if limit < 1:
+            raise ValueError("limit은 1 이상이어야 합니다")
+        self._limit = limit
+        self._semaphore = threading.BoundedSemaphore(limit)
+        self._lock = threading.Lock()
+        self._in_flight = 0
+        self._peak_in_flight = 0
+
+    @property
+    def limit(self) -> int:
+        return self._limit
+
+    @property
+    def in_flight(self) -> int:
+        with self._lock:
+            return self._in_flight
+
+    @property
+    def peak_in_flight(self) -> int:
+        """관측된 최대 동시 실행 수 (테스트/모니터링용)"""
+        with self._lock:
+            return self._peak_in_flight
+
+    def reset_peak(self):
+        with self._lock:
+            self._peak_in_flight = self._in_flight
+
+    @contextmanager
+    def slot(self, timeout: Optional[float] = None):
+        """
+        호출 슬롯 하나를 확보한다.
+
+        Args:
+            timeout: 슬롯 대기 상한(초). None이면 무한 대기하므로
+                     요청 예산이 있는 경로에서는 반드시 지정해야 한다.
+
+        Raises:
+            ConcurrencyLimitError: 상한에 걸려 슬롯을 얻지 못한 경우
+        """
+        if timeout is not None and timeout <= 0:
+            # 기다릴 시간이 없으면 시도조차 하지 않는다
+            raise ConcurrencyLimitError("동시 호출 상한 - 대기할 예산이 없음")
+
+        if timeout is None:
+            acquired = self._semaphore.acquire()
+        else:
+            acquired = self._semaphore.acquire(timeout=timeout)
+        if not acquired:
+            raise ConcurrencyLimitError(
+                f"동시 호출 상한({self._limit}) - {timeout:.2f}초 안에 슬롯 확보 실패"
+            )
+
+        with self._lock:
+            self._in_flight += 1
+            self._peak_in_flight = max(self._peak_in_flight, self._in_flight)
+        try:
+            yield
+        finally:
+            # 예외·타임아웃·서킷 차단 등 어떤 경로로 빠져나가도 반드시 반납한다
+            with self._lock:
+                self._in_flight -= 1
+            self._semaphore.release()
+
+
 class CallThrottle:
     """
     호출 간 최소 간격을 보장하는 유량 제한기.

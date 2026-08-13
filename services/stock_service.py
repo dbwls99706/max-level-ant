@@ -19,10 +19,14 @@ from sqlalchemy.exc import SQLAlchemyError
 from game_config import GameConfig
 from settings import CacheConfig, KISConfig, SkillConfig
 from database import SessionLocal
+from contextlib import contextmanager
+
 from utils import (
+    BoundedConcurrency,
     CallThrottle,
     CircuitBreaker,
     CircuitOpenError,
+    ConcurrencyLimitError,
     budget,
     get_service_logger,
 )
@@ -39,6 +43,32 @@ _circuit_breaker = CircuitBreaker(
 # 급등/급락(순위 API)은 통과하는데 종목별 현재가(inquire-price)만 자주·병렬로
 # 호출돼 한도를 넘던 증상을 완화한다.
 _kis_throttle = CallThrottle(KISConfig.MIN_CALL_INTERVAL)
+
+# 프로세스 전체 동시 KIS 호출 상한.
+# throttle은 호출이 '시작되는 간격'만 제어하므로 상류가 느려지면 in-flight
+# 호출이 계속 쌓인다. 요청 예산이 끝나면 응답은 먼저 돌려주지만
+# (executor.shutdown(wait=False)) 그 worker와 소켓은 백그라운드에 남는다.
+# 동시 실행 수 자체에 상한을 걸어 그 누적을 막는다.
+_kis_limiter = BoundedConcurrency(KISConfig.MAX_CONCURRENT_CALLS)
+
+
+@contextmanager
+def _kis_call():
+    """
+    KIS 외부 호출 한 건을 감싸는 컨텍스트 (동시 실행 상한 + 서킷 브레이커).
+
+    슬롯을 서킷 guard '바깥'에서 잡는 이유:
+      - guard 안에서 잡으면 HALF_OPEN 프로브가 슬롯을 기다리는 동안
+        복구 프로브 자리를 붙잡게 된다.
+      - 슬롯 확보 실패는 로컬 자원 제한이지 API 장애가 아니므로
+        서킷 실패로 집계되면 안 된다.
+
+    슬롯 대기는 min(설정 상한, 남은 요청 예산)으로 제한되며,
+    확보하지 못하면 ConcurrencyLimitError를 던진다(호출을 시작하지 않는다).
+    """
+    with _kis_limiter.slot(timeout=budget.timeout_for(KISConfig.SLOT_WAIT_CAP)):
+        with _circuit_breaker.guard() as call:
+            yield call
 
 
 class KISAPIClient:
@@ -86,7 +116,7 @@ class KISAPIClient:
                 return None
 
             try:
-                with _circuit_breaker.guard() as call:
+                with _kis_call() as call:
                     url = f"{KISConfig.BASE_URL}/oauth2/tokenP"
                     headers = {"Content-Type": "application/json"}
                     body = {
@@ -199,7 +229,7 @@ class KISAPIClient:
             return None
 
         try:
-            with _circuit_breaker.guard() as call:
+            with _kis_call() as call:
                 url = f"{KISConfig.BASE_URL}/uapi/domestic-stock/v1/quotations/inquire-price"
                 params = {
                     "FID_COND_MRKT_DIV_CODE": "J",  # 주식
@@ -252,6 +282,8 @@ class KISAPIClient:
                     "volume": cls._safe_int(output.get("acml_vol")),
                 }
 
+        except ConcurrencyLimitError as e:
+            logger.debug(f"KIS 동시 호출 상한 - 시세 조회 스킵 ({stock_code}): {e}")
         except CircuitOpenError:
             logger.debug(f"KIS API 서킷 브레이커 열림 - 시세 조회 스킵 ({stock_code})")
         except Timeout:
@@ -280,7 +312,7 @@ class KISAPIClient:
             return []
 
         try:
-            with _circuit_breaker.guard() as call:
+            with _kis_call() as call:
                 url = f"{KISConfig.BASE_URL}/uapi/domestic-stock/v1/quotations/volume-rank"
                 params = {
                     "FID_COND_MRKT_DIV_CODE": market,
@@ -342,6 +374,8 @@ class KISAPIClient:
                         continue
                 return results
 
+        except ConcurrencyLimitError as e:
+            logger.debug(f"KIS 동시 호출 상한 - {label} 순위 조회 스킵: {e}")
         except CircuitOpenError:
             logger.debug(f"KIS API 서킷 브레이커 열림 - {label} 순위 조회 스킵")
         except Timeout:
@@ -422,7 +456,7 @@ class KISAPIClient:
             return None
 
         try:
-            with _circuit_breaker.guard() as call:
+            with _kis_call() as call:
                 url = f"{KISConfig.BASE_URL}/uapi/domestic-stock/v1/quotations/inquire-index-price"
                 params = {"FID_COND_MRKT_DIV_CODE": "U", "FID_INPUT_ISCD": index_code}
 
@@ -460,6 +494,8 @@ class KISAPIClient:
                     "change": cls._safe_float(output.get("bstp_nmix_prdy_ctrt")),
                 }
 
+        except ConcurrencyLimitError as e:
+            logger.debug(f"KIS 동시 호출 상한 - 지수 조회 스킵 ({index_code}): {e}")
         except CircuitOpenError:
             logger.debug(f"KIS API 서킷 브레이커 열림 - 지수 조회 스킵 ({index_code})")
         except Timeout:

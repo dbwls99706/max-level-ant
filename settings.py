@@ -95,6 +95,14 @@ class KISConfig:
     # 0.1 → 초당 최대 ~10건. 필요 시 환경변수로 조정 가능.
     MIN_CALL_INTERVAL = float(os.getenv("KIS_MIN_CALL_INTERVAL", "0.1"))
 
+    # 프로세스 전체 동시 KIS 호출 상한.
+    # 상류가 느려질 때 in-flight 호출이 무한정 쌓이는 것을 막는다.
+    # (요청 예산이 끝나면 응답은 먼저 반환하지만 worker/소켓은 남기 때문)
+    MAX_CONCURRENT_CALLS = int(os.getenv("KIS_MAX_CONCURRENT_CALLS", "5"))
+
+    # 동시 호출 슬롯 대기 상한 (초). 실제 대기는 min(이 값, 남은 예산)
+    SLOT_WAIT_CAP = float(os.getenv("KIS_SLOT_WAIT_CAP", "1.0"))
+
     # 서킷 브레이커 (연속 실패 시 일시 차단)
     CIRCUIT_FAILURE_THRESHOLD = int(os.getenv("KIS_CIRCUIT_FAILURE_THRESHOLD", "5"))
     CIRCUIT_RECOVERY_TIMEOUT = float(os.getenv("KIS_CIRCUIT_RECOVERY_TIMEOUT", "60"))
