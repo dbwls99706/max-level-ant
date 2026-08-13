@@ -162,9 +162,26 @@ class CommandHandler(
         라우팅 테이블을 사용하여 적절한 핸들러 호출
         """
         # 그룹 챗봇: 채팅방 멤버 등록
+        # chatroom_members는 users를 FK로 참조하므로 유저가 있어야 등록된다.
+        # 그룹방에서의 첫 `/시작`은 이 시점에 아직 유저가 없어 건너뛰어지고,
+        # 그러면 그 유저는 다음 명령을 칠 때까지 방 랭킹에서 빠진다.
+        # 명령 처리 뒤에 한 번 더 시도해 그 한 턴의 공백을 메운다.
+        registered = False
         if self.group_key:
+            registered = register_chatroom_member(
+                self.db, self.group_key, self.kakao_id
+            )
+
+        response = self._dispatch()
+
+        # 명령 처리 중에 유저가 새로 생겼을 수 있다 (첫 `/시작`)
+        if self.group_key and not registered:
             register_chatroom_member(self.db, self.group_key, self.kakao_id)
 
+        return response
+
+    def _dispatch(self) -> Dict:
+        """utterance를 라우팅 테이블로 해석해 핸들러를 호출한다"""
         cmd = self.utterance.lower()
 
         # 빈 utterance = 웰컴 블록 트리거

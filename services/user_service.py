@@ -10,7 +10,7 @@ import re
 from datetime import datetime, timedelta
 from typing import Optional, Tuple, Dict
 from sqlalchemy.orm import Session
-from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy import exists
 
 from models import User, ChatRoomMember
@@ -23,10 +23,21 @@ from utils import get_service_logger, log_attendance
 logger = get_service_logger()
 
 
-def register_chatroom_member(db: Session, group_key: str, kakao_id: str) -> None:
-    """채팅방 멤버 등록/갱신 (그룹 챗봇용) - 별도 세션 사용하여 메인 세션 오염 방지"""
+def register_chatroom_member(db: Session, group_key: str, kakao_id: str) -> bool:
+    """
+    채팅방 멤버 등록/갱신 (그룹 챗봇용) - 별도 세션 사용하여 메인 세션 오염 방지
+
+    Returns:
+        멤버십이 확보됐으면 True.
+        users 행이 아직 없어 등록을 건너뛰었으면 False.
+
+        이 구분이 필요한 이유: chatroom_members는 users를 FK로 참조하므로
+        유저가 없으면 등록할 수 없다. 그런데 그룹방에서의 첫 `/시작`은
+        바로 그 명령이 유저를 만든다. 호출부가 False를 보고 명령 처리 뒤에
+        다시 시도할 수 있어야, 첫 턴부터 방 랭킹에 잡힌다.
+    """
     if not group_key or not kakao_id:
-        return
+        return False
     from database import SessionLocal
 
     separate_db = None
@@ -37,7 +48,7 @@ def register_chatroom_member(db: Session, group_key: str, kakao_id: str) -> None
             exists().where(User.kakao_id == kakao_id)
         ).scalar()
         if not user_exists:
-            return
+            return False
 
         existing = (
             separate_db.query(ChatRoomMember)
@@ -55,10 +66,18 @@ def register_chatroom_member(db: Session, group_key: str, kakao_id: str) -> None
             member = ChatRoomMember(group_key=group_key, kakao_id=kakao_id)
             separate_db.add(member)
         separate_db.commit()
+        return True
+    except IntegrityError:
+        # 같은 유저의 요청이 동시에 들어와 다른 쪽이 먼저 INSERT한 경우.
+        # unique(group_key, kakao_id)에 걸린 것이므로 멤버십은 이미 존재한다.
+        if separate_db:
+            separate_db.rollback()
+        return True
     except Exception:
         if separate_db:
             separate_db.rollback()
         logger.debug(f"채팅방 멤버 등록 실패: group={group_key[:8]}...")
+        return False
     finally:
         if separate_db:
             separate_db.close()
