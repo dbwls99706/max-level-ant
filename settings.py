@@ -90,6 +90,12 @@ class KISConfig:
     # 실제 적용값은 min(이 값, 요청에 남은 예산)이다 (utils.budget 참고).
     API_TIMEOUT = float(os.getenv("KIS_API_TIMEOUT", "1.5"))
 
+    # 토큰 발급(/oauth2/tokenP) 전용 타임아웃 상한 (초).
+    # 시세 조회보다 느리고, 실패하면 그 뒤 모든 조회가 막히는 선행 호출이다.
+    # 기동 시점에는 카카오 SLA가 없으므로 조회용보다 넉넉하게 준다.
+    # 요청 처리 중에는 min(이 값, 남은 예산)으로 다시 잘린다 (utils.budget).
+    TOKEN_TIMEOUT = float(os.getenv("KIS_TOKEN_TIMEOUT", "5.0"))
+
     # KIS 유량 제한(초당 거래건수) 회피용 호출 간 최소 간격(초).
     # 단일 프로세스 기준 모든 KIS 호출을 직렬화해 초당 호출 수를 제한한다.
     # 0.1 → 초당 최대 ~10건. 필요 시 환경변수로 조정 가능.

@@ -32,7 +32,7 @@ ruff format --check .
 stock-king-bot/
 ├── main.py              # FastAPI app, endpoints, rate limiter, lifespan
 ├── database.py          # DB engine, session, migration, cleanup
-├── models.py            # SQLAlchemy models (10 tables)
+├── models.py            # SQLAlchemy models (11 tables)
 │   # ── Configuration & shared contracts (formerly one config.py) ──
 ├── settings.py          # DB URL, KIS/공공데이터 API, cache TTL, validate_config()
 ├── security.py          # Admin token, CORS origins, request size & rate limits
@@ -125,7 +125,10 @@ mutation + commit
 - Error codes defined in `errors.ErrorCode`
 
 ### Database
-- Models in `models.py`, 10 tables: `users`, `holdings`, `transactions`, `battles`, `weekly_challenges`, `user_challenges`, `milestones`, `asset_history`, `chatroom_members`, `stock_cache`
+- Models in `models.py`, 11 tables: `users`, `holdings`, `transactions`, `battles`, `weekly_challenges`, `user_challenges`, `milestones`, `asset_history`, `chatroom_members`, `stock_cache`, `api_tokens`
+- `api_tokens`는 KIS 접근 토큰을 영속 저장한다. 토큰이 프로세스 메모리에만 있으면
+  재배포·콜드스타트마다 재발급을 시도하는데, KIS는 토큰 발급 자체에 유량 제한이 있어
+  재기동이 잦으면 시세 조회가 통째로 멈춘다
 - Auto-migration in `database._migrate_db()` adds missing columns on startup
 - `User.cash` and financial fields use `BigInteger` to prevent overflow
 - Timestamps stored as naive UTC (`_utcnow()` helper)
@@ -152,6 +155,9 @@ DB_POOL_TIMEOUT=2.0                       # DB 커넥션 풀 대기 상한 (초)
 DEV_MODE=false                            # true면 CORS 전체 허용 + 디버그 엔드포인트
 KIS_MIN_CALL_INTERVAL=0.1                 # KIS 호출 간 최소 간격 (초)
 KIS_API_TIMEOUT=1.5                       # KIS 개별 호출 타임아웃 (초)
+KIS_TOKEN_TIMEOUT=5.0                     # KIS 토큰 발급 전용 타임아웃 (초)
+KIS_MAX_CONCURRENT_CALLS=5                # 프로세스 전역 동시 KIS 호출 상한
+KIS_SLOT_WAIT_CAP=1.0                     # 동시 호출 슬롯 대기 상한 (초)
 SKILL_RESPONSE_BUDGET=3.5                 # 요청 전체 시간 예산 (카카오 5초 SLA 대비)
 PUBLIC_DATA_API_TIMEOUT=2.0               # 공공데이터 API 타임아웃 (초)
 KIS_CIRCUIT_FAILURE_THRESHOLD=5           # 서킷 차단 임계 실패 횟수

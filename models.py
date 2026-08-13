@@ -14,6 +14,7 @@ from sqlalchemy import (
     ForeignKey,
     UniqueConstraint,
     Index,
+    Text,
 )
 from sqlalchemy.orm import relationship
 from database import Base
@@ -400,3 +401,30 @@ class StockCache(Base):
 
     def __repr__(self):
         return f"<StockCache(code={self.stock_code}, name={self.stock_name})>"
+
+
+class ApiToken(Base):
+    """
+    외부 API 접근 토큰 영속 저장
+
+    KIS 토큰은 24시간 유효하지만 프로세스 메모리에만 두면 재배포·콜드스타트마다
+    재발급을 시도하게 된다. KIS는 토큰 '발급' 자체에 유량 제한을 걸어두므로
+    재기동이 잦으면 발급이 거부돼 시세 조회가 통째로 멈춘다.
+    발급받은 토큰을 DB에 남겨 재기동 후에도 만료 전까지 재사용한다.
+    """
+
+    __tablename__ = "api_tokens"
+
+    # 발급처 식별자 (예: "kis")
+    provider = Column(String(30), primary_key=True)
+
+    # 접근 토큰 (KIS 토큰은 수백 자에 달해 길이 제한을 두지 않는다)
+    access_token = Column(Text, nullable=False)
+
+    # 만료 시각 (naive UTC)
+    expires_at = Column(DateTime, nullable=False)
+
+    updated_at = Column(DateTime, default=_utcnow, onupdate=_utcnow)
+
+    def __repr__(self):
+        return f"<ApiToken(provider={self.provider}, expires_at={self.expires_at})>"

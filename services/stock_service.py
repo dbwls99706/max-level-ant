@@ -89,6 +89,111 @@ class KISAPIClient:
     _token_expires_at = None
     _token_lock = threading.Lock()  # 토큰 중복 발급 방지
 
+    # DB에 토큰을 남길 때 쓰는 발급처 식별자
+    TOKEN_PROVIDER = "kis"
+
+    # 토큰 만료 안전 여유.
+    # 호출 도중 만료되는 일이 없도록 실제 만료보다 이만큼 일찍 폐기한다.
+    TOKEN_EXPIRY_MARGIN = timedelta(hours=1)
+
+    # KIS가 expires_in을 주지 않을 때 가정할 유효기간
+    TOKEN_DEFAULT_LIFETIME = timedelta(hours=24)
+
+    @classmethod
+    def _token_ttl(cls, expires_in) -> timedelta:
+        """
+        응답의 expires_in(초)에서 실제로 신뢰할 유효기간을 계산.
+
+        KIS가 값을 주지 않거나 이상한 값을 주면 기본값을 쓰고,
+        만료 직전에 걸치지 않도록 안전 여유를 뺀다.
+        """
+        seconds = cls._safe_int(expires_in, 0)
+        lifetime = (
+            timedelta(seconds=seconds) if seconds > 0 else cls.TOKEN_DEFAULT_LIFETIME
+        )
+        # 여유를 빼서 음수/0이 되면 짧게라도 쓸 수 있게 최소치를 보장한다
+        return max(lifetime - cls.TOKEN_EXPIRY_MARGIN, timedelta(minutes=1))
+
+    @classmethod
+    def _cached_token(cls) -> Optional[str]:
+        """메모리에 남은 토큰이 아직 유효하면 반환"""
+        if cls._access_token and cls._token_expires_at:
+            if datetime.now(timezone.utc) < cls._token_expires_at:
+                return cls._access_token
+        return None
+
+    @classmethod
+    def _load_token_from_db(cls) -> Optional[str]:
+        """
+        DB에 저장된 토큰을 메모리로 복구.
+
+        재배포·콜드스타트로 프로세스가 새로 떠도 만료 전이면 재발급하지 않는다.
+        DB가 없거나 실패해도 토큰 발급 자체는 계속돼야 하므로 예외는 삼킨다.
+        """
+        from models import ApiToken
+
+        try:
+            db = SessionLocal()
+            try:
+                row = (
+                    db.query(ApiToken)
+                    .filter(ApiToken.provider == cls.TOKEN_PROVIDER)
+                    .first()
+                )
+                if row is None or not row.access_token or row.expires_at is None:
+                    return None
+
+                # 저장은 naive UTC 규약
+                expires_at = row.expires_at.replace(tzinfo=timezone.utc)
+                if expires_at <= datetime.now(timezone.utc):
+                    return None
+
+                cls._access_token = row.access_token
+                cls._token_expires_at = expires_at
+                logger.info("저장된 KIS 토큰 재사용 (재발급 생략)")
+                return row.access_token
+            finally:
+                db.close()
+        except SQLAlchemyError as e:
+            logger.warning(f"저장된 KIS 토큰 조회 실패: {e}")
+            return None
+
+    @classmethod
+    def _save_token_to_db(cls, token: str, expires_at: datetime) -> None:
+        """발급받은 토큰을 DB에 저장 (실패해도 발급 결과는 유지)"""
+        from models import ApiToken
+
+        try:
+            db = SessionLocal()
+            try:
+                naive_expiry = expires_at.astimezone(timezone.utc).replace(tzinfo=None)
+                row = (
+                    db.query(ApiToken)
+                    .filter(ApiToken.provider == cls.TOKEN_PROVIDER)
+                    .first()
+                )
+                if row is None:
+                    db.add(
+                        ApiToken(
+                            provider=cls.TOKEN_PROVIDER,
+                            access_token=token,
+                            expires_at=naive_expiry,
+                        )
+                    )
+                else:
+                    row.access_token = token
+                    row.expires_at = naive_expiry
+                db.commit()
+            except SQLAlchemyError:
+                # 다른 프로세스가 같은 PK를 먼저 넣었을 수도 있다. 토큰은 이미
+                # 메모리에 있으므로 저장 실패가 조회를 막지는 않는다.
+                db.rollback()
+                raise
+            finally:
+                db.close()
+        except SQLAlchemyError as e:
+            logger.warning(f"KIS 토큰 저장 실패 (동작에는 영향 없음): {e}")
+
     @classmethod
     def get_access_token(cls) -> Optional[str]:
         """OAuth 접근 토큰 발급 (24시간 유효, 스레드 안전)"""
@@ -99,17 +204,23 @@ class KISAPIClient:
         # 토큰이 아직 유효하면 재사용 (락 없이 빠른 확인)
         # 서킷 브레이커는 실제 HTTP 호출 직전에만 확인한다. 캐시된 토큰 반환 경로에서
         # 서킷을 통과시키면 HALF_OPEN 프로브 슬롯을 잡고도 반납하지 않게 된다.
-        if cls._access_token and cls._token_expires_at:
-            if datetime.now(timezone.utc) < cls._token_expires_at:
-                return cls._access_token
+        cached = cls._cached_token()
+        if cached:
+            return cached
 
         # 병렬 배치 조회 중 여러 스레드가 동시에 만료를 감지해도
         # 토큰 발급 요청은 한 번만 나가도록 락으로 직렬화
         with cls._token_lock:
             # 락 대기 중 다른 스레드가 이미 발급했으면 재사용
-            if cls._access_token and cls._token_expires_at:
-                if datetime.now(timezone.utc) < cls._token_expires_at:
-                    return cls._access_token
+            cached = cls._cached_token()
+            if cached:
+                return cached
+
+            # 재기동 직후라면 메모리만 비었을 뿐 DB에 유효한 토큰이 남아 있다.
+            # HTTP 발급보다 먼저 확인해 불필요한 재발급을 막는다.
+            stored = cls._load_token_from_db()
+            if stored:
+                return stored
 
             if budget.exhausted(SkillConfig.MIN_CALL_BUDGET):
                 logger.warning("응답 예산 소진 - KIS 토큰 발급 스킵")
@@ -133,20 +244,30 @@ class KISAPIClient:
                         url,
                         headers=headers,
                         json=body,
-                        timeout=budget.timeout_for(KISConfig.API_TIMEOUT),
+                        timeout=budget.timeout_for(KISConfig.TOKEN_TIMEOUT),
                     )
 
                     if resp.status_code != 200:
-                        logger.error(f"KIS 토큰 발급 실패: {resp.status_code}")
+                        logger.error(
+                            f"KIS 토큰 발급 실패: {resp.status_code} "
+                            f"{cls._describe_error_body(resp)}"
+                        )
                         call.failure()
                         return None
 
                     data = resp.json()
-                    cls._access_token = data.get("access_token")
-                    # 토큰 만료시간 설정 (23시간 - 여유 1시간)
-                    cls._token_expires_at = datetime.now(timezone.utc) + timedelta(
-                        hours=23
+                    token = data.get("access_token")
+                    if not token:
+                        logger.error("KIS 토큰 발급 응답에 access_token이 없습니다")
+                        call.failure()
+                        return None
+
+                    cls._access_token = token
+                    cls._token_expires_at = datetime.now(timezone.utc) + cls._token_ttl(
+                        data.get("expires_in")
                     )
+                    # 다음 재기동에서 재발급하지 않도록 남겨둔다
+                    cls._save_token_to_db(token, cls._token_expires_at)
                     logger.info("KIS API 토큰 발급 성공")
                     return cls._access_token
 
