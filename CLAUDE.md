@@ -98,6 +98,25 @@ stock-king-bot/
 ### Handler Architecture
 `CommandHandler` uses **mixin inheritance**: `TradingHandlerMixin`, `GameHandlerMixin`, `MarketHandlerMixin`, `SocialHandlerMixin`, `BaseHandlerMixin`. Each mixin handles a domain of commands.
 
+### Trading Lock Discipline
+거래(`trade_service`)는 외부 API 호출을 **락 밖에서** 끝낸 뒤 락을 잡는다.
+
+```
+종목 resolve + KIS 시세 조회   ← 락 없음 (느릴 수 있는 구간)
+        ↓
+User FOR UPDATE
+        ↓
+잔고·보유량 재조회 + 재검증
+        ↓
+mutation + commit
+```
+
+- 락 밖에서 읽은 값 중 신뢰하는 것은 **주가뿐**이다. 돈·보유량은 락 이후 다시 읽는다
+- 수량이 상태에 의존하는 `buy_max`/`sell_all`은 **락 안에서** 수량을 계산한다
+- 락 보유 상태 전용 primitive: `_buy_stock_locked()` / `_sell_stock_locked()` (외부 호출 금지)
+- 락 이후 재조회는 `populate_existing()`이 필수다. 없으면 ORM identity map이
+  락 이전의 낡은 객체를 그대로 돌려줘 재검증이 무의미해진다
+
 ### Service Layer Conventions
 - All services take `db: Session` as first parameter
 - Use `safe_commit()` for DB writes (auto-rollback on failure)
