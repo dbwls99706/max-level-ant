@@ -41,3 +41,6 @@ Thumbs.db
 .pytest_cache/
 .coverage
 htmlcov/
+
+# 생성된 직군 이미지 (용량이 커서 저장소에 넣지 않는다)
+art/

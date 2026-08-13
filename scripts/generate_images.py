@@ -1,0 +1,240 @@
+#!/usr/bin/env python3
+"""
+각성 직군 이미지 생성기 (OpenAI Images API)
+
+이미지는 한 번만 만들어 두고 정적으로 서빙한다. 런타임에 생성하지 않는다.
+카카오 스킬은 5초 안에 응답해야 하는데 이미지 생성은 수 초 이상 걸리고,
+유저 요청마다 과금되기 때문이다.
+
+사용법:
+    export OPENAI_API_KEY="..."
+
+    # 1) 맛보기 - 기본 3장만, 가장 싼 설정
+    python scripts/generate_images.py --test
+
+    # 2) 프롬프트가 확정되면 전량
+    python scripts/generate_images.py --all
+
+    # 3) 특정 직군만 다시
+    python scripts/generate_images.py --class scalper
+
+이미 파일이 있으면 건너뛰므로, 중단해도 다시 실행하면 이어서 받는다.
+비용이 실제로 청구되므로 실행 전에 예상 금액을 보여주고 확인을 받는다.
+"""
+
+import argparse
+import base64
+import json
+import os
+import sys
+import time
+from pathlib import Path
+
+import requests
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
+from enhance_art import (  # noqa: E402
+    CLASS_ART,
+    GROWTH_ART,
+    RARITY_ART,
+    all_combinations,
+    build_prompt,
+)
+
+API_URL = "https://api.openai.com/v1/images/generations"
+
+# 장당 단가 (USD). 공개 가격표 기준의 근사치이므로 실제 청구액과 다를 수 있다.
+# 예상 비용을 보여주기 위한 용도이지 정산용이 아니다.
+PRICE_TABLE = {
+    ("gpt-image-1-mini", "low"): 0.008,
+    ("gpt-image-1-mini", "medium"): 0.017,
+    ("gpt-image-1-mini", "high"): 0.054,
+    ("gpt-image-1.5", "low"): 0.014,
+    ("gpt-image-1.5", "medium"): 0.051,
+    ("gpt-image-1.5", "high"): 0.200,
+}
+
+# 카카오 basicCard 썸네일은 가로형이다. 정사각형으로 뽑으면 위아래가 잘린다.
+DEFAULT_SIZE = "1536x1024"
+
+# 맛보기용 조합.
+# 기준선 / 최고 등급 / 다른 계열 - 셋을 보면 판단에 필요한 건 다 나온다.
+#   1. 스캘퍼 노멀 1단계  - 가장 흔한 조합의 기본 품질
+#   2. 스캘퍼 신화 3단계  - 등급·성장 연출이 실제로 반영되는지
+#   3. 가치 발굴자 노멀 1단계 - 다른 직군과 그림체가 붙는지
+TEST_COMBOS = [
+    ("scalper", "normal", 1),
+    ("scalper", "myth", 3),
+    ("valuehunter", "normal", 1),
+]
+
+
+def out_path(outdir: Path, class_key: str, rarity: str, growth: int) -> Path:
+    return outdir / f"{class_key}__{rarity}__g{growth}.png"
+
+
+def estimate_cost(count: int, model: str, quality: str) -> float:
+    unit = PRICE_TABLE.get((model, quality))
+    if unit is None:
+        return 0.0
+    # 세로/가로형은 정사각형보다 픽셀이 많아 단가가 오른다 (약 1.5배로 가정)
+    return count * unit * (1.5 if DEFAULT_SIZE != "1024x1024" else 1.0)
+
+
+def generate_one(prompt: str, model: str, quality: str, size: str, retries: int):
+    """이미지 한 장 생성. 성공하면 PNG 바이트, 실패하면 None."""
+    payload = {
+        "model": model,
+        "prompt": prompt,
+        "size": size,
+        "quality": quality,
+        "n": 1,
+    }
+    headers = {
+        "Authorization": f"Bearer {os.environ['OPENAI_API_KEY']}",
+        "Content-Type": "application/json",
+    }
+
+    for attempt in range(1, retries + 1):
+        try:
+            resp = requests.post(API_URL, headers=headers, json=payload, timeout=180)
+        except requests.RequestException as e:
+            print(f"    네트워크 오류 ({attempt}/{retries}): {e}")
+            time.sleep(2**attempt)
+            continue
+
+        if resp.status_code == 200:
+            data = resp.json()["data"][0]
+            return base64.b64decode(data["b64_json"])
+
+        # 429(유량)·5xx는 기다렸다 재시도할 가치가 있다.
+        # 4xx는 요청 자체가 잘못된 것이라 재시도해도 같은 결과다.
+        if resp.status_code == 429 or resp.status_code >= 500:
+            wait = 2**attempt
+            print(f"    {resp.status_code} - {wait}초 후 재시도 ({attempt}/{retries})")
+            time.sleep(wait)
+            continue
+
+        print(f"    실패 {resp.status_code}: {resp.text[:300]}")
+        return None
+
+    return None
+
+
+def run(combos, args) -> int:
+    outdir = Path(args.outdir)
+    outdir.mkdir(parents=True, exist_ok=True)
+
+    todo = [c for c in combos if args.force or not out_path(outdir, *c).exists()]
+    skipped = len(combos) - len(todo)
+
+    print(f"모델   : {args.model} / {args.quality} / {args.size}")
+    print(f"저장   : {outdir}")
+    print(f"대상   : {len(combos)}장 (이미 있음 {skipped}장 건너뜀 -> {len(todo)}장)")
+    if not todo:
+        print("생성할 것이 없습니다.")
+        return 0
+
+    cost = estimate_cost(len(todo), args.model, args.quality)
+    print(f"예상 비용: 약 ${cost:.2f} (추정치, 실제 청구액과 다를 수 있음)")
+
+    if not args.yes:
+        answer = input("진행할까요? [y/N] ").strip().lower()
+        if answer != "y":
+            print("취소했습니다.")
+            return 1
+
+    manifest = []
+    ok = fail = 0
+    for i, (class_key, rarity, growth) in enumerate(todo, 1):
+        family, name, emoji, _desc, _body = CLASS_ART[class_key]
+        rarity_ko = RARITY_ART[rarity][0]
+        growth_ko = GROWTH_ART[growth][0]
+        label = f"{emoji} {name} / {rarity_ko} / {growth_ko}"
+        print(f"[{i}/{len(todo)}] {label}")
+
+        prompt = build_prompt(class_key, rarity, growth)
+        image = generate_one(prompt, args.model, args.quality, args.size, args.retries)
+        path = out_path(outdir, class_key, rarity, growth)
+
+        if image is None:
+            print("    -> 실패")
+            fail += 1
+            continue
+
+        path.write_bytes(image)
+        print(f"    -> {path.name} ({len(image) // 1024}KB)")
+        ok += 1
+        manifest.append(
+            {
+                "file": path.name,
+                "class": class_key,
+                "family": family,
+                "name": name,
+                "rarity": rarity,
+                "growth": growth,
+                "prompt": prompt,
+            }
+        )
+
+    if manifest:
+        mpath = outdir / "manifest.json"
+        existing = []
+        if mpath.exists():
+            existing = json.loads(mpath.read_text())
+        merged = {m["file"]: m for m in existing}
+        merged.update({m["file"]: m for m in manifest})
+        mpath.write_text(
+            json.dumps(list(merged.values()), ensure_ascii=False, indent=2)
+        )
+        print(f"\nmanifest 갱신: {mpath}")
+
+    print(f"\n완료: 성공 {ok} / 실패 {fail}")
+    return 0 if fail == 0 else 1
+
+
+def main() -> int:
+    p = argparse.ArgumentParser(description=__doc__)
+    p.add_argument("--test", action="store_true", help="맛보기 조합만 생성 (기본 3장)")
+    p.add_argument("--all", action="store_true", help="전체 조합 생성")
+    p.add_argument("--class", dest="class_key", help="특정 직군만 생성")
+    p.add_argument(
+        "--limit", type=int, default=0, help="생성 장수 상한 (0이면 제한 없음)"
+    )
+    p.add_argument("--model", default="gpt-image-1-mini", help="기본값이 가장 저렴")
+    p.add_argument("--quality", default="low", choices=["low", "medium", "high"])
+    p.add_argument("--size", default=DEFAULT_SIZE)
+    p.add_argument("--outdir", default="art")
+    p.add_argument("--retries", type=int, default=3)
+    p.add_argument("--force", action="store_true", help="이미 있는 파일도 다시 생성")
+    p.add_argument("-y", "--yes", action="store_true", help="확인 없이 진행")
+    args = p.parse_args()
+
+    if not os.environ.get("OPENAI_API_KEY"):
+        print("OPENAI_API_KEY 환경변수가 필요합니다.")
+        print('  export OPENAI_API_KEY="sk-..."')
+        return 1
+
+    if args.test:
+        combos = list(TEST_COMBOS)
+    elif args.class_key:
+        combos = [c for c in all_combinations() if c[0] == args.class_key]
+        if not combos:
+            print(f"알 수 없는 직군: {args.class_key}")
+            print(f"사용 가능: {', '.join(CLASS_ART)}")
+            return 1
+    elif args.all:
+        combos = list(all_combinations())
+    else:
+        p.print_help()
+        return 1
+
+    if args.limit:
+        combos = combos[: args.limit]
+
+    return run(combos, args)
+
+
+if __name__ == "__main__":
+    sys.exit(main())
