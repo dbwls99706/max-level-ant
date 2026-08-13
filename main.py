@@ -3,7 +3,6 @@
 """
 
 import os
-import re
 import uuid
 import secrets
 import time
@@ -101,8 +100,13 @@ rate_limiter = RateLimiter(
     window_seconds=SecurityConfig.RATE_LIMIT_WINDOW_SECONDS,
 )
 
-# 카카오 유저 ID 허용 패턴 (ASCII 영숫자 + 하이픈/언더스코어)
-KAKAO_ID_PATTERN = re.compile(r"[A-Za-z0-9_-]+")
+# 카카오 botUserKey(userRequest.user.id) 최대 길이 (공식 문서 기준)
+#
+# botUserKey는 내용에 의미를 부여하지 않는 opaque identifier다. 카카오는 값의
+# 문자 구성을 어디에도 보장하지 않으므로 형식(정규식)으로 거르지 않는다.
+# 예전에는 [A-Za-z0-9_-]+ 로 제한했는데, 이는 문서에 없는 가정이라
+# 카카오가 표현을 바꾸면 멀쩡한 유저가 통째로 차단된다.
+KAKAO_USER_KEY_MAX_LENGTH = 70
 
 
 # ===========================================
@@ -300,22 +304,33 @@ async def kakao_skill(request: Request):
         chat_info = user_request.get("chat", {})
         group_key = chat_info.get("properties", {}).get("botGroupKey", "")
 
+        # 유저 ID 검증.
+        # botUserKey는 opaque identifier이므로 '무엇으로 이루어졌는지'는 보지 않고,
+        # 저장·조회에 쓸 수 있는 값인지만 확인한다.
+        #   - 타입: 문자열이어야 한다. 마스킹·len()보다 먼저 봐야 한다.
+        #           숫자/객체가 오면 len()에서 TypeError가 나고, 바깥 except가
+        #           그걸 삼켜 원인 불명의 '오류가 발생했습니다'로 응답하게 된다
+        #   - 빈 값: 공백뿐인 값 포함
+        #   - 길이: 공식 문서 기준 최대 70자
+        #   - NUL: PostgreSQL text에 저장할 수 없어 커밋 시점에 터진다.
+        #          형식 제약이 아니라 저장 가능성 문제라 여기서 거른다.
+        if not isinstance(kakao_id, str):
+            logger.warning(f"kakao_id 타입 오류: {type(kakao_id).__name__}")
+            return KakaoResponse.simple_text("유저 정보를 확인할 수 없습니다.")
+
+        if (
+            not kakao_id.strip()
+            or len(kakao_id) > KAKAO_USER_KEY_MAX_LENGTH
+            or "\x00" in kakao_id
+        ):
+            return KakaoResponse.simple_text("유저 정보를 확인할 수 없습니다.")
+
         # 디버그: 카카오에서 받은 유저 정보 로그 (민감 정보 마스킹)
         masked_id = f"{kakao_id[:4]}****" if len(kakao_id) > 4 else "****"
         request_id = getattr(request.state, "request_id", "unknown")
         logger.debug(
             f"[{request_id}] 카카오 유저: id={masked_id}, has_nickname={bool(nickname)}"
         )
-
-        # 유저 ID 검증 (빈값, 너무 긴 값 방지)
-        if not kakao_id or len(kakao_id) > 100:
-            return KakaoResponse.simple_text("유저 정보를 확인할 수 없습니다.")
-
-        # 악의적인 ID 패턴 차단 (ASCII 영숫자/하이픈/언더스코어만 허용)
-        # isalnum()은 유니코드 문자에도 True를 반환하므로 명시적 패턴 검사 사용
-        if not KAKAO_ID_PATTERN.fullmatch(kakao_id):
-            logger.warning(f"의심스러운 kakao_id 감지: {repr(kakao_id[:20])}")
-            return KakaoResponse.simple_text("유저 정보를 확인할 수 없습니다.")
 
         # utterance 입력 검증 및 정제
         utterance = utterance.strip()
