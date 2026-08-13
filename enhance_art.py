@@ -40,8 +40,12 @@ COMMON_FRAMING = (
     # 카카오 카드에서는 작게 표시되므로 실루엣만으로도 직군이 읽혀야 한다.
     "the subject is the brightest element in the frame and is fully lit, "
     "never a dark silhouette, always clearly separated from the background, "
-    "background is a simple gradient several stops darker than the subject, "
-    "with only a few abstract light streaks and no scenery, "
+    # 처음에는 배경을 통째로 금지했다. 초기 시안에서 배경 차트에 글자와 숫자가
+    # 박혔기 때문인데, 그건 아래 no text 조항이 따로 막는다. 배경을 다 지우니
+    # 직군 설명력이 같이 죽어서(배당농부의 이삭밭 등) 금지 대신 제약으로 바꿨다.
+    "the background stays several stops darker than the subject and well "
+    "out of focus, at most one simple repeating motif or a few abstract "
+    "light streaks, never a detailed or crowded scene, "
     # 성장 1단계에서 장비를 줄이라고 하니 직군 무기까지 같이 사라졌다.
     # 무기는 직군을 구분하는 유일한 단서라 단계와 무관하게 들려 있어야 한다.
     "the weapon or prop described above is always held and clearly visible, "
