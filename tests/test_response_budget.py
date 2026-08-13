@@ -272,7 +272,7 @@ class TestSkillEndpointBudget:
     (기존 테스트는 KIS 메서드만 반복 호출해서 엔드포인트 경로를 못 봤다)
     """
 
-    def test_skill_endpoint_applies_budget_to_handler(self, monkeypatch):
+    def test_skill_endpoint_applies_budget_to_handler(self, monkeypatch, skill_key):
         from fastapi.testclient import TestClient
 
         import main
@@ -297,13 +297,14 @@ class TestSkillEndpointBudget:
                         "utterance": "/잔고",
                     }
                 },
+                headers=skill_key,
             )
 
         assert resp.status_code == 200
         assert seen["deadline"] is not None, "/skill이 요청 예산을 걸지 않았다"
         assert 0 < seen["remaining"] <= SkillConfig.RESPONSE_BUDGET
 
-    def test_skill_endpoint_does_not_block_event_loop(self, monkeypatch):
+    def test_skill_endpoint_does_not_block_event_loop(self, monkeypatch, skill_key):
         """동기 handler가 이벤트 루프가 아닌 워커 스레드에서 실행돼야 한다"""
         import asyncio
 
@@ -329,6 +330,7 @@ class TestSkillEndpointBudget:
                 json={
                     "userRequest": {"user": {"id": "loopcheck"}, "utterance": "/잔고"}
                 },
+                headers=skill_key,
             )
 
         assert seen["on_event_loop"] is False, (
@@ -343,7 +345,9 @@ class TestSessionPerWorkerThread:
     모두 그 스레드 안에서 끝나야 한다.
     """
 
-    def test_session_is_created_and_closed_in_handler_thread(self, monkeypatch):
+    def test_session_is_created_and_closed_in_handler_thread(
+        self, monkeypatch, skill_key
+    ):
         from fastapi.testclient import TestClient
 
         import main
@@ -379,6 +383,7 @@ class TestSessionPerWorkerThread:
                         "utterance": "/잔고",
                     }
                 },
+                headers=skill_key,
             )
 
         assert resp.status_code == 200

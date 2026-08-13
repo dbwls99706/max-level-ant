@@ -18,7 +18,3 @@ python-dotenv==1.0.0
 python-dateutil==2.8.2
 pytz==2024.1
 cachetools==5.3.2
-
-# Test (스킬 엔드포인트 통합 테스트용 TestClient)
-# starlette 0.35의 TestClient는 httpx의 app= 단축 인자를 사용하므로 <0.28 필요
-httpx>=0.24,<0.28

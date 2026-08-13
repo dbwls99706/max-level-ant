@@ -67,6 +67,7 @@ stock-king-bot/
 │   ├── milestone_service.py # Asset milestones
 │   ├── asset_service.py     # Asset history tracking
 │   └── quiz_data_service.py # Stock quiz data from public API
+├── .github/workflows/   # CI (ruff + pytest, PostgreSQL 동시성 job 포함)
 ├── utils/
 │   ├── kakao_response.py    # Kakao chatbot response format builder (spec limits)
 │   ├── budget.py            # Per-request time budget for the 5s Kakao skill SLA
@@ -125,7 +126,10 @@ KIS_APP_SECRET=<한국투자증권 API secret>
 KIS_BASE_URL=https://openapi.koreainvestment.com:9443
 
 # Optional
+SKILL_API_KEY=<스킬 공유 비밀키>           # 운영 필수. 미설정 시 서버 기동 실패
+SKILL_API_KEY_HEADER=X-Skill-Key          # 카카오 관리자센터에 등록할 헤더 이름
 ADMIN_TOKEN=<관리자 API 토큰>              # 미설정 시 임시 토큰 생성 + 경고
+DB_POOL_TIMEOUT=2.0                       # DB 커넥션 풀 대기 상한 (초)
 DEV_MODE=false                            # true면 CORS 전체 허용 + 디버그 엔드포인트
 KIS_MIN_CALL_INTERVAL=0.1                 # KIS 호출 간 최소 간격 (초)
 KIS_API_TIMEOUT=1.5                       # KIS 개별 호출 타임아웃 (초)
@@ -139,15 +143,24 @@ PUBLIC_DATA_SERVICE_KEY=<공공데이터포털 key>
 ## Testing
 
 ```bash
-pytest                    # Run all tests
+pytest                    # Run all tests (postgres 테스트는 자동 skip)
+pytest -m "not postgres"  # Unit tests only (CI의 lint job과 동일)
 pytest tests/test_trade_service.py  # Run specific test file
 pytest -k "test_buy"      # Run tests matching pattern
+
+# 동시성 통합 테스트 (실제 PostgreSQL 필요)
+TEST_DATABASE_URL=postgresql://user:pw@localhost/dbname pytest -m postgres
 ```
+
+의존성: `pip install -r requirements.txt -r requirements-dev.txt`
 
 - Tests use **in-memory SQLite** (see `tests/conftest.py`)
 - Each test gets a fresh DB via function-scoped `db` fixture
 - Fixtures: `test_user` (10M cash), `rich_user` (100M cash), `poor_user` (1K cash)
 - No external API calls in tests — mock `StockService` / `KISAPIClient` as needed
+- **동시성 정합성은 SQLite로 검증되지 않는다.** `SELECT ... FOR UPDATE`에 의존하는
+  매수/출석/보물상자 로직은 `tests/test_postgres_concurrency.py`가 실제 PostgreSQL에서
+  검증한다 (`TEST_DATABASE_URL` 없으면 skip). CI는 postgres 서비스 컨테이너로 돌린다
 
 ## Code Conventions
 
@@ -168,6 +181,12 @@ ruff format --check .     # Format check
 
 ## Important Notes
 
+- **`/skill`은 공유 비밀키(`SKILL_API_KEY`) 헤더로 인증한다.** 없으면 누구나 임의의
+  `user.id`로 게임 명령을 실행할 수 있으므로, 운영 환경에서는 키 미설정 시 기동을 막는다
+  (`DEV_MODE=true`에서만 인증 없이 동작)
+- **증시 휴장일 = 법정공휴일 + KRX 전용 휴장일**(근로자의 날 5/1, 연말 휴장).
+  `market_calendar.py`의 데이터는 손으로 관리하므로 공휴일법 개정·임시공휴일·선거일이
+  생기면 갱신해야 한다. 날짜 기준 판정은 `is_trading_day()` 사용
 - The app integrates with Kakao chatbot platform — responses must follow Kakao's JSON format (see `utils/kakao_response.py`)
 - KIS API requires token refresh; handled in `stock_service.py`
 - Group chat support: `chatroom_members` table tracks which users are in which chat rooms for per-room rankings

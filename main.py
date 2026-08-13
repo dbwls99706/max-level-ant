@@ -118,8 +118,18 @@ async def lifespan(app: FastAPI):
     is_valid, errors = validate_config()
     if not is_valid:
         logger.error(f"설정 검증 실패: {errors}")
-        # 중요: 설정 오류 시에도 서버는 시작 (경고만 출력)
-        # 실제 프로덕션에서는 raise RuntimeError() 고려
+        # 중요: 대부분의 설정 오류는 경고만 하고 서버를 시작한다.
+
+    # 스킬 키는 예외 — 없으면 /skill이 사실상 무인증 공개 엔드포인트가 되므로
+    # 운영 환경에서는 기동 자체를 막는다.
+    if not SecurityConfig.is_skill_key_configured() and not SecurityConfig.DEV_MODE:
+        raise RuntimeError(
+            "SKILL_API_KEY가 설정되지 않았습니다. "
+            "설정하지 않으면 /skill이 무인증으로 공개됩니다. "
+            "(로컬 개발은 DEV_MODE=true)"
+        )
+    if not SecurityConfig.is_skill_key_configured():
+        logger.warning("SKILL_API_KEY 미설정 (DEV_MODE): /skill 인증이 비활성화됨")
 
     init_db()  # DB 테이블 생성
 
@@ -260,6 +270,14 @@ async def kakao_skill(request: Request):
     카카오 챗봇 관리자센터에서 이 URL을 스킬 서버로 등록합니다.
     예: https://your-domain.com/skill
     """
+    # 공유 비밀키 검증 — 본문을 파싱하기 전에 먼저 막는다.
+    # 이 검사가 없으면 누구나 임의의 user.id로 게임 명령을 실행할 수 있다.
+    if not SecurityConfig.verify_skill_key(
+        request.headers.get(SecurityConfig.SKILL_API_KEY_HEADER)
+    ):
+        logger.warning("스킬 인증 실패 - 잘못되거나 누락된 스킬 키")
+        raise HTTPException(status_code=403, detail="Forbidden")
+
     # 예산은 요청 처리의 가장 앞에서 시작한다. 파싱·검증·rate limit도
     # 카카오가 재는 5초 안에 포함되기 때문이다.
     # (worker 스레드는 thread-local을 물려받지 않으므로 아래에서 adopt로 전달)
@@ -335,6 +353,8 @@ async def kakao_skill(request: Request):
 
         return await run_in_threadpool(run_handler)
 
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"스킬 처리 에러: {e}", exc_info=True)
 

@@ -87,3 +87,20 @@ def poor_user(db):
     db.commit()
     db.refresh(user)
     return user
+
+
+@pytest.fixture
+def skill_key(monkeypatch):
+    """
+    /skill 인증 키를 설정하고 요청에 붙일 헤더를 돌려준다.
+
+    TestClient를 띄우기 전에 써야 한다. 키가 없으면 운영 모드 기동 가드에
+    걸려 앱이 뜨지 않는다.
+    """
+    from security import SecurityConfig
+
+    key = "test-skill-key"
+    monkeypatch.setattr(SecurityConfig, "SKILL_API_KEY", key)
+    monkeypatch.setattr(SecurityConfig, "SKILL_API_KEY_HEADER", "X-Skill-Key")
+    monkeypatch.setattr(SecurityConfig, "DEV_MODE", False)
+    return {"X-Skill-Key": key}
