@@ -73,7 +73,7 @@ class User(Base):
     updown_round = Column(Integer, default=0)  # 현재 라운드
     updown_multiplier = Column(Float, default=1.0)  # 누적 배율
 
-    # 시장예측(역사 퀴즈) 출제 상태 — 서버가 출제한 퀴즈만 판정에 사용 (조작 방지)
+    # 시장예측(역사 퀴즈) 출제 상태 - 서버가 출제한 퀴즈만 판정에 사용 (조작 방지)
     pending_quiz = Column(String(2000), nullable=True)  # 출제된 퀴즈 (JSON)
     pending_quiz_bet = Column(BigInteger, default=0)  # 출제 시점 베팅 금액
 

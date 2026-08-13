@@ -86,7 +86,7 @@ class GameProbability:
         "빈 상자": {"prob": 0.312, "min_reward": 0, "max_reward": 0},  # 31.2%
     }
 
-    # 시장예측 (역사 퀴즈) — 상승/하락 맞추면 x2 (기대값: 지식 의존)
+    # 시장예측 (역사 퀴즈) - 상승/하락 맞추면 x2 (기대값: 지식 의존)
     STOCK_QUIZ_MULTIPLIER = 2.0
 
     # 역사 퀴즈 데이터 (quiz_history)
@@ -95,7 +95,7 @@ class GameProbability:
     # 역사 퀴즈 최소 문항 수 (검증용)
     MIN_QUIZ_COUNT = 10
 
-    # 업다운 멀티라운드 — 배율은 확률 기반으로 동적 계산
+    # 업다운 멀티라운드 - 배율은 확률 기반으로 동적 계산
     # (EV 100%: 매 라운드 배율 = 1/확률)
     # 라운드 진행 수수료: 정보 우위를 상쇄하기 위한 배율 감소
     UPDOWN_ROUND_FEE = {

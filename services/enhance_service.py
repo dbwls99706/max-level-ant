@@ -1,5 +1,5 @@
 """
-각성 시스템 서비스 — 투자 감각 각성
+각성 시스템 서비스 - 투자 감각 각성
 
 - 돈을 투자해서 투자 능력 각성
 - 레벨이 높을수록 출석/복권 보상 증가
@@ -215,7 +215,7 @@ class EnhanceService:
                 "class_assigned": class_assigned,
             }
         else:
-            # 실패 — 레벨 0으로 초기화 (직군은 유지)
+            # 실패 - 레벨 0으로 초기화 (직군은 유지)
             drop = level  # 현재 레벨 전부 하락
             new_level = 0
             user.enhance_level = new_level

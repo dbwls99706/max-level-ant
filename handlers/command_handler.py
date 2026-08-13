@@ -250,7 +250,7 @@ class CommandHandler(
             ]
             return KakaoResponse.text_with_buttons(welcome_msg, buttons)
         else:
-            # 세로 버튼 3개 한도 — 나머지 기능은 /도움말에서 안내한다
+            # 세로 버튼 3개 한도 - 나머지 기능은 /도움말에서 안내한다
             buttons = [
                 {"label": "📅 출석", "action": "message", "messageText": "/출석"},
                 {"label": "💼 포폴", "action": "message", "messageText": "/포트폴리오"},
@@ -341,7 +341,7 @@ class CommandHandler(
 {streak_emoji} 현재 연속 입장: {streak}일
 {motivation}"""
 
-        # 세로 버튼 3개 한도 — 장 마감 시 예측게임 버튼이 붙으므로 기본은 2개만 둔다
+        # 세로 버튼 3개 한도 - 장 마감 시 예측게임 버튼이 붙으므로 기본은 2개만 둔다
         buttons = [
             {"label": "📈 급등주", "action": "message", "messageText": "/급등"},
             {"label": "🎁 보물상자", "action": "message", "messageText": "/보물상자"},

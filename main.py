@@ -124,7 +124,7 @@ async def lifespan(app: FastAPI):
         logger.error(f"설정 검증 실패: {errors}")
         # 중요: 대부분의 설정 오류는 경고만 하고 서버를 시작한다.
 
-    # 스킬 키는 예외 — 없으면 /skill이 사실상 무인증 공개 엔드포인트가 되므로
+    # 스킬 키는 예외 - 없으면 /skill이 사실상 무인증 공개 엔드포인트가 되므로
     # 운영 환경에서는 기동 자체를 막는다.
     if not SecurityConfig.is_skill_key_configured() and not SecurityConfig.DEV_MODE:
         raise RuntimeError(
@@ -174,7 +174,7 @@ async def lifespan(app: FastAPI):
 # ===========================================
 app = FastAPI(
     title="만렙개미 카카오톡 챗봇",
-    description="주식 던전 RPG 챗봇 API — 쪼렙 개미에서 만렙 개미로",
+    description="주식 던전 RPG 챗봇 API - 쪼렙 개미에서 만렙 개미로",
     version="1.0.0",
     lifespan=lifespan,
 )
@@ -277,7 +277,7 @@ async def kakao_skill(request: Request):
     카카오 챗봇 관리자센터에서 이 URL을 스킬 서버로 등록합니다.
     예: https://your-domain.com/skill
     """
-    # 공유 비밀키 검증 — 본문을 파싱하기 전에 먼저 막는다.
+    # 공유 비밀키 검증 - 본문을 파싱하기 전에 먼저 막는다.
     # 이 검사가 없으면 누구나 임의의 user.id로 게임 명령을 실행할 수 있다.
     if not SecurityConfig.verify_skill_key(
         request.headers.get(SecurityConfig.SKILL_API_KEY_HEADER)

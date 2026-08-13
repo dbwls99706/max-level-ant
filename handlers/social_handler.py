@@ -135,7 +135,7 @@ class SocialHandlerMixin(BaseHandlerMixin):
         return self._ranking_list_card(title, items, buttons)
 
     def _handle_ranking_solo(self) -> Dict:
-        """1:1 채널 랭킹 — 내 자산/수익률 요약만 (다른 유저 데이터 없이)"""
+        """1:1 채널 랭킹 - 내 자산/수익률 요약만 (다른 유저 데이터 없이)"""
         user = UserService.get_user(self.db, self.kakao_id)
         if not user:
             return KakaoResponse.text_with_buttons(
@@ -309,7 +309,7 @@ class SocialHandlerMixin(BaseHandlerMixin):
         return self._ranking_list_card(title, items, buttons)
 
     def _handle_enhance_ranking_solo(self) -> Dict:
-        """1:1 채널 각성 랭킹 — 내 각성 정보만"""
+        """1:1 채널 각성 랭킹 - 내 각성 정보만"""
         from services.enhance_service import EnhanceService
 
         result = EnhanceService.get_enhance_info(self.db, self.kakao_id)
@@ -490,7 +490,7 @@ class SocialHandlerMixin(BaseHandlerMixin):
             return None
 
         # 진행도 + 도전 중(액션 유도)은 헤더에 담아 항상 노출
-        header = f"🏆 업적 — {done}/{total}개 달성\n[{gauge}]"
+        header = f"🏆 업적 - {done}/{total}개 달성\n[{gauge}]"
         if status["available_achievements"]:
             header += "\n\n🎯 도전 중 (보상 자동 지급)"
             for ach in status["available_achievements"][:4]:
@@ -774,7 +774,7 @@ class SocialHandlerMixin(BaseHandlerMixin):
 
             if result["winner"] == "무승부":
                 result_header = "🤝 무승부!"
-                result_detail = "주가 변동 없음 — 투자금 반환"
+                result_detail = "주가 변동 없음 - 투자금 반환"
             else:
                 result_header = f"🎊 배틀 종료!{market_note}"
                 result_detail = f"🏆 승자: {result['winner']}! 예측 적중!"
@@ -963,10 +963,10 @@ class SocialHandlerMixin(BaseHandlerMixin):
         total_cnt = achieved_cnt + len(result["pending"])
 
         header = (
-            f"🎖️ 마일스톤 — {achieved_cnt}/{total_cnt}개 달성\n(달성 시 보상 자동 지급!)"
+            f"🎖️ 마일스톤 - {achieved_cnt}/{total_cnt}개 달성\n(달성 시 보상 자동 지급!)"
         )
 
-        # 다음 목표(액션 유도)는 헤더에 담아 항상 노출 — 카테고리별 진행도 표시
+        # 다음 목표(액션 유도)는 헤더에 담아 항상 노출 - 카테고리별 진행도 표시
         if result["pending"]:
             try:
                 from services.asset_service import AssetService
