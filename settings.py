@@ -58,6 +58,10 @@ class KISConfig:
     # 0.1 → 초당 최대 ~10건. 필요 시 환경변수로 조정 가능.
     MIN_CALL_INTERVAL = float(os.getenv("KIS_MIN_CALL_INTERVAL", "0.1"))
 
+    # 서킷 브레이커 (연속 실패 시 일시 차단)
+    CIRCUIT_FAILURE_THRESHOLD = int(os.getenv("KIS_CIRCUIT_FAILURE_THRESHOLD", "5"))
+    CIRCUIT_RECOVERY_TIMEOUT = float(os.getenv("KIS_CIRCUIT_RECOVERY_TIMEOUT", "60"))
+
     # 급등/급락 순위에서 제외할 종목 키워드 (레버리지/인버스 ETF 등)
     # 이름에 아래 키워드가 포함된 종목은 개별 종목 급등/급락 순위에 노출하지 않는다.
     # 레버리지/인버스 상품은 지수의 2배로 움직여 등락률 상·하위를 독식하므로 제외한다.

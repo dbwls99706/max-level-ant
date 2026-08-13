@@ -22,6 +22,12 @@ from .logger import (
     get_service_logger,
     get_api_logger,
 )
+from .resilience import (
+    CallThrottle,
+    CircuitBreaker,
+    CircuitOpenError,
+    CircuitState,
+)
 from .audit_logger import (
     log_trade,
     log_game,
@@ -48,6 +54,10 @@ __all__ = [
     "get_handler_logger",
     "get_service_logger",
     "get_api_logger",
+    "CallThrottle",
+    "CircuitBreaker",
+    "CircuitOpenError",
+    "CircuitState",
     "log_trade",
     "log_game",
     "log_battle",
