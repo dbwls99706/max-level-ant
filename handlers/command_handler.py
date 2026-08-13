@@ -233,17 +233,11 @@ class CommandHandler(
             ]
             return KakaoResponse.text_with_buttons(welcome_msg, buttons)
         else:
+            # 세로 버튼 3개 한도 — 나머지 기능은 /도움말에서 안내한다
             buttons = [
                 {"label": "📅 출석", "action": "message", "messageText": "/출석"},
-                {
-                    "label": "🎁 보물상자",
-                    "action": "message",
-                    "messageText": "/보물상자",
-                },
                 {"label": "💼 포폴", "action": "message", "messageText": "/포트폴리오"},
-                {"label": "🚀 급등주", "action": "message", "messageText": "/급등"},
-                {"label": "🧬 각성", "action": "message", "messageText": "/각성"},
-                {"label": "🏆 랭킹", "action": "message", "messageText": "/랭킹"},
+                {"label": "📖 도움말", "action": "message", "messageText": "/도움말"},
             ]
             name = self._display_name()
             return KakaoResponse.text_with_buttons(
@@ -330,29 +324,33 @@ class CommandHandler(
 {streak_emoji} 현재 연속 입장: {streak}일
 {motivation}"""
 
+        # 세로 버튼 3개 한도 — 장 마감 시 예측게임 버튼이 붙으므로 기본은 2개만 둔다
         buttons = [
             {"label": "📈 급등주", "action": "message", "messageText": "/급등"},
             {"label": "🎁 보물상자", "action": "message", "messageText": "/보물상자"},
-            {
-                "label": "💼 포트폴리오",
-                "action": "message",
-                "messageText": "/포트폴리오",
-            },
         ]
         buttons.extend(self._get_game_buttons())
+        if len(buttons) < KakaoResponse.MAX_VERTICAL_BUTTONS:
+            buttons.append(
+                {
+                    "label": "💼 포트폴리오",
+                    "action": "message",
+                    "messageText": "/포트폴리오",
+                }
+            )
         return KakaoResponse.text_with_buttons(msg, buttons)
 
     def handle_help(self) -> Dict:
         """도움말 - 분야 선택(화면을 가득 채우지 않도록 카테고리로 분할)"""
+        # 세로 버튼은 최대 3개(카카오 명세)이므로 게임·소셜을 한 분류로 묶는다
         buttons = [
             {"label": "📊 주식", "action": "message", "messageText": "/도움말주식"},
             {"label": "💼 자산", "action": "message", "messageText": "/도움말자산"},
             {
-                "label": "🧬 게임·각성",
+                "label": "🎮 게임·소셜",
                 "action": "message",
                 "messageText": "/도움말게임",
             },
-            {"label": "⚔️ 소셜", "action": "message", "messageText": "/도움말소셜"},
         ]
         return KakaoResponse.text_with_buttons(Messages.HELP, buttons)
 
@@ -379,22 +377,16 @@ class CommandHandler(
         return KakaoResponse.text_with_buttons(Messages.HELP_ASSET, buttons)
 
     def handle_help_game(self) -> Dict:
-        """도움말 - 각성·게임"""
+        """도움말 - 게임·소셜 (한 장으로 병합)"""
         buttons = [
             {"label": "🎁 보물상자", "action": "message", "messageText": "/보물상자"},
             {"label": "🧬 각성", "action": "message", "messageText": "/각성"},
-            {"label": "📖 도움말", "action": "message", "messageText": "/도움말"},
-        ]
-        return KakaoResponse.text_with_buttons(Messages.HELP_GAME, buttons)
-
-    def handle_help_social(self) -> Dict:
-        """도움말 - 소셜"""
-        buttons = [
             {"label": "⚔️ 배틀", "action": "message", "messageText": "/배틀"},
-            {"label": "🎯 미션", "action": "message", "messageText": "/미션"},
-            {"label": "📖 도움말", "action": "message", "messageText": "/도움말"},
         ]
-        return KakaoResponse.text_with_buttons(Messages.HELP_SOCIAL, buttons)
+        return KakaoResponse.text_with_buttons(Messages.HELP_PLAY, buttons)
+
+    # /도움말소셜도 같은 병합 페이지로 안내한다 (기존 명령어 호환)
+    handle_help_social = handle_help_game
 
     def handle_welcome(self) -> Dict:
         """웰컴 블록 응답 - 채팅방 진입 시 빈 utterance로 트리거됨"""
@@ -415,6 +407,5 @@ class CommandHandler(
                 {"label": "🚀 시작하기", "action": "message", "messageText": "/시작"},
                 {"label": "📖 도움말", "action": "message", "messageText": "/도움말"},
                 {"label": "📈 급등주", "action": "message", "messageText": "/급등"},
-                {"label": "📅 출석", "action": "message", "messageText": "/출석"},
             ],
         )

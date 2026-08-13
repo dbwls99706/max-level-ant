@@ -3,13 +3,13 @@
 
 만렙개미 그룹 챗봇은 모든 본문을 '단일 카드(textCard)'로만 노출한다.
 - 본문이 길어도 simpleText로 쪼개지지 않는다(본문/카드 분리 금지).
-- 카드 본문은 항상 CARD_DESC_LIMIT 이하로 유지된다.
+- 카드 본문은 항상 BODY_LIMIT 이하로 유지된다(스펙 상한 400보다 보수적).
 - 가변 목록은 fit_items()로 헤더·푸터를 보존하며 줄여 담는다.
 """
 
 from utils import KakaoResponse
 
-LIMIT = KakaoResponse.CARD_DESC_LIMIT
+LIMIT = KakaoResponse.BODY_LIMIT
 
 
 def _outputs(resp):
@@ -50,13 +50,16 @@ class TestSingleCardInvariant:
         assert len(outs) == 1
         assert len(outs[0]["textCard"]["description"]) <= LIMIT
 
-    def test_buttons_capped_at_five(self):
+    def test_buttons_capped_at_vertical_limit(self):
+        """buttonLayout='vertical'은 최대 3개까지만 노출된다 (카카오 명세)"""
         btns = [
             {"label": f"B{i}", "action": "message", "messageText": f"/{i}"}
             for i in range(8)
         ]
         resp = KakaoResponse.text_with_buttons("hi", btns)
-        assert len(_outputs(resp)[0]["textCard"]["buttons"]) == 5
+        card = _outputs(resp)[0]["textCard"]
+        assert card["buttonLayout"] == "vertical"
+        assert len(card["buttons"]) == KakaoResponse.MAX_VERTICAL_BUTTONS == 3
 
     def test_no_buttons_is_single_bubble(self):
         resp = KakaoResponse.text_with_buttons("버튼 없음", [])

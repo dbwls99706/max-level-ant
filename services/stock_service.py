@@ -9,6 +9,7 @@
 from datetime import datetime, timedelta, timezone
 from typing import Optional, Dict, List
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import TimeoutError as FuturesTimeout
 from cachetools import TTLCache
 import threading
 import requests
@@ -16,9 +17,15 @@ from requests.exceptions import RequestException, Timeout
 from sqlalchemy.exc import SQLAlchemyError
 
 from game_config import GameConfig
-from settings import CacheConfig, KISConfig
+from settings import CacheConfig, KISConfig, SkillConfig
 from database import SessionLocal
-from utils import CallThrottle, CircuitBreaker, CircuitOpenError, get_service_logger
+from utils import (
+    CallThrottle,
+    CircuitBreaker,
+    CircuitOpenError,
+    budget,
+    get_service_logger,
+)
 
 logger = get_service_logger()
 
@@ -74,6 +81,10 @@ class KISAPIClient:
                 if datetime.now(timezone.utc) < cls._token_expires_at:
                     return cls._access_token
 
+            if budget.exhausted(SkillConfig.MIN_CALL_BUDGET):
+                logger.warning("응답 예산 소진 - KIS 토큰 발급 스킵")
+                return None
+
             try:
                 with _circuit_breaker.guard() as call:
                     url = f"{KISConfig.BASE_URL}/oauth2/tokenP"
@@ -84,9 +95,15 @@ class KISAPIClient:
                         "appsecret": KISConfig.APP_SECRET,
                     }
 
-                    _kis_throttle.wait()  # 토큰 발급도 유량 제한 대상
+                    # 유량 제한 대기가 예산을 잡아먹지 않도록 상한을 건다
+                    if not _kis_throttle.wait(max_wait=budget.remaining()):
+                        logger.warning("응답 예산 부족 - KIS 토큰 발급 스킵")
+                        return None
                     resp = requests.post(
-                        url, headers=headers, json=body, timeout=KISConfig.API_TIMEOUT
+                        url,
+                        headers=headers,
+                        json=body,
+                        timeout=budget.timeout_for(KISConfig.API_TIMEOUT),
                     )
 
                     if resp.status_code != 200:
@@ -170,6 +187,11 @@ class KISAPIClient:
         주식 현재가 조회
         tr_id: FHKST01010100
         """
+        # 남은 예산이 없으면 어차피 카카오 타임아웃이므로 호출하지 않는다
+        if budget.exhausted(SkillConfig.MIN_CALL_BUDGET):
+            logger.debug(f"응답 예산 소진 - 시세 조회 스킵 ({stock_code})")
+            return None
+
         # 토큰 발급은 자체적으로 서킷을 통과 판정한다.
         # 아래 guard() 안에서 호출하면 프로브 슬롯을 중첩 요청하게 되므로 먼저 처리한다.
         headers = cls._get_headers(cls.TR_ID_STOCK_PRICE)
@@ -184,9 +206,15 @@ class KISAPIClient:
                     "FID_INPUT_ISCD": stock_code,
                 }
 
-                _kis_throttle.wait()  # 초당 거래건수 초과 방지
+                # 초당 거래건수 초과 방지 (대기도 예산 안에서만)
+                if not _kis_throttle.wait(max_wait=budget.remaining()):
+                    logger.debug(f"응답 예산 부족 - 시세 조회 스킵 ({stock_code})")
+                    return None
                 resp = requests.get(
-                    url, headers=headers, params=params, timeout=KISConfig.API_TIMEOUT
+                    url,
+                    headers=headers,
+                    params=params,
+                    timeout=budget.timeout_for(KISConfig.API_TIMEOUT),
                 )
 
                 if resp.status_code != 200:
@@ -243,6 +271,9 @@ class KISAPIClient:
         blng_cls_code: 0=평균거래량, 1=거래증가율, 2=평균거래회전율, 3=거래금액순, 4=평균거래금액회전율
         """
         label = "거래대금" if blng_cls_code == "3" else "거래량"
+        if budget.exhausted(SkillConfig.MIN_CALL_BUDGET):
+            logger.debug(f"응답 예산 소진 - {label} 순위 조회 스킵")
+            return []
         headers = cls._get_headers(cls.TR_ID_VOLUME_RANK)
         if not headers:
             logger.warning(f"{label} 순위: 헤더 생성 실패")
@@ -265,9 +296,15 @@ class KISAPIClient:
                     "FID_INPUT_DATE_1": "",
                 }
 
-                _kis_throttle.wait()  # 초당 거래건수 초과 방지
+                # 초당 거래건수 초과 방지 (대기도 예산 안에서만)
+                if not _kis_throttle.wait(max_wait=budget.remaining()):
+                    logger.debug(f"응답 예산 부족 - {label} 순위 조회 스킵")
+                    return []
                 resp = requests.get(
-                    url, headers=headers, params=params, timeout=KISConfig.API_TIMEOUT
+                    url,
+                    headers=headers,
+                    params=params,
+                    timeout=budget.timeout_for(KISConfig.API_TIMEOUT),
                 )
 
                 if resp.status_code != 200:
@@ -376,6 +413,10 @@ class KISAPIClient:
         시장 지수 조회 (KOSPI: 0001, KOSDAQ: 1001)
         tr_id: FHPUP02100000
         """
+        if budget.exhausted(SkillConfig.MIN_CALL_BUDGET):
+            logger.debug(f"응답 예산 소진 - 지수 조회 스킵 ({index_code})")
+            return None
+
         headers = cls._get_headers(cls.TR_ID_MARKET_INDEX)
         if not headers:
             return None
@@ -385,9 +426,15 @@ class KISAPIClient:
                 url = f"{KISConfig.BASE_URL}/uapi/domestic-stock/v1/quotations/inquire-index-price"
                 params = {"FID_COND_MRKT_DIV_CODE": "U", "FID_INPUT_ISCD": index_code}
 
-                _kis_throttle.wait()  # 초당 거래건수 초과 방지
+                # 초당 거래건수 초과 방지 (대기도 예산 안에서만)
+                if not _kis_throttle.wait(max_wait=budget.remaining()):
+                    logger.debug(f"응답 예산 부족 - 지수 조회 스킵 ({index_code})")
+                    return None
                 resp = requests.get(
-                    url, headers=headers, params=params, timeout=KISConfig.API_TIMEOUT
+                    url,
+                    headers=headers,
+                    params=params,
+                    timeout=budget.timeout_for(KISConfig.API_TIMEOUT),
                 )
 
                 if resp.status_code != 200:
@@ -432,6 +479,15 @@ class StockService:
     # TTLCache는 스레드 안전하지 않으므로 배치 병렬 조회 시 락으로 보호
     _price_cache = TTLCache(maxsize=500, ttl=CacheConfig.STOCK_PRICE_TTL)
     _price_cache_lock = threading.Lock()
+
+    # 배치 조회에서 개별 future를 기다릴 최대 시간 (초).
+    # 요청 예산이 걸려 있으면 그 잔여 시간을 넘기지 않는다.
+    BATCH_WAIT_CAP = 3.0
+
+    @staticmethod
+    def _batch_wait() -> float:
+        """배치 future 대기 시간 = min(상한, 요청에 남은 예산)"""
+        return budget.timeout_for(StockService.BATCH_WAIT_CAP)
 
     @staticmethod
     def _cap_limit(limit: int, default: int = 10) -> int:
@@ -848,23 +904,36 @@ class StockService:
         if not uncached_codes:
             return prices
 
-        # 병렬로 API 호출 (최대 5개 동시)
-        def fetch_price(code):
-            stock_info = cls.get_price(code)
-            return code, stock_info
+        # 워커 스레드는 요청 deadline을 자동으로 물려받지 않으므로 명시적으로 넘긴다
+        deadline = budget.current_deadline()
 
-        with ThreadPoolExecutor(max_workers=min(5, len(uncached_codes))) as executor:
-            futures = {
-                executor.submit(fetch_price, code): code for code in uncached_codes
-            }
-            for future in as_completed(futures):
+        def fetch_price(code):
+            with budget.adopt(deadline):
+                return code, cls.get_price(code)
+
+        # 병렬로 API 호출 (최대 5개 동시)
+        # ThreadPoolExecutor를 with로 쓰면 블록을 나갈 때 shutdown(wait=True)라,
+        # 예산이 끝나도 실행 중인 worker가 끝날 때까지 요청 스레드가 붙잡힌다.
+        # 직접 관리하며 wait=False로 내려 곧바로 반환시킨다.
+        executor = ThreadPoolExecutor(max_workers=min(5, len(uncached_codes)))
+        futures = {executor.submit(fetch_price, code): code for code in uncached_codes}
+        try:
+            # 대기 상한은 as_completed에 건다. future.result(timeout=)에 걸면
+            # as_completed가 이미 완료까지 기다린 뒤라 아무 효과가 없다.
+            for future in as_completed(futures, timeout=cls._batch_wait()):
                 try:
-                    code, stock_info = future.result(timeout=15)
+                    code, stock_info = future.result()
                     if stock_info:
                         prices[code] = stock_info["price"]
                 except Exception as e:
-                    code = futures[future]
-                    logger.warning(f"배치 시세 조회 실패 ({code}): {e}")
+                    logger.warning(f"배치 시세 조회 실패 ({futures[future]}): {e}")
+        except FuturesTimeout:
+            pending = [futures[f] for f in futures if not f.done()]
+            logger.warning(f"배치 시세 조회 예산 초과 - 미완료 {len(pending)}건 포기")
+        finally:
+            # 아직 시작하지 않은 작업은 취소하고, 실행 중인 worker는 기다리지 않는다.
+            # (파이썬 스레드는 강제 종료할 수 없어 백그라운드에서 마저 끝난다)
+            executor.shutdown(wait=False, cancel_futures=True)
 
         return prices
 
@@ -883,20 +952,29 @@ class StockService:
             return {}
 
         result = {}
+        deadline = budget.current_deadline()
 
         def fetch_info(code):
-            stock_info = cls.get_price(code)
-            return code, stock_info
+            with budget.adopt(deadline):
+                return code, cls.get_price(code)
 
-        with ThreadPoolExecutor(max_workers=min(5, len(stock_codes))) as executor:
-            futures = {executor.submit(fetch_info, code): code for code in stock_codes}
-            for future in as_completed(futures):
+        # with 대신 직접 관리 — 이유는 batch_get_prices의 주석 참고
+        executor = ThreadPoolExecutor(max_workers=min(5, len(stock_codes)))
+        futures = {executor.submit(fetch_info, code): code for code in stock_codes}
+        try:
+            for future in as_completed(futures, timeout=cls._batch_wait()):
                 try:
-                    code, stock_info = future.result(timeout=15)
+                    code, stock_info = future.result()
                     if stock_info:
                         result[code] = stock_info
                 except Exception as e:
-                    code = futures[future]
-                    logger.warning(f"배치 종목 정보 조회 실패 ({code}): {e}")
+                    logger.warning(f"배치 종목 정보 조회 실패 ({futures[future]}): {e}")
+        except FuturesTimeout:
+            pending = [futures[f] for f in futures if not f.done()]
+            logger.warning(
+                f"배치 종목 정보 조회 예산 초과 - 미완료 {len(pending)}건 포기"
+            )
+        finally:
+            executor.shutdown(wait=False, cancel_futures=True)
 
         return result

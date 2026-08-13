@@ -7,7 +7,7 @@ from datetime import datetime, timezone
 from sqlalchemy import create_engine, text, inspect
 from sqlalchemy.orm import sessionmaker, declarative_base
 from sqlalchemy.exc import SQLAlchemyError
-from settings import DATABASE_URL
+from settings import DATABASE_URL, SkillConfig
 from utils import get_handler_logger
 
 logger = get_handler_logger()
@@ -32,7 +32,10 @@ if not is_sqlite:
             "pool_size": 5,  # 기본 연결 수
             "max_overflow": 10,  # 추가 연결 허용 수 (최대 15개)
             "pool_recycle": 1800,  # 30분마다 연결 갱신 (DB timeout 방지)
-            "pool_timeout": 30,  # 연결 대기 최대 시간 (초)
+            # 연결 대기 최대 시간 (초).
+            # 카카오 스킬 SLA(5초) 안에 응답해야 하므로, 풀이 고갈됐을 때
+            # 30초씩 기다리면 요청 예산과 무관하게 SLA를 넘긴다.
+            "pool_timeout": SkillConfig.DB_POOL_TIMEOUT,
         }
     )
 

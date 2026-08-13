@@ -7,28 +7,78 @@ from typing import List, Dict, Optional
 
 
 class KakaoResponse:
-    """카카오톡 챗봇 응답 생성 헬퍼"""
+    """카카오톡 챗봇 응답 생성 헬퍼
+
+    아래 한도는 카카오 스킬 응답 JSON 공식 명세를 따른다.
+    https://kakaobusiness.gitbook.io/main/tool/chatbot/skill_guide/answer_json_format
+
+    그룹(팀채팅) 챗봇은 일반채팅에 제공되는 기능의 부분집합이므로,
+    표준 명세보다 넉넉한 한도를 가정하지 않는다.
+    """
+
+    # 버튼 개수: 세로 정렬 최대 3개, 가로 정렬 최대 2개
+    MAX_VERTICAL_BUTTONS = 3
+    MAX_HORIZONTAL_BUTTONS = 2
+
+    # listCard items: 단일형 최대 5개
+    MAX_LIST_ITEMS = 5
+
+    # template.outputs: 1개 이상 3개 이하
+    MAX_OUTPUTS = 3
+
+    # ── 스펙 상한 (초과 시 카카오가 응답을 거부할 수 있음) ──
+    # simpleText: text 최대 1000자
+    SIMPLE_TEXT_LIMIT = 1000
+    # simpleImage: altText 최대 50자
+    ALT_TEXT_LIMIT = 50
+    # textCard / basicCard: title 최대 50자
+    CARD_TITLE_LIMIT = 50
+    # textCard: title과 description을 합쳐 최대 400자
+    TEXT_CARD_LIMIT = 400
+    # basicCard: description 최대 230자
+    BASIC_CARD_DESC_LIMIT = 230
+
+    # ── UX 한도 (스펙보다 보수적인 자체 기준) ──
+    # 그룹 챗봇 beta 가이드: "챗봇 응답이 채팅창 전체를 가리지 않아야 해요.
+    # 그룹 대화 맥락에 방해되지 않도록 한 화면을 가리지 않게 해주세요."
+    # 스펙상 400자까지 가능하지만 그룹방 대화를 덮지 않도록 본문은 더 짧게 유지한다.
+    BODY_LIMIT = 350
 
     @staticmethod
     def simple_text(text: str) -> Dict:
         """
-        단순 텍스트 응답
-        """
-        return {
-            "version": "2.0",
-            "template": {"outputs": [{"simpleText": {"text": text}}]},
-        }
-
-    @staticmethod
-    def simple_image(image_url: str, alt_text: str = "이미지") -> Dict:
-        """
-        단순 이미지 응답
+        단순 텍스트 응답 (최대 1000자)
         """
         return {
             "version": "2.0",
             "template": {
                 "outputs": [
-                    {"simpleImage": {"imageUrl": image_url, "altText": alt_text}}
+                    {
+                        "simpleText": {
+                            "text": KakaoResponse._fit_card(
+                                text, KakaoResponse.SIMPLE_TEXT_LIMIT
+                            )
+                        }
+                    }
+                ]
+            },
+        }
+
+    @staticmethod
+    def simple_image(image_url: str, alt_text: str = "이미지") -> Dict:
+        """
+        단순 이미지 응답 (altText 최대 50자)
+        """
+        return {
+            "version": "2.0",
+            "template": {
+                "outputs": [
+                    {
+                        "simpleImage": {
+                            "imageUrl": image_url,
+                            "altText": (alt_text or "")[: KakaoResponse.ALT_TEXT_LIMIT],
+                        }
+                    }
                 ]
             },
         }
@@ -37,11 +87,14 @@ class KakaoResponse:
     def basic_card(
         title: str,
         description: str,
-        thumbnail_url: Optional[str] = None,
+        thumbnail_url: str,
         buttons: Optional[List[Dict]] = None,
     ) -> Dict:
         """
-        기본 카드 응답
+        기본 카드 응답 (피드형)
+
+        thumbnail은 카카오 명세상 **필수**이므로 인자로 강제한다.
+        title 최대 50자, description 최대 230자.
 
         buttons 예시:
         [
@@ -49,13 +102,19 @@ class KakaoResponse:
             {"action": "webLink", "label": "링크", "webLinkUrl": "https://..."}
         ]
         """
-        card = {"title": title, "description": description}
+        if not thumbnail_url:
+            raise ValueError("basicCard는 thumbnail이 필수입니다")
 
-        if thumbnail_url:
-            card["thumbnail"] = {"imageUrl": thumbnail_url}
+        card = {
+            "title": (title or "")[: KakaoResponse.CARD_TITLE_LIMIT],
+            "description": KakaoResponse._fit_card(
+                description, KakaoResponse.BASIC_CARD_DESC_LIMIT
+            ),
+            "thumbnail": {"imageUrl": thumbnail_url},
+        }
 
         if buttons:
-            card["buttons"] = buttons
+            card["buttons"] = KakaoResponse._fit_buttons(buttons)
 
         return {"version": "2.0", "template": {"outputs": [{"basicCard": card}]}}
 
@@ -65,11 +124,23 @@ class KakaoResponse:
     ) -> Dict:
         """
         텍스트 카드 응답 (썸네일 없음)
+
+        textCard는 title 최대 50자이고, title+description 합산 400자 한도다.
+        title이 차지한 만큼을 빼고 description을 맞춘다.
+        title/description 중 최소 하나는 있어야 한다.
         """
-        card = {"title": title, "description": description}
+        title = (title or "")[: KakaoResponse.CARD_TITLE_LIMIT]
+        budget = max(0, KakaoResponse.TEXT_CARD_LIMIT - len(title))
+        description = KakaoResponse._fit_card(description or "", budget)
+        if not title and not description:
+            raise ValueError("textCard는 title과 description 중 하나가 필요합니다")
+
+        card = {"description": description}
+        if title:
+            card["title"] = title
 
         if buttons:
-            card["buttons"] = buttons
+            card["buttons"] = KakaoResponse._fit_buttons(buttons)
 
         return {"version": "2.0", "template": {"outputs": [{"textCard": card}]}}
 
@@ -81,35 +152,51 @@ class KakaoResponse:
         list_layout: Optional[str] = None,
     ) -> Dict:
         """
-        리스트 카드 응답 (팀채팅 챗봇 지원 컴포넌트)
+        리스트 카드 응답
 
-        list_layout: "ranking" 지정 시 팀채팅 랭킹 전용 레이아웃으로 노출.
+        list_layout="ranking": 그룹(팀채팅) 챗봇 전용 '리스트(랭킹)' 말풍선.
+
+        ⚠️ 검증 상태: 그룹 챗봇 beta 가이드 슬라이드 32는 사용 가능한 말풍선으로
+        텍스트 / 텍스트(링크) / 이미지 / 리스트 / 피드 / **리스트(랭킹)**을 명시한다.
+        즉 '랭킹 리스트 말풍선이 존재한다'는 것까지는 확인됐다.
+        다만 그 말풍선을 지정하는 JSON 필드가 정확히 `listLayout: "ranking"`인지는
+        공개 기본 명세에 없고 beta 문서의 JSON 예제로도 확인하지 못했다.
+        개발 채널에서 실제 렌더링을 확인하기 전까지는 미검증 상태로 둔다.
+        (렌더링 실패 시 이 인자만 빼면 일반 리스트로 정상 노출된다.)
+
         items 예시:
         [
             {
                 "title": "항목1",
                 "description": "설명",
-                "imageUrl": "https://...",  # 선택 (팀채팅 listCard는 이미지 불필요)
+                "imageUrl": "https://...",  # 선택
                 "action": "message",
                 "messageText": "/명령어"
             }
         ]
         """
-        card = {"header": {"title": header}, "items": items}
+        card = {
+            "header": {"title": header},
+            "items": list(items)[: KakaoResponse.MAX_LIST_ITEMS],
+        }
 
         if list_layout:
             card["listLayout"] = list_layout
 
         if buttons:
-            card["buttons"] = buttons
+            card["buttons"] = KakaoResponse._fit_buttons(buttons)
 
         return {"version": "2.0", "template": {"outputs": [{"listCard": card}]}}
 
-    # 버튼 레이아웃 vertical 최대 노출 개수 (카카오 그룹 챗봇 가이드 기준)
-    MAX_VERTICAL_BUTTONS = 5
-    # 카드 description 안전 한도. 본문은 항상 이 한도 안에서 '단일 카드'로만 노출한다.
-    # (한도를 넘으면 simpleText로 쪼개지 않고, 줄 단위로 잘라 생략 표시를 붙인다.)
-    CARD_DESC_LIMIT = 230
+    @staticmethod
+    def _fit_buttons(buttons: List[Dict], layout: str = "vertical") -> List[Dict]:
+        """버튼 개수를 레이아웃 한도(세로 3 / 가로 2)에 맞춰 자른다"""
+        cap = (
+            KakaoResponse.MAX_VERTICAL_BUTTONS
+            if layout == "vertical"
+            else KakaoResponse.MAX_HORIZONTAL_BUTTONS
+        )
+        return list(buttons)[:cap]
 
     @staticmethod
     def _fit_card(text: str, limit: int) -> str:
@@ -148,11 +235,11 @@ class KakaoResponse:
         하나의 카드 본문 문자열로 조립한다.
 
         - header/footer 는 항상 유지된다(예: 총자산·내 순위 같은 요약은 잘리지 않음).
-        - 중간 items 만 카드 한도(CARD_DESC_LIMIT)에 맞춰 앞에서부터 담는다.
+        - 중간 items 만 본문 한도(BODY_LIMIT)에 맞춰 앞에서부터 담는다.
         - 결과는 한도 이하가 되도록 맞춘다(초과해도 _fit_card가 한 번 더 방어).
         """
         if limit is None:
-            limit = KakaoResponse.CARD_DESC_LIMIT
+            limit = KakaoResponse.BODY_LIMIT
 
         def join(parts: List[str]) -> str:
             return "\n".join(p for p in parts if p)
@@ -182,8 +269,8 @@ class KakaoResponse:
         본문 + 액션 버튼을 함께 담은 응답.
 
         ⚠️ 카카오 그룹(팀채팅) 챗봇은 quickReplies 컴포넌트를 지원하지 않으므로,
-        본문과 버튼을 하나의 textCard(buttonLayout="vertical", 최대 5개)로 합쳐
-        노출한다. 본문은 항상 '단일 카드'로만 보내며, 카드 한도(CARD_DESC_LIMIT)를
+        본문과 버튼을 하나의 textCard(buttonLayout="vertical", 최대 3개)로 합쳐
+        노출한다. 본문은 항상 '단일 카드'로만 보내며, 카드 한도(TEXT_CARD_LIMIT)를
         넘으면 줄 단위로 잘라 생략 표시를 붙인다(본문을 별도 말풍선으로 쪼개지 않음).
         길이가 가변적인 목록은 핸들러에서 fit_items()로 미리 줄여 보내는 것을 권장한다.
 
@@ -199,9 +286,11 @@ class KakaoResponse:
                 "template": {"outputs": [{"simpleText": {"text": text}}]},
             }
 
-        # vertical 레이아웃은 최대 5개까지만 노출되므로 초과분은 잘라낸다
-        card_buttons = list(buttons)[: KakaoResponse.MAX_VERTICAL_BUTTONS]
-        card_text = KakaoResponse._fit_card(text, KakaoResponse.CARD_DESC_LIMIT)
+        # vertical 레이아웃은 최대 3개까지만 노출되므로 초과분은 잘라낸다
+        card_buttons = KakaoResponse._fit_buttons(buttons, "vertical")
+        # title이 없으므로 스펙상 400자까지 가능하지만, 그룹방 화면을 덮지 않도록
+        # 더 보수적인 BODY_LIMIT을 적용한다.
+        card_text = KakaoResponse._fit_card(text, KakaoResponse.BODY_LIMIT)
 
         return {
             "version": "2.0",

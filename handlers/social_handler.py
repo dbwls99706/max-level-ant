@@ -25,13 +25,13 @@ class SocialHandlerMixin(BaseHandlerMixin):
     """소셜/경쟁 관련 핸들러 믹스인"""
 
     def _ranking_list_card(self, title: str, items: list, buttons: list) -> Dict:
-        """랭킹을 listCard로 노출 (팀채팅 랭킹 전용 listLayout="ranking").
+        """랭킹을 그룹 챗봇 전용 '리스트(랭킹)' 말풍선으로 노출.
 
         - 항목은 카카오 listCard 한도(최대 5개), 버튼은 최대 2개로 맞춘다.
         - 항목이 2개 미만이면 listCard가 어색하므로 텍스트 카드로 폴백한다.
         """
-        items = items[:5]
-        buttons = (buttons or [])[:2]
+        items = items[: KakaoResponse.MAX_LIST_ITEMS]
+        buttons = (buttons or [])[: KakaoResponse.MAX_HORIZONTAL_BUTTONS]
         if len(items) < 2:
             lines = [
                 f"{it['title']}\n  {it.get('description', '')}".rstrip() for it in items

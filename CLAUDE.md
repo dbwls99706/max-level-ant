@@ -68,7 +68,8 @@ stock-king-bot/
 │   ├── asset_service.py     # Asset history tracking
 │   └── quiz_data_service.py # Stock quiz data from public API
 ├── utils/
-│   ├── kakao_response.py    # Kakao chatbot response format builder
+│   ├── kakao_response.py    # Kakao chatbot response format builder (spec limits)
+│   ├── budget.py            # Per-request time budget for the 5s Kakao skill SLA
 │   ├── visual_helpers.py    # Text-based charts, progress bars
 │   ├── resilience.py        # CircuitBreaker, CallThrottle (external API guards)
 │   ├── logger.py            # Logging configuration
@@ -127,6 +128,9 @@ KIS_BASE_URL=https://openapi.koreainvestment.com:9443
 ADMIN_TOKEN=<관리자 API 토큰>              # 미설정 시 임시 토큰 생성 + 경고
 DEV_MODE=false                            # true면 CORS 전체 허용 + 디버그 엔드포인트
 KIS_MIN_CALL_INTERVAL=0.1                 # KIS 호출 간 최소 간격 (초)
+KIS_API_TIMEOUT=1.5                       # KIS 개별 호출 타임아웃 (초)
+SKILL_RESPONSE_BUDGET=3.5                 # 요청 전체 시간 예산 (카카오 5초 SLA 대비)
+PUBLIC_DATA_API_TIMEOUT=2.0               # 공공데이터 API 타임아웃 (초)
 KIS_CIRCUIT_FAILURE_THRESHOLD=5           # 서킷 차단 임계 실패 횟수
 KIS_CIRCUIT_RECOVERY_TIMEOUT=60           # 차단 후 복구 프로브까지 대기 (초)
 PUBLIC_DATA_SERVICE_KEY=<공공데이터포털 key>
@@ -170,3 +174,6 @@ ruff format --check .     # Format check
 - Rate limiting is in-memory (not Redis) — resets on restart
 - Configuration is split by responsibility (see Project Structure). Large pure-data tables live in their own modules (`quiz_history.py`, `enhance_titles.py`) so the config modules stay readable
 - KIS API calls are wrapped by `utils.resilience.CircuitBreaker.guard()`; in `HALF_OPEN` only a single recovery probe is allowed through at a time
+- **Kakao skill SLA is 5s.** `/skill` starts a **cooperative** time budget (`utils/budget.py`) at request entry and hands it to the worker thread; external calls use `min(call timeout, remaining budget)` and are skipped when the budget is spent. This is not a hard timeout — DB query time isn't covered (pool wait is bounded separately by `DB_POOL_TIMEOUT`), and `requests` timeouts are per-connect/read, not total wall clock. Handling runs in a threadpool so one slow request can't stall the event loop
+- **Kakao response spec** (enforced in `utils/kakao_response.py`, verified by `tests/test_kakao_spec_compliance.py`): `outputs` ≤ 3; textCard title+description ≤ 400; basicCard description ≤ 230; listCard items ≤ 5; buttons ≤ 3 vertical / 2 horizontal. `KakaoResponse.BODY_LIMIT` (350) is a deliberately stricter UX limit — the group beta guide requires responses not to cover the whole chat screen
+- `listLayout: "ranking"` is a **group-chatbot-only** bubble ('리스트(랭킹)', beta guide slide 32); it is not in the public 1:1 spec
