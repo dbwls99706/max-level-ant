@@ -215,13 +215,19 @@ class EnhanceService:
                 "class_assigned": class_assigned,
             }
         else:
-            # 실패 — 레벨 0으로 초기화 (직군은 유지)
+            # 실패 — 레벨 0으로 초기화
             drop = level  # 현재 레벨 전부 하락
             new_level = 0
             user.enhance_level = new_level
+
+            # 계열도 같이 풀린다. 다음에 Lv.10에 도달하면 새로 뽑으므로,
+            # 실패는 곧 다른 계열로 갈아탈 기회이기도 하다.
+            user.enhance_class = 0
+            enhance_class = 0
+
             new_seed = random.randint(0, 4)
             user.enhance_title_seed = new_seed
-            # 레벨 0은 직군 무관 공통 칭호
+            # 레벨 0은 계열 무관 공통 칭호
             new_name, new_emoji = EnhanceConfig.get_title(
                 new_level, seed=new_seed, enhance_class=0
             )
