@@ -83,8 +83,19 @@ def get_user_for_update(db: Session, kakao_id: str) -> Optional[User]:
     유저 조회 with FOR UPDATE (Row Lock)
     - 동시성 제어가 필요한 거래에서 사용
     - 트랜잭션 종료 시까지 해당 row lock 유지
+
+    populate_existing()이 중요하다. 같은 세션에서 이미 이 유저를 읽은 적이 있으면
+    ORM은 identity map의 기존 객체를 그대로 돌려주고 속성을 갱신하지 않는다.
+    그러면 락을 잡고도 락 이전의 낡은 cash로 검증하게 된다.
+    락으로 읽은 최신 값을 반드시 반영하도록 강제한다.
     """
-    return db.query(User).filter(User.kakao_id == kakao_id).with_for_update().first()
+    return (
+        db.query(User)
+        .filter(User.kakao_id == kakao_id)
+        .populate_existing()
+        .with_for_update()
+        .first()
+    )
 
 
 def get_user_with_error(
