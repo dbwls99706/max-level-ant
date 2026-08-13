@@ -14,22 +14,37 @@
 #
 # 초기 시안에서 스캘퍼는 실사 3D, 가치 발굴자는 따뜻한 점토 피규어처럼 나와
 # 두 장을 나란히 놓으면 다른 게임 같았다. 재질·질감을 금지어까지 써서 좁힌다.
+#
+# 재질만 막았더니 '비율'로 빠져나갔다. 머리가 몸통만 한 치비 비율이면
+# 재질이 같아도 장난감으로 보인다. 두상 크기를 명시적으로 고정한다.
 STYLE_LOCK = (
     "stylized hero game character art, polished 3D render with hard surface "
     "armor and crisp specular highlights, consistent single art direction, "
-    "not clay, not matte plasticine, not a toy figurine, not a soft plush look"
+    "heroic adult proportions with a small head relative to a tall athletic "
+    "body, long limbs, "
+    "not clay, not matte plasticine, not a toy figurine, not a soft plush "
+    "look, not chibi, not a big-headed cute mascot"
 )
 
 # 프롬프트 맨 뒤에 붙는 촬영·구도 제약 블록.
 COMMON_FRAMING = (
     "single anthropomorphic ant hero centered, full body visible, "
     "dynamic action pose, "
+    # 게임 이름이 '만렙개미'다. 성장 3단계에서 갑옷 지시가 세지자
+    # 투구가 머리를 통째로 덮어 인간 기사가 나왔다. 개미 특징은 못박는다.
+    "the head is unmistakably an ant head with two long antennae and large "
+    "compound eyes, antennae always visible and never covered, "
+    "any helmet is open or has openings that let the antennae through, "
+    "never a human face, never a human head, "
     # 아래 두 줄이 없으면 어두운 팔레트의 직군이 배경에 그대로 묻힌다.
     # 카카오 카드에서는 작게 표시되므로 실루엣만으로도 직군이 읽혀야 한다.
     "the subject is the brightest element in the frame and is fully lit, "
     "never a dark silhouette, always clearly separated from the background, "
     "background is a simple gradient several stops darker than the subject, "
     "with only a few abstract light streaks and no scenery, "
+    # 성장 1단계에서 장비를 줄이라고 하니 직군 무기까지 같이 사라졌다.
+    # 무기는 직군을 구분하는 유일한 단서라 단계와 무관하게 들려 있어야 한다.
+    "the weapon or prop described above is always held and clearly visible, "
     "strong key light plus colored rim light, high detail, "
     "wide cinematic 16:9 composition, "
     "absolutely no text, no numbers, no letters, no logos, no watermark"
@@ -77,7 +92,8 @@ GROWTH_ART = {
     ),
     3: (
         "초월",
-        "clad head to toe in ornate layered plate armor with a crested helm, "
+        "clad head to toe in ornate layered plate armor with an open crested "
+        "helm that leaves the antennae free, "
         "large winged pauldrons, an ornamented weapon and a long flowing "
         "cape, gold filigree tracing every edge, towering imposing build",
     ),
