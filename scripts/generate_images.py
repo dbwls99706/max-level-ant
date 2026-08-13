@@ -199,6 +199,12 @@ def run(combos, args) -> int:
             print("취소했습니다.")
             return 1
 
+    # 동시 실행이라 첫 줄이 찍히기까지 30초 넘게 아무것도 안 보인다.
+    # 멈춘 것처럼 보이므로 시작했다는 것과 예상 소요를 먼저 알린다.
+    eta = len(todo) * 35 / max(1, args.concurrency) / 60
+    print(f"\n생성 시작 - 동시 {args.concurrency}장, 예상 {eta:.0f}분")
+    print("(첫 결과가 찍히기까지 30초 이상 걸립니다)\n")
+
     # 장당 30초가 넘게 걸려서 직렬로 600장을 돌리면 5시간이다.
     # API는 동시 요청을 받으므로 직렬로 기다릴 이유가 없다.
     # 429는 generate_one이 지수 백오프로 이미 처리한다.
