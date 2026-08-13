@@ -109,6 +109,19 @@ def out_path(outdir: Path, class_key: str, rarity: str, growth: int) -> Path:
     return outdir / f"{class_key}__{rarity}__g{growth}.png"
 
 
+def already_have(outdir: Path, class_key: str, rarity: str, growth: int) -> bool:
+    """이 조합을 이미 확보했는지.
+
+    원본 PNG는 용량 때문에 저장소에 넣지 않으므로, 다른 PC에서 clone하면
+    art/*.png가 비어 있다. PNG만 보고 판단하면 이미 만든 600장을 통째로
+    다시 생성해 돈을 두 번 낸다. 서빙용 WebP는 커밋되므로 그것도 함께 본다.
+    """
+    png = out_path(outdir, class_key, rarity, growth)
+    if png.exists():
+        return True
+    return (outdir / "web" / f"{png.stem}.webp").exists()
+
+
 def estimate_cost(count: int, model: str, quality: str, size: str) -> float:
     unit = PRICE_TABLE.get((model, quality))
     if unit is None:
@@ -180,7 +193,7 @@ def run(combos, args) -> int:
     outdir = Path(args.outdir)
     outdir.mkdir(parents=True, exist_ok=True)
 
-    todo = [c for c in combos if args.force or not out_path(outdir, *c).exists()]
+    todo = [c for c in combos if args.force or not already_have(outdir, *c)]
     skipped = len(combos) - len(todo)
 
     print(f"모델   : {args.model} / {args.quality} / {args.size}")
@@ -300,14 +313,19 @@ def write_manifest(outdir: Path, entries) -> None:
 
 
 def rebuild_manifest(outdir: Path) -> int:
-    """이미 받아 둔 PNG 파일명으로 manifest를 복구한다.
+    """이미 받아 둔 파일명으로 manifest를 복구한다.
 
     파일명이 (직군, 종, 성장)을 그대로 담고 있고 프롬프트 조합은 결정적이라,
     중간에 끊겨 기록이 빠진 이미지도 파일만 있으면 되살릴 수 있다.
     """
+    # 다른 PC에서는 원본 PNG 없이 WebP만 있을 수 있다. 둘 다 훑는다.
+    stems = {p.stem for p in outdir.glob("*.png")}
+    stems |= {p.stem for p in (outdir / "web").glob("*.webp")}
+
     entries = []
     unknown = 0
-    for path in sorted(outdir.glob("*.png")):
+    for stem in sorted(stems):
+        path = outdir / f"{stem}.png"
         parts = path.stem.split("__")
         if len(parts) != 3 or not parts[2].startswith("g"):
             unknown += 1
@@ -333,7 +351,7 @@ def rebuild_manifest(outdir: Path) -> int:
     if unknown:
         print(f"이름 규칙에 안 맞아 건너뛴 파일 {unknown}개")
     if not entries:
-        print(f"{outdir}에 복구할 png가 없습니다.")
+        print(f"{outdir}에 복구할 이미지가 없습니다.")
         return 1
     write_manifest(outdir, entries)
     return 0
