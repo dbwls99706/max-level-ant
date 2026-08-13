@@ -46,19 +46,28 @@ from enhance_art import (  # noqa: E402
 
 API_URL = "https://api.openai.com/v1/images/generations"
 
-# 장당 단가 (USD). 공개 가격표 기준의 근사치이므로 실제 청구액과 다를 수 있다.
+# 1536x1024 기준 장당 단가 (USD).
+# mini/low는 실측값이다 (3장 $0.016 -> 장당 $0.0053). 나머지는 그 비율로
+# 공개 가격표를 보정한 추정치라 실제 청구액과 다를 수 있다.
 # 예상 비용을 보여주기 위한 용도이지 정산용이 아니다.
 PRICE_TABLE = {
-    ("gpt-image-1-mini", "low"): 0.008,
-    ("gpt-image-1-mini", "medium"): 0.017,
-    ("gpt-image-1-mini", "high"): 0.054,
-    ("gpt-image-1.5", "low"): 0.014,
-    ("gpt-image-1.5", "medium"): 0.051,
-    ("gpt-image-1.5", "high"): 0.200,
+    ("gpt-image-1-mini", "low"): 0.0053,  # 실측
+    ("gpt-image-1-mini", "medium"): 0.011,
+    ("gpt-image-1-mini", "high"): 0.036,
+    ("gpt-image-1.5", "low"): 0.009,
+    ("gpt-image-1.5", "medium"): 0.034,
+    ("gpt-image-1.5", "high"): 0.133,
 }
 
 # 카카오 basicCard 썸네일은 가로형이다. 정사각형으로 뽑으면 위아래가 잘린다.
 DEFAULT_SIZE = "1536x1024"
+
+# PRICE_TABLE(1536x1024) 대비 크기별 단가 배율. 픽셀 수 비율로 어림잡는다.
+SIZE_FACTOR = {
+    "1536x1024": 1.0,
+    "1024x1536": 1.0,
+    "1024x1024": 1024 / 1536,
+}
 
 # 맛보기용 조합.
 # 기준선 / 최고 등급 / 다른 계열 - 셋을 보면 판단에 필요한 건 다 나온다.
@@ -76,12 +85,13 @@ def out_path(outdir: Path, class_key: str, rarity: str, growth: int) -> Path:
     return outdir / f"{class_key}__{rarity}__g{growth}.png"
 
 
-def estimate_cost(count: int, model: str, quality: str) -> float:
+def estimate_cost(count: int, model: str, quality: str, size: str) -> float:
     unit = PRICE_TABLE.get((model, quality))
     if unit is None:
         return 0.0
-    # 세로/가로형은 정사각형보다 픽셀이 많아 단가가 오른다 (약 1.5배로 가정)
-    return count * unit * (1.5 if DEFAULT_SIZE != "1024x1024" else 1.0)
+    # PRICE_TABLE 자체가 1536x1024 기준이므로 여기서 또 곱하면 안 된다.
+    # 정사각형으로 뽑을 때만 픽셀 수 비율(1024*1024 / 1536*1024)로 낮춰 잡는다.
+    return count * unit * (SIZE_FACTOR.get(size, 1.0))
 
 
 def generate_one(prompt: str, model: str, quality: str, size: str, retries: int):
@@ -156,7 +166,7 @@ def run(combos, args) -> int:
         print("생성할 것이 없습니다.")
         return 0
 
-    cost = estimate_cost(len(todo), args.model, args.quality)
+    cost = estimate_cost(len(todo), args.model, args.quality, args.size)
     print(f"예상 비용: 약 ${cost:.2f} (추정치, 실제 청구액과 다를 수 있음)")
 
     if not args.yes:
