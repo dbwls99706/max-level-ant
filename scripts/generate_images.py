@@ -7,7 +7,9 @@
 유저 요청마다 과금되기 때문이다.
 
 사용법:
-    export OPENAI_API_KEY="..."
+    # API 키 설정
+    export OPENAI_API_KEY="sk-..."       # macOS / Linux
+    $env:OPENAI_API_KEY = "sk-..."       # Windows PowerShell
 
     # 1) 맛보기 - 기본 3장만, 가장 싼 설정
     python scripts/generate_images.py --test
@@ -213,7 +215,8 @@ def main() -> int:
 
     if not os.environ.get("OPENAI_API_KEY"):
         print("OPENAI_API_KEY 환경변수가 필요합니다.")
-        print('  export OPENAI_API_KEY="sk-..."')
+        print('  macOS/Linux : export OPENAI_API_KEY="sk-..."')
+        print('  PowerShell  : $env:OPENAI_API_KEY = "sk-..."')
         return 1
 
     if args.test:
