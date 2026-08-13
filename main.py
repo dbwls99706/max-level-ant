@@ -255,7 +255,10 @@ async def root():
 @app.api_route("/health", methods=["GET", "HEAD"])
 async def health_check():
     """헬스체크 (UptimeRobot 등 모니터링 서비스용)"""
-    db_healthy = check_db_health()
+    # check_db_health()는 동기 DB 호출이다. 이벤트 루프에서 직접 부르면
+    # DB가 느려질 때 그 시간 동안 /skill을 포함한 모든 요청이 함께 멈춘다.
+    # 모니터링 때문에 서비스가 막히는 일이 없도록 워커 스레드로 넘긴다.
+    db_healthy = await run_in_threadpool(check_db_health)
     if not db_healthy:
         return JSONResponse(
             status_code=503, content={"status": "unhealthy", "db": "disconnected"}
@@ -460,7 +463,9 @@ async def admin_reset_db(
             }
 
         # 데이터베이스 초기화
-        reset_db()
+        # DROP/CREATE는 오래 걸릴 수 있다. 이벤트 루프에서 돌리면 그동안
+        # 스킬 요청이 전부 멈추므로 워커 스레드에서 실행한다.
+        await run_in_threadpool(reset_db)
         logger.info("관리자에 의해 데이터베이스가 초기화됨")
 
         return {
@@ -473,6 +478,52 @@ async def admin_reset_db(
     except Exception as e:
         logger.error(f"관리자 API 에러: {e}", exc_info=True)
         return {"success": False, "error": str(e)}
+
+
+def _reset_seed_money() -> dict:
+    """
+    전 유저 시드머니 초기화 (워커 스레드에서 실행).
+
+    Session을 이 함수 안에서 열고 닫아 생성·commit·close가 한 스레드에
+    머물게 한다 (SQLAlchemy Session은 스레드 간 공유를 전제하지 않는다).
+    """
+    from models import User, Holding, Transaction
+    from game_config import GameConfig
+
+    db = SessionLocal()
+    try:
+        # 보유 주식 전량 삭제
+        deleted_holdings = db.query(Holding).delete()
+        # 거래 내역 전량 삭제
+        deleted_transactions = db.query(Transaction).delete()
+        # 모든 유저 현금 + 초기자금 리셋
+        new_cash = GameConfig.INITIAL_CASH
+        updated_users = db.query(User).update(
+            {
+                User.cash: new_cash,
+                User.initial_cash: new_cash,
+            }
+        )
+        db.commit()
+        logger.info(
+            f"시드머니 초기화 완료: {updated_users}명 유저 → {new_cash:,}원, "
+            f"보유주식 {deleted_holdings}건 삭제, 거래내역 {deleted_transactions}건 삭제"
+        )
+        return {
+            "success": True,
+            "message": "시드머니 초기화 완료",
+            "data": {
+                "updated_users": updated_users,
+                "new_seed_money": new_cash,
+                "deleted_holdings": deleted_holdings,
+                "deleted_transactions": deleted_transactions,
+            },
+        }
+    except Exception:
+        db.rollback()
+        raise
+    finally:
+        db.close()
 
 
 @app.post("/admin/reset-seed")
@@ -510,43 +561,11 @@ async def admin_reset_seed(
                 "message": "시드머니 초기화를 확인하려면 confirm 필드에 'RESET_SEED_MONEY'를 입력하세요.",
             }
 
-        from models import User, Holding, Transaction
-        from game_config import GameConfig
-
-        db = SessionLocal()
-        try:
-            # 보유 주식 전량 삭제
-            deleted_holdings = db.query(Holding).delete()
-            # 거래 내역 전량 삭제
-            deleted_transactions = db.query(Transaction).delete()
-            # 모든 유저 현금 + 초기자금 리셋
-            new_cash = GameConfig.INITIAL_CASH
-            updated_users = db.query(User).update(
-                {
-                    User.cash: new_cash,
-                    User.initial_cash: new_cash,
-                }
-            )
-            db.commit()
-            logger.info(
-                f"시드머니 초기화 완료: {updated_users}명 유저 → {new_cash:,}원, "
-                f"보유주식 {deleted_holdings}건 삭제, 거래내역 {deleted_transactions}건 삭제"
-            )
-            return {
-                "success": True,
-                "message": "시드머니 초기화 완료",
-                "data": {
-                    "updated_users": updated_users,
-                    "new_seed_money": new_cash,
-                    "deleted_holdings": deleted_holdings,
-                    "deleted_transactions": deleted_transactions,
-                },
-            }
-        except Exception as e:
-            db.rollback()
-            raise e
-        finally:
-            db.close()
+        # 전 유저 대상 UPDATE/DELETE라 오래 걸린다. Session은 생성·쿼리·
+        # commit/rollback·close가 모두 같은 스레드에서 끝나야 하므로
+        # 워커 함수 안에서 열고 닫는다.
+        result = await run_in_threadpool(_reset_seed_money)
+        return result
 
     except HTTPException:
         raise

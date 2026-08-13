@@ -8,7 +8,7 @@
 - **Framework**: FastAPI + Uvicorn (ASGI)
 - **Database**: PostgreSQL (production) / SQLite (local dev, tests)
 - **ORM**: SQLAlchemy 2.x
-- **Deploy**: Docker (multi-stage) → Railway (PaaS)
+- **Deploy**: Docker (multi-stage) → Render (PaaS)
 
 ## Quick Commands
 
@@ -72,7 +72,7 @@ stock-king-bot/
 │   ├── kakao_response.py    # Kakao chatbot response format builder (spec limits)
 │   ├── budget.py            # Per-request time budget for the 5s Kakao skill SLA
 │   ├── visual_helpers.py    # Text-based charts, progress bars
-│   ├── resilience.py        # CircuitBreaker, CallThrottle (external API guards)
+│   ├── resilience.py        # CircuitBreaker, CallThrottle, BoundedConcurrency
 │   ├── logger.py            # Logging configuration
 │   └── audit_logger.py      # Audit log for sensitive operations
 ├── tests/               # pytest tests (SQLite in-memory)
@@ -80,7 +80,7 @@ stock-king-bot/
 │   └── test_*.py            # Service-level unit tests
 ├── docs/                # Documentation
 ├── Dockerfile           # Multi-stage build, non-root user
-├── Procfile             # Railway deployment
+├── Procfile             # PaaS start command (uvicorn on $PORT)
 ├── requirements.txt     # Dependencies
 └── pytest.ini           # pytest config: -v --tb=short
 ```
@@ -217,7 +217,24 @@ ruff format --check .     # Format check
 - Group chat support: `chatroom_members` table tracks which users are in which chat rooms for per-room rankings
 - Rate limiting is in-memory (not Redis) — resets on restart
 - Configuration is split by responsibility (see Project Structure). Large pure-data tables live in their own modules (`quiz_history.py`, `enhance_titles.py`) so the config modules stay readable
-- KIS API calls are wrapped by `utils.resilience.CircuitBreaker.guard()`; in `HALF_OPEN` only a single recovery probe is allowed through at a time
+- KIS API calls go through `services.stock_service._kis_call()`: a process-wide
+  `BoundedConcurrency` slot **outside** the `CircuitBreaker.guard()`. The slot is outside
+  so a HALF_OPEN probe never waits on a slot while holding the recovery slot, and so a
+  `ConcurrencyLimitError` (a local resource limit, not an API failure) is never counted as
+  a circuit failure. In `HALF_OPEN` only a single recovery probe is allowed through at a time
+- KIS token issuance uses its own timeout (`KIS_TOKEN_TIMEOUT`), longer than the per-query
+  one: it is slower, and if it fails every subsequent query is blocked. At startup there is no
+  Kakao SLA so the full value applies; during a request `budget` caps it again
 - **Kakao skill SLA is 5s.** `/skill` starts a **cooperative** time budget (`utils/budget.py`) at request entry and hands it to the worker thread; external calls use `min(call timeout, remaining budget)` and are skipped when the budget is spent. This is not a hard timeout — DB query time isn't covered (pool wait is bounded separately by `DB_POOL_TIMEOUT`), and `requests` timeouts are per-connect/read, not total wall clock. Handling runs in a threadpool so one slow request can't stall the event loop
+- **No sync DB work on the event loop.** An `async def` endpoint body runs on the loop thread,
+  so a slow DB call there freezes *every* request in that worker. `/skill`, `/debug/skill`,
+  `/health`, `/admin/reset-db` and `/admin/reset-seed` all hand their DB work to
+  `run_in_threadpool`. A `Session` must be created, used, committed and closed inside the same
+  worker function (`_reset_seed_money` exists for exactly this reason)
+- **Group chat membership.** `chatroom_members` has an FK to `users`, so registration only works
+  once the user row exists. The first `/시작` in a room creates that row *during* the command,
+  so `CommandHandler.handle()` retries registration after dispatch when the pre-check found no
+  user. A unique-constraint violation there means a concurrent request already registered — it
+  is treated as success, not failure
 - **Kakao response spec** (enforced in `utils/kakao_response.py`, verified by `tests/test_kakao_spec_compliance.py`): `outputs` ≤ 3; textCard title+description ≤ 400; basicCard description ≤ 230; listCard items ≤ 5; buttons ≤ 3 vertical / 2 horizontal. `KakaoResponse.BODY_LIMIT` (350) is a deliberately stricter UX limit — the group beta guide requires responses not to cover the whole chat screen
 - `listLayout: "ranking"` is a **group-chatbot-only** bubble ('리스트(랭킹)', beta guide slide 32); it is not in the public 1:1 spec
