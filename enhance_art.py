@@ -1,33 +1,46 @@
 """
 각성 직군 아트 프롬프트 데이터
 
-이미지는 [공통 스타일] + [직군 본문] + [종 연출] + [성장 연출] 네 조각의
-조합으로 만든다. 직군 본문만 늘리면 조합 수가 자동으로 늘어나므로,
+이미지는 [그림체 고정] + [직군 본문] + [성장 연출] + [종 연출] + [구도 제약]
+다섯 조각의 조합으로 만든다. 직군 본문만 늘리면 조합 수가 자동으로 늘어나므로,
 직군을 100개로 확장해도 이 파일에 항목만 추가하면 된다.
 
 순수 데이터만 담는다. 조합·생성 로직은 scripts/generate_images.py에 있다.
 """
 
-# 모든 프롬프트 앞에 붙는 공통 블록.
+# 프롬프트 맨 앞에 붙는 스타일 고정 블록.
 # 도감은 낱장의 완성도보다 '나란히 놨을 때 한 세트로 보이는가'가 중요하다.
-# 그래서 렌더 방식·배경·색 수를 여기서 강하게 고정한다.
-COMMON_STYLE = (
-    "cinematic 3D render, photorealistic materials, anthropomorphic ant hero, "
-    "single subject centered, dynamic full-body action pose, "
-    "dark uncluttered background with only abstract light streaks, "
-    "two dominant colors, "
-    # 강한 key light가 없으면 어두운 색 직군이 배경에 묻혀 형체가 안 보인다.
-    # 카카오 카드에서는 작게 표시되므로 실루엣이 또렷해야 한다.
-    "strong key light on the subject plus rim lighting, "
-    "subject clearly readable and well separated from the background, "
-    "high detail, wide cinematic 16:9 composition, "
+# 이미지 모델은 앞쪽 토큰을 더 세게 반영하므로 그림체는 맨 앞에서 못박는다.
+#
+# 초기 시안에서 스캘퍼는 실사 3D, 가치 발굴자는 따뜻한 점토 피규어처럼 나와
+# 두 장을 나란히 놓으면 다른 게임 같았다. 재질·질감을 금지어까지 써서 좁힌다.
+STYLE_LOCK = (
+    "stylized hero game character art, polished 3D render with hard surface "
+    "armor and crisp specular highlights, consistent single art direction, "
+    "not clay, not matte plasticine, not a toy figurine, not a soft plush look"
+)
+
+# 프롬프트 맨 뒤에 붙는 촬영·구도 제약 블록.
+COMMON_FRAMING = (
+    "single anthropomorphic ant hero centered, full body visible, "
+    "dynamic action pose, "
+    # 아래 두 줄이 없으면 어두운 팔레트의 직군이 배경에 그대로 묻힌다.
+    # 카카오 카드에서는 작게 표시되므로 실루엣만으로도 직군이 읽혀야 한다.
+    "the subject is the brightest element in the frame and is fully lit, "
+    "never a dark silhouette, always clearly separated from the background, "
+    "background is a simple gradient several stops darker than the subject, "
+    "with only a few abstract light streaks and no scenery, "
+    "strong key light plus colored rim light, high detail, "
+    "wide cinematic 16:9 composition, "
     "absolutely no text, no numbers, no letters, no logos, no watermark"
 )
 
 # 종(희귀도) 연출.
 # 도감을 훑을 때 등급이 즉시 읽혀야 하므로 연출 강도를 단계적으로 벌린다.
 RARITY_ART = {
-    "normal": ("노멀", "⬜", "clean render, minimal effects, matte finish"),
+    # "matte finish"는 STYLE_LOCK의 "not matte plasticine"과 싸운다.
+    # 노멀은 '광택이 없는 것'이 아니라 '특수효과가 없는 것'이다.
+    "normal": ("노멀", "⬜", "clean crisp render, no aura, no glowing effects"),
     "rare": ("레어", "🟦", "faint colored aura tracing the silhouette"),
     "epic": ("에픽", "🟪", "glowing aura, small fragments orbiting slowly"),
     "legend": (
@@ -46,21 +59,27 @@ RARITY_ART = {
 }
 
 # 성장 단계 연출.
-# 종을 못 뽑아도 레벨을 올리면 내 캐릭터가 멋있어지는 축.
+# 종을 못 뽑아도 레벨을 올리면 내 캐릭터가 멋있어지는 축이므로,
+# 단계가 올라가면 '장비가 실제로 늘어난 게' 눈에 보여야 한다.
+#
+# 처음에는 "imposing silhouette, veteran presence" 식의 추상적인 표현만 넣었더니
+# 신화·초월인데도 맨몸으로 나왔다. 갑옷 부위를 명사로 못박아야 반영된다.
 GROWTH_ART = {
     1: (
         "각성",
-        "young lean build, simple functional gear, clean unmarked carapace",
+        "wearing only light gear: a simple harness and forearm wraps, "
+        "most of the clean unmarked carapace exposed, young lean build",
     ),
     2: (
         "숙련",
-        "hardened build, layered refined armor with battle scars and "
-        "etched sigils, confident weathered presence",
+        "wearing a fitted breastplate, one shoulder pauldron, greaves and "
+        "a short cape, scratched and battle-worn, broader hardened build",
     ),
     3: (
         "초월",
-        "imposing silhouette, armor transformed and partially self-luminous, "
-        "trailing energy cape, overwhelming veteran presence",
+        "clad head to toe in ornate layered plate armor with a crested helm, "
+        "large winged pauldrons, an ornamented weapon and a long flowing "
+        "cape, gold filigree tracing every edge, towering imposing build",
     ),
 }
 
@@ -92,10 +111,10 @@ CLASS_ART = {
         "스캘퍼",
         "⚡",
         "1초를 세 번 쪼갠다. 남들이 클릭할 때 그는 이미 나왔다.",
-        "A lean swift ant courier in sleek charcoal-grey armor with glowing "
+        "A lean swift ant courier in sleek brushed-silver armor with glowing "
         "crimson accent lines, edges blurred from sheer speed, wielding a "
         "slender glowing blade shaped like a single thin candlestick wick. "
-        "Bright light trails streak past. Palette: charcoal grey and crimson.",
+        "Bright light trails streak past. Palette: gunmetal silver and crimson.",
     ),
     "swinger": (
         "trader",
@@ -241,7 +260,7 @@ CLASS_ART = {
         "A towering ant executive in a heavy double-breasted coat of "
         "midnight blue with gold trim, arms crossed, utterly immovable, "
         "a colossal stone seal ring on one claw. "
-        "Palette: midnight blue and heavy gold.",
+        "Palette: deep sapphire blue and bright gold.",
     ),
     "foreign": (
         "whale",
@@ -260,7 +279,7 @@ CLASS_ART = {
         "A shadowed ant figure in a high-collared cloak holding a fine "
         "brush that paints a glowing rising line in the air, face half "
         "hidden behind a smooth featureless mask. "
-        "Palette: black violet and sickly gold.",
+        "Palette: vivid violet and pale gold.",
     ),
     "superant": (
         "whale",
@@ -297,7 +316,7 @@ CLASS_ART = {
         "빌린 힘은 달콤하고, 청산은 조용히 온다.",
         "A straining ant warrior gripping a massive weapon far too large "
         "for its frame, glowing chains coiled around both arms pulling in "
-        "opposite directions. Palette: molten orange and iron black.",
+        "opposite directions. Palette: molten orange and pale steel.",
     ),
     "themesurfer": (
         "gambler",
@@ -334,7 +353,7 @@ CLASS_ART = {
         "현금도 포지션이다.",
         "A hooded ant ascetic seated in shadow beside a single candle, "
         "hands folded over a closed heavy chest, flame perfectly still. "
-        "Palette: near black and warm candle amber.",
+        "Palette: cool slate blue and warm candle amber.",
     ),
     "shortseller": (
         "watcher",
@@ -480,7 +499,9 @@ def build_prompt(class_key: str, rarity: str, growth: int) -> str:
     body = CLASS_ART[class_key][4]
     rarity_fx = RARITY_ART[rarity][2]
     growth_fx = GROWTH_ART[growth][1]
-    return f"{COMMON_STYLE}. {body} {growth_fx}. {rarity_fx}."
+    # 순서가 곧 우선순위다. 그림체 -> 누구를 그릴지 -> 얼마나 컸는지 ->
+    # 등급 연출 -> 구도·조명 제약. 성장/종을 뒤쪽 제약 블록 뒤에 두면 묻힌다.
+    return f"{STYLE_LOCK}. {body} The character is {growth_fx}. {rarity_fx}. {COMMON_FRAMING}."
 
 
 def all_combinations():
