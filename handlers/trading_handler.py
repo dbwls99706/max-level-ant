@@ -119,11 +119,6 @@ class TradingHandlerMixin(BaseHandlerMixin):
                     "messageText": f"/매수 {stock_info['name']} 10",
                 },
                 {
-                    "label": "100주 매수",
-                    "action": "message",
-                    "messageText": f"/매수 {stock_info['name']} 100",
-                },
-                {
                     "label": "💰 전량매수",
                     "action": "message",
                     "messageText": f"/전량매수 {stock_info['name']}",

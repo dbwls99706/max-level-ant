@@ -32,7 +32,6 @@ class GameHandlerMixin(BaseHandlerMixin):
 ⏰ 예언 배틀/업다운/각성은 장 마감 후 이용 가능"""
 
         small_bet = GameConfig.DEFAULT_BET
-        big_bet = GameConfig.BIG_BET
         return KakaoResponse.text_with_buttons(
             msg,
             [
@@ -43,19 +42,9 @@ class GameHandlerMixin(BaseHandlerMixin):
                 },
                 {"label": "🧬 각성", "action": "message", "messageText": "/각성"},
                 {
-                    "label": "⚡ 5만 예언 배틀",
+                    "label": f"⚡ {small_bet // 10000}만 예언 배틀",
                     "action": "message",
                     "messageText": f"/시장예측 {small_bet}",
-                },
-                {
-                    "label": "🔥 50만 대박 배틀",
-                    "action": "message",
-                    "messageText": f"/시장예측 {big_bet}",
-                },
-                {
-                    "label": "🔢 5만 업다운",
-                    "action": "message",
-                    "messageText": f"/업다운 {small_bet}",
                 },
             ],
         )
