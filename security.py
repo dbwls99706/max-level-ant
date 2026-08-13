@@ -8,6 +8,7 @@
 import logging
 import os
 import secrets
+from typing import Optional
 
 from dotenv import load_dotenv
 
@@ -38,6 +39,19 @@ class SecurityConfig:
     ADMIN_TOKEN = _admin_token
     del _admin_token
 
+    # ===========================================
+    # 스킬 서버 인증
+    # ===========================================
+    # /skill은 공개 POST 엔드포인트다. 인증이 없으면 누구나 임의의
+    # userRequest.user.id를 만들어 게임 명령을 실행할 수 있고,
+    # ID를 바꿔가며 유저별 rate limit도 우회할 수 있다.
+    # (DB 레코드 대량 생성, KIS 호출 유발, 게임 상태 조작)
+    #
+    # 카카오 챗봇 관리자센터의 스킬 설정에서 커스텀 헤더를 지정할 수 있으므로,
+    # 그 헤더에 공유 비밀키를 실어 보내게 하고 서버에서 검증한다.
+    SKILL_API_KEY = os.getenv("SKILL_API_KEY", "")
+    SKILL_API_KEY_HEADER = os.getenv("SKILL_API_KEY_HEADER", "X-Skill-Key")
+
     # 요청 본문 최대 크기 (10KB) - DoS 방지
     MAX_REQUEST_SIZE = 10 * 1024
 
@@ -60,3 +74,21 @@ class SecurityConfig:
         if cls.DEV_MODE:
             return ["*"]
         return cls.ALLOWED_ORIGINS
+
+    @classmethod
+    def is_skill_key_configured(cls) -> bool:
+        return bool(cls.SKILL_API_KEY)
+
+    @classmethod
+    def verify_skill_key(cls, provided: Optional[str]) -> bool:
+        """
+        스킬 요청의 공유 비밀키 검증.
+
+        키가 설정돼 있지 않으면 DEV_MODE에서만 통과시킨다.
+        운영 환경에서는 기동 시점에 키 미설정을 막으므로(validate_config)
+        여기까지 오면 통과시키지 않는다.
+        """
+        if not cls.SKILL_API_KEY:
+            return cls.DEV_MODE
+        # 타이밍 공격 방지
+        return secrets.compare_digest(provided or "", cls.SKILL_API_KEY)
