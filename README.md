@@ -109,7 +109,7 @@
 - **News**: Google News RSS
 - **Cache**: cachetools TTLCache (시세 60초, 랭킹 5분)
 - **Container**: Docker (멀티스테이지 빌드, non-root 실행)
-- **Deploy**: Railway (PaaS)
+- **Deploy**: Render (PaaS, Docker 배포)
 
 ## 실행 방법
 
@@ -152,16 +152,37 @@ ADMIN_TOKEN=your_secure_token    # /admin/* 엔드포인트 인증 (미설정 �
 DEV_MODE=false                   # true 시 /debug/skill 활성화 + 스킬 인증 생략 (로컬 전용)
 DB_POOL_TIMEOUT=2.0              # DB 커넥션 풀 대기 상한 (초)
 SKILL_RESPONSE_BUDGET=3.5        # 요청 시간 예산 (카카오 5초 SLA 대비)
+KIS_API_TIMEOUT=1.5              # KIS 개별 조회 타임아웃 (초)
+KIS_TOKEN_TIMEOUT=5.0            # KIS 토큰 발급 타임아웃 (초, 조회보다 넉넉하게)
+KIS_MAX_CONCURRENT_CALLS=5       # 프로세스 전역 동시 KIS 호출 상한
+KIS_SLOT_WAIT_CAP=1.0            # 동시 호출 슬롯 대기 상한 (초)
 ```
 
+> **KIS 토큰은 DB(`api_tokens`)에 저장된다.** 토큰은 24시간 유효한데
+> 프로세스 메모리에만 두면 재배포·콜드스타트마다 재발급을 시도하게 되고,
+> KIS는 토큰 발급 자체에 유량 제한이 있어 재기동이 잦으면 시세 조회가 통째로 멈춘다.
+
 전체 목록은 `.env.example` 참고.
+
+### 데이터베이스 마이그레이션
+
+스키마 변경은 Alembic으로 관리한다.
+
+```bash
+alembic upgrade head     # 최신 스키마 적용 (새 DB / 기존 DB 모두 안전)
+alembic check            # models.py와 실제 스키마 차이 확인
+```
+
+`0001_baseline`은 이미 테이블이 있는 기존 운영 DB에서도 그대로 돌도록
+멱등하게 작성돼 있다 (`stamp` 불필요). 운영 적용 절차와 자동 마이그레이션
+제거 시점은 [docs/MIGRATIONS.md](docs/MIGRATIONS.md) 참고.
 
 ### ⚠️ 스킬 인증 적용 시 배포 순서
 
 `/skill`은 공유 비밀키 헤더로 인증한다. **키를 설정하지 않으면 서버가 기동하지 않으므로**
 아래 순서를 지켜야 무중단으로 넘어갈 수 있다.
 
-1. **Railway 등 운영 환경에 `SKILL_API_KEY` 먼저 설정** (아직 배포하지 않음)
+1. **Render 등 운영 환경에 `SKILL_API_KEY` 먼저 설정** (아직 배포하지 않음)
 2. **카카오 챗봇 관리자센터 > 스킬 설정에 같은 헤더/값 등록**
 3. **스킬 설정 배포** — 관리자센터에서 배포해야 운영 봇에 반영된다
 4. **서버 코드 배포**
@@ -220,10 +241,12 @@ stock-king-bot/
 ├── responses.py             # 서비스 응답 빌더
 ├── constants.py             # 배틀/거래 상태 상수
 ├── database.py              # DB 연결 + 자동 마이그레이션
-├── models.py                # DB 모델 (10개 테이블)
+├── models.py                # DB 모델 (11개 테이블)
+├── alembic.ini              # Alembic 설정
+├── migrations/              # Alembic 리비전 (env.py, versions/)
 ├── requirements.txt
 ├── Dockerfile               # 멀티스테이지 빌드
-├── Procfile                 # Railway 배포용
+├── Procfile                 # PaaS 기동 명령 (uvicorn, $PORT 바인딩)
 ├── runtime.txt              # Python 3.11.0
 ├── handlers/                # 명령어 처리 (믹스인 아키텍처)
 │   ├── command_handler.py   # 명령어 라우팅 (COMMAND_ROUTES)

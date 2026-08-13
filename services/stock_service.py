@@ -19,10 +19,14 @@ from sqlalchemy.exc import SQLAlchemyError
 from game_config import GameConfig
 from settings import CacheConfig, KISConfig, SkillConfig
 from database import SessionLocal
+from contextlib import contextmanager
+
 from utils import (
+    BoundedConcurrency,
     CallThrottle,
     CircuitBreaker,
     CircuitOpenError,
+    ConcurrencyLimitError,
     budget,
     get_service_logger,
 )
@@ -39,6 +43,32 @@ _circuit_breaker = CircuitBreaker(
 # 급등/급락(순위 API)은 통과하는데 종목별 현재가(inquire-price)만 자주·병렬로
 # 호출돼 한도를 넘던 증상을 완화한다.
 _kis_throttle = CallThrottle(KISConfig.MIN_CALL_INTERVAL)
+
+# 프로세스 전체 동시 KIS 호출 상한.
+# throttle은 호출이 '시작되는 간격'만 제어하므로 상류가 느려지면 in-flight
+# 호출이 계속 쌓인다. 요청 예산이 끝나면 응답은 먼저 돌려주지만
+# (executor.shutdown(wait=False)) 그 worker와 소켓은 백그라운드에 남는다.
+# 동시 실행 수 자체에 상한을 걸어 그 누적을 막는다.
+_kis_limiter = BoundedConcurrency(KISConfig.MAX_CONCURRENT_CALLS)
+
+
+@contextmanager
+def _kis_call():
+    """
+    KIS 외부 호출 한 건을 감싸는 컨텍스트 (동시 실행 상한 + 서킷 브레이커).
+
+    슬롯을 서킷 guard '바깥'에서 잡는 이유:
+      - guard 안에서 잡으면 HALF_OPEN 프로브가 슬롯을 기다리는 동안
+        복구 프로브 자리를 붙잡게 된다.
+      - 슬롯 확보 실패는 로컬 자원 제한이지 API 장애가 아니므로
+        서킷 실패로 집계되면 안 된다.
+
+    슬롯 대기는 min(설정 상한, 남은 요청 예산)으로 제한되며,
+    확보하지 못하면 ConcurrencyLimitError를 던진다(호출을 시작하지 않는다).
+    """
+    with _kis_limiter.slot(timeout=budget.timeout_for(KISConfig.SLOT_WAIT_CAP)):
+        with _circuit_breaker.guard() as call:
+            yield call
 
 
 class KISAPIClient:
@@ -59,6 +89,111 @@ class KISAPIClient:
     _token_expires_at = None
     _token_lock = threading.Lock()  # 토큰 중복 발급 방지
 
+    # DB에 토큰을 남길 때 쓰는 발급처 식별자
+    TOKEN_PROVIDER = "kis"
+
+    # 토큰 만료 안전 여유.
+    # 호출 도중 만료되는 일이 없도록 실제 만료보다 이만큼 일찍 폐기한다.
+    TOKEN_EXPIRY_MARGIN = timedelta(hours=1)
+
+    # KIS가 expires_in을 주지 않을 때 가정할 유효기간
+    TOKEN_DEFAULT_LIFETIME = timedelta(hours=24)
+
+    @classmethod
+    def _token_ttl(cls, expires_in) -> timedelta:
+        """
+        응답의 expires_in(초)에서 실제로 신뢰할 유효기간을 계산.
+
+        KIS가 값을 주지 않거나 이상한 값을 주면 기본값을 쓰고,
+        만료 직전에 걸치지 않도록 안전 여유를 뺀다.
+        """
+        seconds = cls._safe_int(expires_in, 0)
+        lifetime = (
+            timedelta(seconds=seconds) if seconds > 0 else cls.TOKEN_DEFAULT_LIFETIME
+        )
+        # 여유를 빼서 음수/0이 되면 짧게라도 쓸 수 있게 최소치를 보장한다
+        return max(lifetime - cls.TOKEN_EXPIRY_MARGIN, timedelta(minutes=1))
+
+    @classmethod
+    def _cached_token(cls) -> Optional[str]:
+        """메모리에 남은 토큰이 아직 유효하면 반환"""
+        if cls._access_token and cls._token_expires_at:
+            if datetime.now(timezone.utc) < cls._token_expires_at:
+                return cls._access_token
+        return None
+
+    @classmethod
+    def _load_token_from_db(cls) -> Optional[str]:
+        """
+        DB에 저장된 토큰을 메모리로 복구.
+
+        재배포·콜드스타트로 프로세스가 새로 떠도 만료 전이면 재발급하지 않는다.
+        DB가 없거나 실패해도 토큰 발급 자체는 계속돼야 하므로 예외는 삼킨다.
+        """
+        from models import ApiToken
+
+        try:
+            db = SessionLocal()
+            try:
+                row = (
+                    db.query(ApiToken)
+                    .filter(ApiToken.provider == cls.TOKEN_PROVIDER)
+                    .first()
+                )
+                if row is None or not row.access_token or row.expires_at is None:
+                    return None
+
+                # 저장은 naive UTC 규약
+                expires_at = row.expires_at.replace(tzinfo=timezone.utc)
+                if expires_at <= datetime.now(timezone.utc):
+                    return None
+
+                cls._access_token = row.access_token
+                cls._token_expires_at = expires_at
+                logger.info("저장된 KIS 토큰 재사용 (재발급 생략)")
+                return row.access_token
+            finally:
+                db.close()
+        except SQLAlchemyError as e:
+            logger.warning(f"저장된 KIS 토큰 조회 실패: {e}")
+            return None
+
+    @classmethod
+    def _save_token_to_db(cls, token: str, expires_at: datetime) -> None:
+        """발급받은 토큰을 DB에 저장 (실패해도 발급 결과는 유지)"""
+        from models import ApiToken
+
+        try:
+            db = SessionLocal()
+            try:
+                naive_expiry = expires_at.astimezone(timezone.utc).replace(tzinfo=None)
+                row = (
+                    db.query(ApiToken)
+                    .filter(ApiToken.provider == cls.TOKEN_PROVIDER)
+                    .first()
+                )
+                if row is None:
+                    db.add(
+                        ApiToken(
+                            provider=cls.TOKEN_PROVIDER,
+                            access_token=token,
+                            expires_at=naive_expiry,
+                        )
+                    )
+                else:
+                    row.access_token = token
+                    row.expires_at = naive_expiry
+                db.commit()
+            except SQLAlchemyError:
+                # 다른 프로세스가 같은 PK를 먼저 넣었을 수도 있다. 토큰은 이미
+                # 메모리에 있으므로 저장 실패가 조회를 막지는 않는다.
+                db.rollback()
+                raise
+            finally:
+                db.close()
+        except SQLAlchemyError as e:
+            logger.warning(f"KIS 토큰 저장 실패 (동작에는 영향 없음): {e}")
+
     @classmethod
     def get_access_token(cls) -> Optional[str]:
         """OAuth 접근 토큰 발급 (24시간 유효, 스레드 안전)"""
@@ -69,24 +204,30 @@ class KISAPIClient:
         # 토큰이 아직 유효하면 재사용 (락 없이 빠른 확인)
         # 서킷 브레이커는 실제 HTTP 호출 직전에만 확인한다. 캐시된 토큰 반환 경로에서
         # 서킷을 통과시키면 HALF_OPEN 프로브 슬롯을 잡고도 반납하지 않게 된다.
-        if cls._access_token and cls._token_expires_at:
-            if datetime.now(timezone.utc) < cls._token_expires_at:
-                return cls._access_token
+        cached = cls._cached_token()
+        if cached:
+            return cached
 
         # 병렬 배치 조회 중 여러 스레드가 동시에 만료를 감지해도
         # 토큰 발급 요청은 한 번만 나가도록 락으로 직렬화
         with cls._token_lock:
             # 락 대기 중 다른 스레드가 이미 발급했으면 재사용
-            if cls._access_token and cls._token_expires_at:
-                if datetime.now(timezone.utc) < cls._token_expires_at:
-                    return cls._access_token
+            cached = cls._cached_token()
+            if cached:
+                return cached
+
+            # 재기동 직후라면 메모리만 비었을 뿐 DB에 유효한 토큰이 남아 있다.
+            # HTTP 발급보다 먼저 확인해 불필요한 재발급을 막는다.
+            stored = cls._load_token_from_db()
+            if stored:
+                return stored
 
             if budget.exhausted(SkillConfig.MIN_CALL_BUDGET):
                 logger.warning("응답 예산 소진 - KIS 토큰 발급 스킵")
                 return None
 
             try:
-                with _circuit_breaker.guard() as call:
+                with _kis_call() as call:
                     url = f"{KISConfig.BASE_URL}/oauth2/tokenP"
                     headers = {"Content-Type": "application/json"}
                     body = {
@@ -103,20 +244,30 @@ class KISAPIClient:
                         url,
                         headers=headers,
                         json=body,
-                        timeout=budget.timeout_for(KISConfig.API_TIMEOUT),
+                        timeout=budget.timeout_for(KISConfig.TOKEN_TIMEOUT),
                     )
 
                     if resp.status_code != 200:
-                        logger.error(f"KIS 토큰 발급 실패: {resp.status_code}")
+                        logger.error(
+                            f"KIS 토큰 발급 실패: {resp.status_code} "
+                            f"{cls._describe_error_body(resp)}"
+                        )
                         call.failure()
                         return None
 
                     data = resp.json()
-                    cls._access_token = data.get("access_token")
-                    # 토큰 만료시간 설정 (23시간 - 여유 1시간)
-                    cls._token_expires_at = datetime.now(timezone.utc) + timedelta(
-                        hours=23
+                    token = data.get("access_token")
+                    if not token:
+                        logger.error("KIS 토큰 발급 응답에 access_token이 없습니다")
+                        call.failure()
+                        return None
+
+                    cls._access_token = token
+                    cls._token_expires_at = datetime.now(timezone.utc) + cls._token_ttl(
+                        data.get("expires_in")
                     )
+                    # 다음 재기동에서 재발급하지 않도록 남겨둔다
+                    cls._save_token_to_db(token, cls._token_expires_at)
                     logger.info("KIS API 토큰 발급 성공")
                     return cls._access_token
 
@@ -199,7 +350,7 @@ class KISAPIClient:
             return None
 
         try:
-            with _circuit_breaker.guard() as call:
+            with _kis_call() as call:
                 url = f"{KISConfig.BASE_URL}/uapi/domestic-stock/v1/quotations/inquire-price"
                 params = {
                     "FID_COND_MRKT_DIV_CODE": "J",  # 주식
@@ -252,6 +403,8 @@ class KISAPIClient:
                     "volume": cls._safe_int(output.get("acml_vol")),
                 }
 
+        except ConcurrencyLimitError as e:
+            logger.debug(f"KIS 동시 호출 상한 - 시세 조회 스킵 ({stock_code}): {e}")
         except CircuitOpenError:
             logger.debug(f"KIS API 서킷 브레이커 열림 - 시세 조회 스킵 ({stock_code})")
         except Timeout:
@@ -280,7 +433,7 @@ class KISAPIClient:
             return []
 
         try:
-            with _circuit_breaker.guard() as call:
+            with _kis_call() as call:
                 url = f"{KISConfig.BASE_URL}/uapi/domestic-stock/v1/quotations/volume-rank"
                 params = {
                     "FID_COND_MRKT_DIV_CODE": market,
@@ -342,6 +495,8 @@ class KISAPIClient:
                         continue
                 return results
 
+        except ConcurrencyLimitError as e:
+            logger.debug(f"KIS 동시 호출 상한 - {label} 순위 조회 스킵: {e}")
         except CircuitOpenError:
             logger.debug(f"KIS API 서킷 브레이커 열림 - {label} 순위 조회 스킵")
         except Timeout:
@@ -422,7 +577,7 @@ class KISAPIClient:
             return None
 
         try:
-            with _circuit_breaker.guard() as call:
+            with _kis_call() as call:
                 url = f"{KISConfig.BASE_URL}/uapi/domestic-stock/v1/quotations/inquire-index-price"
                 params = {"FID_COND_MRKT_DIV_CODE": "U", "FID_INPUT_ISCD": index_code}
 
@@ -460,6 +615,8 @@ class KISAPIClient:
                     "change": cls._safe_float(output.get("bstp_nmix_prdy_ctrt")),
                 }
 
+        except ConcurrencyLimitError as e:
+            logger.debug(f"KIS 동시 호출 상한 - 지수 조회 스킵 ({index_code}): {e}")
         except CircuitOpenError:
             logger.debug(f"KIS API 서킷 브레이커 열림 - 지수 조회 스킵 ({index_code})")
         except Timeout:

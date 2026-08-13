@@ -68,9 +68,27 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt -r requirements-dev.txt
 
-      - name: Concurrency tests
+      - name: Alembic upgrade (fresh database)
+        # 운영 dialect에서 마이그레이션이 실제로 도는지 먼저 확인한다.
+        # 여기서 깨지면 배포가 통째로 막히므로 테스트보다 앞에 둔다.
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/maxlevelant_migration
+        run: |
+          PGPASSWORD=postgres psql -h localhost -U postgres -c \
+            "CREATE DATABASE maxlevelant_migration;"
+          alembic upgrade head
+
+      - name: Alembic schema matches models
+        # 마이그레이션 결과와 models.py가 어긋나면 autogenerate가 차이를 낸다.
+        # (모델만 고치고 리비전을 안 만든 경우를 여기서 잡는다)
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/maxlevelant_migration
+        run: alembic check
+
+      - name: Concurrency & migration tests
         # 거래/보상 정합성은 PostgreSQL row lock에 의존하므로
         # SQLite로는 검증할 수 없다. 실제 PostgreSQL에 붙여 확인한다.
+        # 마이그레이션 테스트(기존 DB 수렴)도 같은 DB에서 함께 돈다.
         env:
           TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/maxlevelant_test
         run: pytest -m postgres -v

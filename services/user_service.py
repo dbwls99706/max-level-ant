@@ -10,7 +10,7 @@ import re
 from datetime import datetime, timedelta
 from typing import Optional, Tuple, Dict
 from sqlalchemy.orm import Session
-from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy import exists
 
 from models import User, ChatRoomMember
@@ -23,10 +23,33 @@ from utils import get_service_logger, log_attendance
 logger = get_service_logger()
 
 
-def register_chatroom_member(db: Session, group_key: str, kakao_id: str) -> None:
-    """채팅방 멤버 등록/갱신 (그룹 챗봇용) - 별도 세션 사용하여 메인 세션 오염 방지"""
+def _find_member(session: Session, group_key: str, kakao_id: str):
+    """해당 방의 멤버십 행 조회 (없으면 None)"""
+    return (
+        session.query(ChatRoomMember)
+        .filter(
+            ChatRoomMember.group_key == group_key,
+            ChatRoomMember.kakao_id == kakao_id,
+        )
+        .first()
+    )
+
+
+def register_chatroom_member(db: Session, group_key: str, kakao_id: str) -> bool:
+    """
+    채팅방 멤버 등록/갱신 (그룹 챗봇용) - 별도 세션 사용하여 메인 세션 오염 방지
+
+    Returns:
+        멤버십이 확보됐으면 True.
+        users 행이 아직 없어 등록을 건너뛰었으면 False.
+
+        이 구분이 필요한 이유: chatroom_members는 users를 FK로 참조하므로
+        유저가 없으면 등록할 수 없다. 그런데 그룹방에서의 첫 `/시작`은
+        바로 그 명령이 유저를 만든다. 호출부가 False를 보고 명령 처리 뒤에
+        다시 시도할 수 있어야, 첫 턴부터 방 랭킹에 잡힌다.
+    """
     if not group_key or not kakao_id:
-        return
+        return False
     from database import SessionLocal
 
     separate_db = None
@@ -37,16 +60,9 @@ def register_chatroom_member(db: Session, group_key: str, kakao_id: str) -> None
             exists().where(User.kakao_id == kakao_id)
         ).scalar()
         if not user_exists:
-            return
+            return False
 
-        existing = (
-            separate_db.query(ChatRoomMember)
-            .filter(
-                ChatRoomMember.group_key == group_key,
-                ChatRoomMember.kakao_id == kakao_id,
-            )
-            .first()
-        )
+        existing = _find_member(separate_db, group_key, kakao_id)
         if existing:
             from models import _utcnow
 
@@ -55,10 +71,28 @@ def register_chatroom_member(db: Session, group_key: str, kakao_id: str) -> None
             member = ChatRoomMember(group_key=group_key, kakao_id=kakao_id)
             separate_db.add(member)
         separate_db.commit()
+        return True
+    except IntegrityError:
+        # IntegrityError는 unique 충돌만 뜻하지 않는다. FK 위반 등 다른 무결성
+        # 오류도 같은 예외로 온다. 그래서 "동시 요청이 먼저 넣었겠지"라고
+        # 단정하면, 실제로는 멤버십이 없는데 성공을 보고하게 된다.
+        #
+        # constraint 이름으로 구분하는 방법은 DB·드라이버마다 달라 깨지기 쉽다.
+        # rollback 후 행이 실제로 있는지 다시 확인하는 쪽이 DB 독립적이고 정확하다.
+        if separate_db is None:
+            return False
+        try:
+            separate_db.rollback()
+            return _find_member(separate_db, group_key, kakao_id) is not None
+        except SQLAlchemyError:
+            # 재확인조차 실패하면 확보됐다고 볼 근거가 없다
+            logger.debug(f"채팅방 멤버 재확인 실패: group={group_key[:8]}...")
+            return False
     except Exception:
         if separate_db:
             separate_db.rollback()
         logger.debug(f"채팅방 멤버 등록 실패: group={group_key[:8]}...")
+        return False
     finally:
         if separate_db:
             separate_db.close()

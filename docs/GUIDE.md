@@ -5,7 +5,7 @@
 2. [STEP 1: 카카오톡 채널 만들기](#step-1-카카오톡-채널-만들기)
 3. [STEP 2: 챗봇 관리자센터 신청](#step-2-챗봇-관리자센터-신청)
 4. [STEP 3: 스킬 서버 개발](#step-3-스킬-서버-개발)
-5. [STEP 4: 서버 배포 (Railway)](#step-4-서버-배포-railway)
+5. [STEP 4: 서버 배포 (Render)](#step-4-서버-배포-render)
 6. [STEP 5: 챗봇 설정 및 연동](#step-5-챗봇-설정-및-연동)
 7. [STEP 6: 테스트 및 배포](#step-6-테스트-및-배포)
 
@@ -16,7 +16,7 @@
 ### 필수 계정
 - [ ] **카카오 계정** (카카오톡 사용 중이면 있음)
 - [ ] **GitHub 계정** (https://github.com 에서 가입)
-- [ ] **Railway 계정** (https://railway.app 에서 GitHub로 가입)
+- [ ] **Render 계정** (https://render.com 에서 GitHub로 가입)
 
 ### 개발 환경
 - [ ] Python 3.11 이상 설치
@@ -97,7 +97,7 @@ stock-king-bot/
 ├── models.py                # DB 모델 (10개 테이블)
 ├── requirements.txt         # 패키지 목록
 ├── Dockerfile               # Docker 빌드
-├── Procfile                 # Railway 배포용
+├── Procfile                 # PaaS 기동 명령 (uvicorn, $PORT 바인딩)
 ├── handlers/                # 명령어 처리
 │   ├── command_handler.py   # 명령어 라우팅 + 기본 핸들러
 │   ├── base_handler.py      # 공통 유틸리티 믹스인
@@ -168,7 +168,7 @@ uvicorn main:app --reload --port 8000
 
 ---
 
-## STEP 4: 서버 배포 (Railway)
+## STEP 4: 서버 배포 (Render)
 
 ### 4-1. GitHub 저장소 생성
 1. https://github.com 접속
@@ -187,27 +187,41 @@ git remote add origin https://github.com/[사용자명]/stock-king-bot.git
 git push -u origin main
 ```
 
-### 4-3. Railway 배포
-1. https://railway.app 접속
-2. GitHub 계정으로 로그인
-3. **[New Project]** > **[Deploy from GitHub repo]**
-4. `stock-king-bot` 저장소 선택
-5. **[Deploy Now]** 클릭
+### 4-3. Render 배포
+1. https://render.com 접속 후 GitHub 계정으로 로그인
+2. **[New]** > **[Web Service]**
+3. `stock-king-bot` 저장소 연결
+4. 저장소에 `Dockerfile`이 있으므로 런타임은 Docker로 잡힌다
+   (Docker를 쓰지 않을 경우 시작 명령은 `Procfile`과 동일하게
+   `uvicorn main:app --host 0.0.0.0 --port $PORT`)
+5. **[Create Web Service]** 클릭
 
-### 4-4. 환경 변수 설정
-Railway 대시보드에서:
-1. 프로젝트 클릭 > **[Variables]** 탭
-2. 다음 환경 변수 추가:
-   ```
-   DATABASE_URL=postgresql://... (자동 생성됨)
-   KIS_APP_KEY=your_app_key
-   KIS_APP_SECRET=your_app_secret
-   ```
+### 4-4. 데이터베이스 생성
+1. **[New]** > **[PostgreSQL]** 로 관리형 DB 생성
+2. 생성된 DB의 **Internal Database URL** 복사
+   (같은 리전의 서비스끼리는 내부 주소가 더 빠르고 안전하다)
 
-### 4-5. 도메인 확인
-1. **[Settings]** > **[Networking]**
-2. **[Generate Domain]** 클릭
-3. 생성된 URL 복사 (예: `https://stock-king-bot-production.up.railway.app`)
+### 4-5. 환경 변수 설정
+웹 서비스의 **[Environment]** 탭에서 추가한다:
+```
+DATABASE_URL=postgresql://...   # 4-4에서 복사한 Internal URL
+KIS_APP_KEY=your_app_key
+KIS_APP_SECRET=your_app_secret
+SKILL_API_KEY=<긴 랜덤 문자열>   # 미설정 시 서버가 기동하지 않는다
+```
+
+`SKILL_API_KEY`는 아래 명령으로 만든다:
+```bash
+python -c "import secrets; print(secrets.token_urlsafe(32))"
+```
+
+> ⚠️ **배포 순서 주의**: 서버를 먼저 배포하면 헤더 없는 카카오 요청이 전부
+> 403이 된다. `SKILL_API_KEY` 설정 → 카카오 관리자센터에 같은 헤더/값 등록 →
+> **스킬 배포** → 서버 배포 순으로 진행한다. 자세한 내용은 README 참고.
+
+### 4-6. 도메인 확인
+1. 웹 서비스 대시보드 상단의 URL을 복사한다
+   (예: `https://stock-king-bot.onrender.com`)
 
    이 URL이 스킬 서버 URL입니다!
 
@@ -226,8 +240,8 @@ Railway 대시보드에서:
 2. **[생성]** 버튼 클릭
 3. 스킬 정보 입력:
    - **스킬명**: `만렙개미 스킬`
-   - **URL**: `https://[Railway URL]/skill`
-     (예: `https://stock-king-bot-production.up.railway.app/skill`)
+   - **URL**: `https://[Render URL]/skill`
+     (예: `https://stock-king-bot.onrender.com/skill`)
    - **기본 스킬로 지정**: 체크
 
 4. **[저장]** 클릭
@@ -288,7 +302,7 @@ Railway 대시보드에서:
 ### Q1. 스킬 서버 연결 실패
 **증상**: "스킬 서버와 통신할 수 없습니다"
 **해결**:
-1. Railway 서버가 실행 중인지 확인
+1. Render 서버가 실행 중인지 확인
 2. URL 끝에 `/skill` 붙었는지 확인
 3. HTTPS인지 확인 (HTTP 안됨)
 
@@ -304,7 +318,7 @@ Railway 대시보드에서:
 **해결**:
 1. 챗봇이 배포되었는지 확인
 2. 채널과 챗봇이 연결되었는지 확인
-3. Railway 로그에서 에러 확인
+3. Render 로그에서 에러 확인
 4. `/health` 엔드포인트로 서버 상태 확인
 
 ---
@@ -312,7 +326,7 @@ Railway 대시보드에서:
 ## 참고 링크
 
 - **카카오 챗봇 공식 문서**: https://kakaobusiness.gitbook.io/main/tool/chatbot
-- **Railway 문서**: https://docs.railway.app
+- **Render 문서**: https://render.com/docs
 - **KIS OpenAPI**: https://apiportal.koreainvestment.com
 
 ---

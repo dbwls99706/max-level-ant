@@ -8,13 +8,16 @@
 - **Framework**: FastAPI + Uvicorn (ASGI)
 - **Database**: PostgreSQL (production) / SQLite (local dev, tests)
 - **ORM**: SQLAlchemy 2.x
-- **Deploy**: Docker (multi-stage) → Railway (PaaS)
+- **Deploy**: Docker (multi-stage) → Render (PaaS)
 
 ## Quick Commands
 
 ```bash
 # Run server locally
 uvicorn main:app --reload --port 8000
+
+# Apply DB migrations (safe on both fresh and existing databases)
+alembic upgrade head
 
 # Run tests
 pytest
@@ -32,7 +35,7 @@ ruff format --check .
 stock-king-bot/
 ├── main.py              # FastAPI app, endpoints, rate limiter, lifespan
 ├── database.py          # DB engine, session, migration, cleanup
-├── models.py            # SQLAlchemy models (10 tables)
+├── models.py            # SQLAlchemy models (11 tables)
 │   # ── Configuration & shared contracts (formerly one config.py) ──
 ├── settings.py          # DB URL, KIS/공공데이터 API, cache TTL, validate_config()
 ├── security.py          # Admin token, CORS origins, request size & rate limits
@@ -67,12 +70,14 @@ stock-king-bot/
 │   ├── milestone_service.py # Asset milestones
 │   ├── asset_service.py     # Asset history tracking
 │   └── quiz_data_service.py # Stock quiz data from public API
-├── .github/workflows/   # CI (ruff + pytest, PostgreSQL 동시성 job 포함)
+├── .github/workflows/   # CI (ruff + pytest, PostgreSQL 동시성/마이그레이션 job 포함)
+├── alembic.ini          # Alembic 설정 (DB URL은 env.py가 환경변수에서 읽음)
+├── migrations/          # Alembic 리비전 (env.py, versions/)
 ├── utils/
 │   ├── kakao_response.py    # Kakao chatbot response format builder (spec limits)
 │   ├── budget.py            # Per-request time budget for the 5s Kakao skill SLA
 │   ├── visual_helpers.py    # Text-based charts, progress bars
-│   ├── resilience.py        # CircuitBreaker, CallThrottle (external API guards)
+│   ├── resilience.py        # CircuitBreaker, CallThrottle, BoundedConcurrency
 │   ├── logger.py            # Logging configuration
 │   └── audit_logger.py      # Audit log for sensitive operations
 ├── tests/               # pytest tests (SQLite in-memory)
@@ -80,7 +85,7 @@ stock-king-bot/
 │   └── test_*.py            # Service-level unit tests
 ├── docs/                # Documentation
 ├── Dockerfile           # Multi-stage build, non-root user
-├── Procfile             # Railway deployment
+├── Procfile             # PaaS start command (uvicorn on $PORT)
 ├── requirements.txt     # Dependencies
 └── pytest.ini           # pytest config: -v --tb=short
 ```
@@ -125,7 +130,10 @@ mutation + commit
 - Error codes defined in `errors.ErrorCode`
 
 ### Database
-- Models in `models.py`, 10 tables: `users`, `holdings`, `transactions`, `battles`, `weekly_challenges`, `user_challenges`, `milestones`, `asset_history`, `chatroom_members`, `stock_cache`
+- Models in `models.py`, 11 tables: `users`, `holdings`, `transactions`, `battles`, `weekly_challenges`, `user_challenges`, `milestones`, `asset_history`, `chatroom_members`, `stock_cache`, `api_tokens`
+- `api_tokens`는 KIS 접근 토큰을 영속 저장한다. 토큰이 프로세스 메모리에만 있으면
+  재배포·콜드스타트마다 재발급을 시도하는데, KIS는 토큰 발급 자체에 유량 제한이 있어
+  재기동이 잦으면 시세 조회가 통째로 멈춘다
 - Auto-migration in `database._migrate_db()` adds missing columns on startup
 - `User.cash` and financial fields use `BigInteger` to prevent overflow
 - Timestamps stored as naive UTC (`_utcnow()` helper)
@@ -150,8 +158,11 @@ SKILL_API_KEY_HEADER=X-Skill-Key          # 카카오 관리자센터에 등록�
 ADMIN_TOKEN=<관리자 API 토큰>              # 미설정 시 임시 토큰 생성 + 경고
 DB_POOL_TIMEOUT=2.0                       # DB 커넥션 풀 대기 상한 (초)
 DEV_MODE=false                            # true면 CORS 전체 허용 + 디버그 엔드포인트
-KIS_MIN_CALL_INTERVAL=0.1                 # KIS 호출 간 최소 간격 (초)
+KIS_MIN_CALL_INTERVAL=0.1                 # KIS 호출 간 최소 간격 (초). 모의투자면 1.0 이상
 KIS_API_TIMEOUT=1.5                       # KIS 개별 호출 타임아웃 (초)
+KIS_TOKEN_TIMEOUT=5.0                     # KIS 토큰 발급 전용 타임아웃 (초)
+KIS_MAX_CONCURRENT_CALLS=5                # 프로세스 전역 동시 KIS 호출 상한
+KIS_SLOT_WAIT_CAP=1.0                     # 동시 호출 슬롯 대기 상한 (초)
 SKILL_RESPONSE_BUDGET=3.5                 # 요청 전체 시간 예산 (카카오 5초 SLA 대비)
 PUBLIC_DATA_API_TIMEOUT=2.0               # 공공데이터 API 타임아웃 (초)
 KIS_CIRCUIT_FAILURE_THRESHOLD=5           # 서킷 차단 임계 실패 횟수
@@ -188,7 +199,16 @@ TEST_DATABASE_URL=postgresql://user:pw@localhost/dbname pytest -m postgres
 - **Error handling**: Use `ErrorCode` constants and the `error_response()` / `success_response()` format
 - **Logging**: Use module-specific loggers from `utils.logger` (`get_main_logger`, `get_handler_logger`, `get_service_logger`)
 - **Money safety**: Always use `safe_add()` / `safe_subtract()` from `services.common` for financial calculations
-- **No Alembic**: Schema migrations are manual via `_migrate_db()` in `database.py`
+- **Alembic**: schema changes live in `migrations/versions/`. `0001_baseline` is deliberately
+  **idempotent** (creates only missing tables/columns, widens int4 money columns) because the
+  production DB predates Alembic — so `alembic upgrade head` works on both a fresh and an
+  existing DB, with no `stamp` step. Never edit `0001_baseline` when models change; add a new
+  revision. `init_db()`'s `create_all()` + `_migrate_db()` are still in place on purpose and
+  are removed only after the Alembic path has run against production — see `docs/MIGRATIONS.md`
+- **`0001_baseline` cannot be downgraded** and raises if you try. It doubles as an *adoption*
+  step for the pre-Alembic production schema, so it cannot tell which tables it created —
+  `downgrade base` would DROP `users`/`holdings`/`transactions` and destroy real user data.
+  Downgrades between `0002`+ revisions are fine; write their `downgrade()` normally
 - **Imports**: Relative imports within packages (handlers, services, utils), absolute from root
 
 ## Linting
@@ -211,7 +231,24 @@ ruff format --check .     # Format check
 - Group chat support: `chatroom_members` table tracks which users are in which chat rooms for per-room rankings
 - Rate limiting is in-memory (not Redis) — resets on restart
 - Configuration is split by responsibility (see Project Structure). Large pure-data tables live in their own modules (`quiz_history.py`, `enhance_titles.py`) so the config modules stay readable
-- KIS API calls are wrapped by `utils.resilience.CircuitBreaker.guard()`; in `HALF_OPEN` only a single recovery probe is allowed through at a time
+- KIS API calls go through `services.stock_service._kis_call()`: a process-wide
+  `BoundedConcurrency` slot **outside** the `CircuitBreaker.guard()`. The slot is outside
+  so a HALF_OPEN probe never waits on a slot while holding the recovery slot, and so a
+  `ConcurrencyLimitError` (a local resource limit, not an API failure) is never counted as
+  a circuit failure. In `HALF_OPEN` only a single recovery probe is allowed through at a time
+- KIS token issuance uses its own timeout (`KIS_TOKEN_TIMEOUT`), longer than the per-query
+  one: it is slower, and if it fails every subsequent query is blocked. At startup there is no
+  Kakao SLA so the full value applies; during a request `budget` caps it again
 - **Kakao skill SLA is 5s.** `/skill` starts a **cooperative** time budget (`utils/budget.py`) at request entry and hands it to the worker thread; external calls use `min(call timeout, remaining budget)` and are skipped when the budget is spent. This is not a hard timeout — DB query time isn't covered (pool wait is bounded separately by `DB_POOL_TIMEOUT`), and `requests` timeouts are per-connect/read, not total wall clock. Handling runs in a threadpool so one slow request can't stall the event loop
+- **No sync DB work on the event loop.** An `async def` endpoint body runs on the loop thread,
+  so a slow DB call there freezes *every* request in that worker. `/skill`, `/debug/skill`,
+  `/health`, `/admin/reset-db` and `/admin/reset-seed` all hand their DB work to
+  `run_in_threadpool`. A `Session` must be created, used, committed and closed inside the same
+  worker function (`_reset_seed_money` exists for exactly this reason)
+- **Group chat membership.** `chatroom_members` has an FK to `users`, so registration only works
+  once the user row exists. The first `/시작` in a room creates that row *during* the command,
+  so `CommandHandler.handle()` retries registration after dispatch when the pre-check found no
+  user. A unique-constraint violation there means a concurrent request already registered — it
+  is treated as success, not failure
 - **Kakao response spec** (enforced in `utils/kakao_response.py`, verified by `tests/test_kakao_spec_compliance.py`): `outputs` ≤ 3; textCard title+description ≤ 400; basicCard description ≤ 230; listCard items ≤ 5; buttons ≤ 3 vertical / 2 horizontal. `KakaoResponse.BODY_LIMIT` (350) is a deliberately stricter UX limit — the group beta guide requires responses not to cover the whole chat screen
 - `listLayout: "ranking"` is a **group-chatbot-only** bubble ('리스트(랭킹)', beta guide slide 32); it is not in the public 1:1 spec
