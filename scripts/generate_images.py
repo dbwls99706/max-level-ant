@@ -259,13 +259,32 @@ def run(combos, args) -> int:
     return 1 if (fail or interrupted) else 0
 
 
+def _read_manifest(mpath: Path):
+    """기존 manifest를 읽는다. 못 읽으면 빈 목록으로 시작한다.
+
+    초기 버전이 write_text()를 인코딩 없이 호출해서, 윈도우에서 만들어진
+    manifest는 UTF-8이 아니라 cp949로 저장돼 있다. 지금은 항상 UTF-8로
+    쓰지만 이미 만들어진 파일이 남아 있으므로 읽을 때 물러설 곳을 둔다.
+
+    끝까지 못 읽어도 중단하지는 않는다. manifest는 파일명으로 언제든
+    복구할 수 있는 부산물인데(--rebuild-manifest), 이것 때문에 방금 돈 주고
+    받은 이미지의 기록을 통째로 날리는 게 훨씬 손해다.
+    """
+    if not mpath.exists():
+        return []
+    for encoding in ("utf-8", "cp949"):
+        try:
+            return json.loads(mpath.read_text(encoding=encoding))
+        except (UnicodeDecodeError, json.JSONDecodeError):
+            continue
+    print(f"경고: 기존 {mpath.name}을 읽지 못해 새로 씁니다")
+    return []
+
+
 def write_manifest(outdir: Path, entries) -> None:
     """기존 manifest에 이번 결과를 덮어써서 병합한다"""
     mpath = outdir / "manifest.json"
-    existing = []
-    if mpath.exists():
-        existing = json.loads(mpath.read_text(encoding="utf-8"))
-    merged = {m["file"]: m for m in existing}
+    merged = {m["file"]: m for m in _read_manifest(mpath)}
     merged.update({m["file"]: m for m in entries})
     mpath.write_text(
         json.dumps(list(merged.values()), ensure_ascii=False, indent=2),
