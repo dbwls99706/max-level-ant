@@ -102,7 +102,9 @@ class CircuitBreaker:
         self._failure_count = 0
         self._opened_at: Optional[float] = None
         self._state = CircuitState.CLOSED
-        self._probe_in_flight = False
+        # 진행 중인 복구 프로브의 허가증. 슬롯을 "누가" 쥐고 있는지까지 기억해야
+        # 무효화된 옛 프로브가 현재 프로브의 슬롯을 대신 풀어버리는 일이 없다.
+        self._probe_permit: Optional[CallPermit] = None
         self._generation = 0
         self._lock = threading.Lock()
 
@@ -136,31 +138,42 @@ class CircuitBreaker:
                     return None
                 # 복구 타임아웃 경과 → 프로브 1건만 통과시킨다
                 self._state = CircuitState.HALF_OPEN
-                self._probe_in_flight = True
                 logger.info("서킷 브레이커: HALF_OPEN (복구 프로브 시작)")
-                return CallPermit(is_probe=True, generation=self._generation)
+                self._probe_permit = CallPermit(
+                    is_probe=True, generation=self._generation
+                )
+                return self._probe_permit
 
             # HALF_OPEN: 이미 프로브가 진행 중이면 결과가 나올 때까지 차단
-            if self._probe_in_flight:
+            if self._probe_permit is not None:
                 return None
-            self._probe_in_flight = True
-            return CallPermit(is_probe=True, generation=self._generation)
+            self._probe_permit = CallPermit(is_probe=True, generation=self._generation)
+            return self._probe_permit
 
     def release(self, permit: Optional[CallPermit]):
-        """허가증 반납 및 결과 반영 (두 번 호출해도 안전)"""
-        if permit is None or permit._settled:
+        """
+        허가증 반납 및 결과 반영.
+
+        같은 허가증을 여러 번(동시에라도) 반납해도 결과는 한 번만 반영된다.
+        _settled 검사와 갱신은 락 안에서 함께 이뤄진다.
+        """
+        if permit is None:
             return
-        permit._settled = True
 
         with self._lock:
+            if permit._settled:
+                return
+            permit._settled = True
+
             if permit.is_probe:
-                # 프로브 슬롯은 결과와 무관하게 반드시 반납한다
-                self._probe_in_flight = False
-                if (
-                    permit.generation != self._generation
-                    or self._state != CircuitState.HALF_OPEN
-                ):
-                    return  # 프로브가 무효화된 뒤 도착 (방어적)
+                # 이 허가증이 지금 슬롯을 쥐고 있을 때만 반납한다.
+                # reset() 등으로 무효화된 옛 프로브가 뒤늦게 도착해도
+                # 현재 진행 중인 프로브의 슬롯을 풀어서는 안 된다.
+                if self._probe_permit is not permit:
+                    logger.debug("서킷 브레이커: 무효화된 프로브 결과 무시")
+                    return
+                self._probe_permit = None
+
                 if permit.failed:
                     self._open_locked("복구 프로브 실패")
                 else:
@@ -214,14 +227,14 @@ class CircuitBreaker:
             self._state = CircuitState.CLOSED
             self._failure_count = 0
             self._opened_at = None
-            self._probe_in_flight = False
+            self._probe_permit = None
             self._generation += 1
 
     def _open_locked(self, reason: str):
         """서킷 열기 (락 보유 상태에서 호출)"""
         self._state = CircuitState.OPEN
         self._opened_at = time.monotonic()
-        self._probe_in_flight = False
+        self._probe_permit = None
         # 세대를 올려 이 시점 이전에 발급된 허가증의 결과를 모두 무효화한다
         self._generation += 1
         logger.warning(

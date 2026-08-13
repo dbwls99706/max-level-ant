@@ -285,6 +285,41 @@ class TestHalfOpenSingleProbe:
 
         assert len(allowed) == 1, f"프로브가 {len(allowed)}건 통과했습니다"
 
+    def test_invalidated_probe_does_not_release_current_slot(self):
+        """
+        무효화된 옛 프로브가 뒤늦게 반납돼도 현재 프로브의 슬롯을 풀면 안 된다.
+
+        시나리오:
+          1. 프로브 P1 진행 중
+          2. 운영자가 reset() → P1 무효화
+          3. 다시 장애가 나서 서킷이 열리고, 복구 프로브 P2가 진행 중
+          4. 아주 늦게 P1이 반납된다
+          → P1은 슬롯 주인이 아니므로 P2의 슬롯을 건드리면 안 된다
+        """
+        cb = CircuitBreaker(failure_threshold=1)
+        _open_circuit(cb)
+        _expire_recovery_timeout(cb)
+
+        p1 = cb.acquire()
+        assert p1.is_probe is True
+
+        cb.reset()  # 운영자 수동 복구 → P1 무효화
+
+        # 다시 장애 → 복구 프로브 P2 진행 중
+        _fail(cb, 1)
+        _expire_recovery_timeout(cb)
+        p2 = cb.acquire()
+        assert p2.is_probe is True
+        assert cb.acquire() is None  # P2가 슬롯을 쥐고 있다
+
+        cb.release(p1)  # 뒤늦게 도착한 P1
+
+        assert cb.state == CircuitState.HALF_OPEN
+        assert cb.acquire() is None, "무효화된 프로브가 현재 프로브의 슬롯을 풀었습니다"
+
+        cb.release(p2)
+        assert cb.state == CircuitState.CLOSED
+
     def test_probe_failure_blocks_next_wave(self):
         """프로브가 실패하면 다음 요청 무리는 다시 전부 차단"""
         cb = CircuitBreaker()
@@ -373,6 +408,38 @@ class TestGuard:
         cb.release(permit)
         cb.release(permit)  # 두 번째는 무시돼야 한다
         assert cb.state == CircuitState.CLOSED
+
+    def test_concurrent_double_release_counted_once(self):
+        """
+        같은 허가증을 여러 스레드가 동시에 반납해도 결과는 한 번만 반영된다.
+
+        참고: _settled 검사와 갱신이 락 밖에 있으면 원자적이지 않아 중복 집계가
+        가능하지만, CPython에서 실제로 재현시키지는 못했다(300회 시도, 0회 발생).
+        따라서 이 테스트는 버그 재현이 아니라 회귀 방지용 가드다.
+        실제 수정은 check-and-set을 락 안으로 옮긴 것이며 코드 검토로 확인된다.
+        """
+        cb = CircuitBreaker(failure_threshold=5)
+        permit = cb.acquire()
+        permit.failure()
+
+        thread_count = 16
+        start = threading.Barrier(thread_count)
+
+        def worker():
+            start.wait()
+            cb.release(permit)
+
+        threads = [threading.Thread(target=worker) for _ in range(thread_count)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+
+        # 실패가 정확히 1건만 집계됐다면 3건을 더해도 아직 열리지 않는다
+        _fail(cb, 3)
+        assert cb.state == CircuitState.CLOSED, "동시 반납이 중복 집계됐습니다"
+        _fail(cb, 1)
+        assert cb.state == CircuitState.OPEN
 
 
 class TestThreadSafety:
