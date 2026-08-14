@@ -309,6 +309,60 @@ class TestHttpTimeoutIsWallClock:
         assert sum(seen["timeout"]) <= KISConfig.RANK_TIMEOUT
 
 
+class TestRequestPathDefersToBackground:
+    """순위는 배경 루프의 소유다. 요청 경로가 직접 부르면 예산만 태운다"""
+
+    def setup_method(self):
+        from services.stock_service import _rank_cache, _rank_circuit_breaker
+
+        _rank_cache.clear()
+        _rank_circuit_breaker.reset()
+
+    teardown_method = setup_method
+
+    def test_no_kis_call_during_a_kakao_request(self):
+        """KIS 순위는 실측 17초다. 3초 상한에서 부르면 결과는 언제나 폴백이다"""
+        from utils import budget
+
+        with (
+            patch.object(KISAPIClient, "_get_headers", return_value={"x": "y"}),
+            patch(
+                "services.stock_service._http.get",
+                side_effect=AssertionError("요청 경로에서 KIS 호출됨"),
+            ),
+        ):
+            with budget.request_budget(3.5):
+                assert KISAPIClient.get_volume_rank("J") == []
+
+    def test_stale_is_still_served_during_a_request(self):
+        """부르지 않는 것과 안 보여주는 것은 다르다"""
+        from services.stock_service import _rank_cache
+        from utils import budget
+
+        _rank_cache.put("volume:J:0", [{"code": "005930", "name": "삼성전자"}])
+        _rank_cache._fresh.clear()
+
+        with budget.request_budget(3.5):
+            got = KISAPIClient.get_volume_rank("J")
+        assert got and got[0]["name"] == "삼성전자"
+
+    def test_background_still_calls_kis(self):
+        """deadline이 없는 배경 경로까지 막으면 캐시를 채울 사람이 없다"""
+        calls = []
+
+        def fake_get(url, headers=None, params=None, timeout=None):
+            calls.append(url)
+            raise Timeout()
+
+        with (
+            patch.object(KISAPIClient, "_get_headers", return_value={"x": "y"}),
+            patch("services.stock_service._http.get", side_effect=fake_get),
+        ):
+            KISAPIClient.get_volume_rank("J", timeout_cap=KISConfig.REFRESH_TIMEOUT)
+
+        assert calls, "배경 갱신까지 막혔다"
+
+
 class TestConnectionReuse:
     """호출마다 TLS 핸드셰이크를 새로 하면 연결 단계에서만 죽는다"""
 
