@@ -135,7 +135,12 @@ class TestJobAssignment:
 
         assert result["new_level"] == THRESHOLD - 1
         assert result["job"] is None
-        assert result["art_stem"] is None, "직군이 없는데 이미지 좌표가 나왔다"
+        # 직군은 없어도 그림은 있어야 한다. 초반 열 레벨이 텍스트만 나오면
+        # 각성이 무엇을 주는 시스템인지 보이지 않는다.
+        assert result["art_stem"] is not None, "쪼렙 구간에 그림이 없다"
+        assert result["art_stem"].startswith("novice__"), (
+            f"직군이 없는데 직군 그림이 붙었다: {result['art_stem']}"
+        )
 
     def test_job_assigned_at_threshold(self, db, test_user):
         test_user.enhance_level = THRESHOLD - 1
@@ -247,9 +252,9 @@ class TestGrowthTransition:
     def test_growth_change_is_reported(self, db, test_user):
         boundary = next(
             lv
-            for lv in range(2, EnhanceConfig.MAX_LEVEL + 1)
-            if ec.growth_stage(lv, EnhanceConfig.MAX_LEVEL)
-            != ec.growth_stage(lv - 1, EnhanceConfig.MAX_LEVEL)
+            for lv in range(THRESHOLD + 1, EnhanceConfig.MAX_LEVEL + 1)
+            if ec.growth_stage(lv, EnhanceConfig.MAX_LEVEL, THRESHOLD)
+            != ec.growth_stage(lv - 1, EnhanceConfig.MAX_LEVEL, THRESHOLD)
         )
         test_user.enhance_level = boundary - 1
         test_user.enhance_job = "scalper"
@@ -265,7 +270,12 @@ class TestGrowthTransition:
 
     def test_growth_transition_unlocks_a_new_entry(self, db, test_user):
         """같은 직군·종이라도 성장이 바뀌면 새 칸이다"""
-        test_user.enhance_level = 10
+        boundary = next(
+            lv
+            for lv in range(THRESHOLD + 1, EnhanceConfig.MAX_LEVEL + 1)
+            if ec.growth_stage(lv, EnhanceConfig.MAX_LEVEL, THRESHOLD) == 2
+        )
+        test_user.enhance_level = boundary - 1
         test_user.enhance_job = "scalper"
         test_user.enhance_rarity = "normal"
         test_user.cash = 100_000_000

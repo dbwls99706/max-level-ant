@@ -15,26 +15,48 @@
 
 from typing import Dict, List, Optional, Tuple
 
-from enhance_art import CLASS_ART, FAMILIES, RARITY_ART, image_stem
+from enhance_art import (
+    CLASS_ART,
+    FAMILIES,
+    NOVICE_ART,
+    RARITY_ART,
+    image_stem,
+    novice_stem,
+)
 
 # ===========================================
 # 성장 단계 - 레벨에서 파생된다
 # ===========================================
 # 종은 뽑기 운이지만 성장은 노력이다. 레벨을 올리면 종이 낮아도
-# 그림이 확실히 달라지는 축이라, 만렙 구간을 3등분해서 매핑한다.
-GROWTH_STAGES: Dict[int, str] = {1: "각성", 2: "숙련", 3: "초월"}
+# 그림이 확실히 달라지는 축이므로, 그림이 붙는 레벨 구간을 6등분해서 매핑한다.
+GROWTH_STAGES: Dict[int, str] = {
+    1: "각성",
+    2: "발현",
+    3: "숙련",
+    4: "정예",
+    5: "극한",
+    6: "초월",
+}
 
 
-def growth_stage(level: int, max_level: int) -> int:
-    """레벨 -> 성장 단계(1~3).
+def growth_stage(level: int, max_level: int, first_level: int = 1) -> int:
+    """레벨 -> 성장 단계(1~6).
 
-    Lv.0도 1단계로 본다. 이미지가 없는 구간을 만들지 않기 위해서다.
+    first_level은 '이 그림이 붙기 시작하는 레벨'이다. 직군 그림은 직군을
+    받는 Lv.10부터 붙으므로 10..30을 6등분해야 한다. 1..30을 6등분하면
+    앞의 두 단계가 직군 없는 구간에 배정돼 그림이 통째로 사장된다 -
+    실제로 예전 3단계 시절 1단계 200장이 Lv.10 한 레벨에만 쓰였다.
+
+    쪼렙 구간(직군 없음)처럼 다른 범위를 쓰는 그림은 first_level을 바꿔 부른다.
     """
-    if level <= 0:
+    stages = len(GROWTH_STAGES)
+    span = max(1, max_level - first_level + 1)
+    if level <= first_level:
         return 1
-    stage_size = max(1, max_level / len(GROWTH_STAGES))
-    stage = int((level - 1) // stage_size) + 1
-    return min(stage, len(GROWTH_STAGES))
+    # 나눗셈을 실수로 두는 이유: 21레벨을 6단계로 나누면 3.5레벨씩이라
+    # 정수로 자르면 마지막 단계가 한 레벨만 갖는 쏠림이 생긴다.
+    stage = int((level - first_level) / (span / stages)) + 1
+    return max(1, min(stage, stages))
 
 
 # ===========================================
@@ -82,8 +104,11 @@ RARITY_FLAVORS: Dict[str, str] = {
 # 성장: 지금 어떤 모습인지. 문장 맨 뒤에 온다.
 GROWTH_FLAVORS: Dict[int, str] = {
     1: "아직 맨몸이지만, 손에 쥔 것만은 분명합니다.",
-    2: "긁힌 갑옷과 짧은 망토. 몇 번은 넘어져 본 자의 것입니다.",
-    3: "전신을 덮은 판금에 금빛이 흐릅니다. 더 오를 곳이 없습니다.",
+    2: "가죽 흉갑 하나가 늘었습니다. 첫 흠집도 함께 늘었습니다.",
+    3: "긁힌 갑옷과 짧은 망토. 몇 번은 넘어져 본 자의 것입니다.",
+    4: "양어깨가 맞춰졌습니다. 이제 서 있는 자리가 흔들리지 않습니다.",
+    5: "투구의 볏이 서고 망토가 깃발처럼 늘어집니다. 한 걸음 남았습니다.",
+    6: "전신을 덮은 판금에 금빛이 흐릅니다. 더 오를 곳이 없습니다.",
 }
 
 # 직군: 각성하는 그 장면. 이미지의 무기·소품과 같은 것을 가리킨다.
@@ -181,3 +206,42 @@ def art_stem(class_key: str, rarity: str, growth: int) -> Optional[str]:
     if growth not in GROWTH_STAGES:
         return None
     return image_stem(class_key, rarity, growth)
+
+
+# ===========================================
+# 쪼렙 구간 (직군 배정 전)
+# ===========================================
+# 직군도 종도 없는 Lv.0~9 전용. 축이 성장 하나뿐이라 직군 그림과 번호를
+# 공유하지 않는다. 섞으면 "각성 2단계"가 두 가지를 뜻하게 된다.
+NOVICE_FLAVORS: Dict[int, str] = {
+    1: "아직 이름도 없는 개미입니다. 손에 쥔 막대기 하나가 전부입니다.",
+    2: "기운 옷과 무딘 검. 그래도 어제보다는 멀리 나가 봅니다.",
+    3: "가죽 조끼를 입고 지도를 접어 넣습니다. 곧 무언가가 정해집니다.",
+}
+
+
+def novice_stage(level: int, class_level: int) -> int:
+    """레벨 -> 쪼렙 단계(1~3).
+
+    class_level은 직군을 받는 레벨이다. 그 직전까지를 균등하게 나눈다.
+    """
+    stages = len(NOVICE_ART)
+    span = max(1, class_level)
+    if level <= 0:
+        return 1
+    stage = int(level / (span / stages)) + 1
+    return max(1, min(stage, stages))
+
+
+def novice_stage_name(stage: int) -> str:
+    return NOVICE_ART.get(stage, NOVICE_ART[1])[0]
+
+
+def novice_art_stem(stage: int) -> Optional[str]:
+    if stage not in NOVICE_ART:
+        return None
+    return novice_stem(stage)
+
+
+def novice_flavor(stage: int) -> str:
+    return NOVICE_FLAVORS.get(stage, NOVICE_FLAVORS[1])
