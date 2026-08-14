@@ -120,7 +120,7 @@ class TestTokenSurvivesRestart:
         session.close()
 
         # 프로세스 재기동 = 메모리 토큰 없음 (clean_token_state가 이미 비워둠)
-        with patch.object(stock_service.requests, "post") as mock_post:
+        with patch.object(stock_service._http, "post") as mock_post:
             token = KISAPIClient.get_access_token()
 
         assert token == "stored-token"
@@ -142,7 +142,7 @@ class TestTokenSurvivesRestart:
         session.close()
 
         with patch.object(
-            stock_service.requests,
+            stock_service._http,
             "post",
             return_value=FakeResponse(
                 200, {"access_token": "fresh-token", "expires_in": 86400}
@@ -156,7 +156,7 @@ class TestTokenSurvivesRestart:
     def test_issued_token_is_persisted(self, token_db):
         """발급에 성공하면 다음 재기동을 위해 DB에 저장한다"""
         with patch.object(
-            stock_service.requests,
+            stock_service._http,
             "post",
             return_value=FakeResponse(
                 200, {"access_token": "new-token", "expires_in": 86400}
@@ -189,7 +189,7 @@ class TestTokenSurvivesRestart:
         session.close()
 
         with patch.object(
-            stock_service.requests,
+            stock_service._http,
             "post",
             return_value=FakeResponse(
                 200, {"access_token": "rotated-token", "expires_in": 86400}
@@ -217,7 +217,7 @@ class TestTokenSurvivesRestart:
         with (
             patch.object(stock_service, "SessionLocal", broken_session),
             patch.object(
-                stock_service.requests,
+                stock_service._http,
                 "post",
                 return_value=FakeResponse(
                     200, {"access_token": "resilient-token", "expires_in": 86400}
@@ -229,7 +229,7 @@ class TestTokenSurvivesRestart:
     def test_missing_access_token_field_is_rejected(self, token_db):
         """200이어도 access_token이 없으면 토큰으로 취급하지 않는다"""
         with patch.object(
-            stock_service.requests,
+            stock_service._http,
             "post",
             return_value=FakeResponse(200, {"msg1": "권한 없음"}),
         ):
@@ -252,7 +252,7 @@ class TestTokenTimeout:
             captured["timeout"] = timeout
             return FakeResponse(200, {"access_token": "t", "expires_in": 86400})
 
-        with patch.object(stock_service.requests, "post", side_effect=capture_post):
+        with patch.object(stock_service._http, "post", side_effect=capture_post):
             KISAPIClient.get_access_token()
 
         # timeout은 (연결, 응답 대기) 튜플이다 - 합이 곧 벽시계 상한
@@ -278,7 +278,7 @@ class TestTokenTimeout:
             captured["timeout"] = timeout
             return FakeResponse(200, {"access_token": "t", "expires_in": 86400})
 
-        with patch.object(stock_service.requests, "post", side_effect=capture_post):
+        with patch.object(stock_service._http, "post", side_effect=capture_post):
             with budget.request_budget(1.0):
                 KISAPIClient.get_access_token()
 

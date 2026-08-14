@@ -88,14 +88,14 @@ class TestCircuitBlocksCalls:
         """서킷이 열려 있으면 시세 조회 HTTP 요청이 나가지 않는다"""
         _open_circuit(breaker)
 
-        with patch.object(stock_service.requests, "get") as mock_get:
+        with patch.object(stock_service._http, "get") as mock_get:
             assert KISAPIClient.get_stock_price("005930") is None
             mock_get.assert_not_called()
 
     def test_http_error_opens_circuit(self, breaker, valid_token):
         """HTTP 에러가 임계값만큼 쌓이면 서킷이 열린다"""
         with patch.object(
-            stock_service.requests,
+            stock_service._http,
             "get",
             return_value=FakeResponse(500, {"msg_cd": "EGW00201", "msg1": "초당 초과"}),
         ):
@@ -107,7 +107,7 @@ class TestCircuitBlocksCalls:
     def test_data_not_found_does_not_open_circuit(self, breaker, valid_token):
         """rt_cd != 0 (종목 없음)은 API 장애가 아니므로 서킷을 열지 않는다"""
         with patch.object(
-            stock_service.requests,
+            stock_service._http,
             "get",
             return_value=FakeResponse(
                 200, {"rt_cd": "1", "msg1": "조회할 자료가 없습니다"}
@@ -142,7 +142,7 @@ class TestStaleOutcome:
                 return FakeResponse(200, PRICE_OK)
             return FakeResponse(500, {"msg_cd": "EGW00201", "msg1": "장애"})
 
-        with patch.object(stock_service.requests, "get", side_effect=fake_get):
+        with patch.object(stock_service._http, "get", side_effect=fake_get):
             with ThreadPoolExecutor(max_workers=2) as executor:
                 slow = executor.submit(KISAPIClient.get_stock_price, "005930")
                 assert slow_started.wait(timeout=5), "느린 요청이 시작되지 않았습니다"
@@ -159,7 +159,7 @@ class TestStaleOutcome:
         assert breaker.state == CircuitState.OPEN, "뒤늦은 성공이 서킷을 닫았습니다"
 
         # 복구 타임아웃 전이므로 여전히 HTTP 호출이 나가면 안 된다
-        with patch.object(stock_service.requests, "get") as mock_get:
+        with patch.object(stock_service._http, "get") as mock_get:
             assert KISAPIClient.get_stock_price("005930") is None
             mock_get.assert_not_called()
 
@@ -193,7 +193,7 @@ class TestRecoveryProbe:
             with results_lock:
                 results.append(result)
 
-        with patch.object(stock_service.requests, "get", side_effect=slow_get):
+        with patch.object(stock_service._http, "get", side_effect=slow_get):
             threads = [threading.Thread(target=worker) for _ in range(thread_count)]
             for t in threads:
                 t.start()
@@ -218,7 +218,7 @@ class TestRecoveryProbe:
         _expire_recovery_timeout(breaker)
 
         with patch.object(
-            stock_service.requests, "get", return_value=FakeResponse(503, {})
+            stock_service._http, "get", return_value=FakeResponse(503, {})
         ) as mock_get:
             assert KISAPIClient.get_stock_price("005930") is None
             assert mock_get.call_count == 1
@@ -226,7 +226,7 @@ class TestRecoveryProbe:
         assert breaker.state == CircuitState.OPEN
 
         # 타임아웃이 재시작됐으므로 곧바로는 프로브가 나가지 않는다
-        with patch.object(stock_service.requests, "get") as mock_get:
+        with patch.object(stock_service._http, "get") as mock_get:
             assert KISAPIClient.get_stock_price("005930") is None
             mock_get.assert_not_called()
 
@@ -236,7 +236,7 @@ class TestRecoveryProbe:
         _expire_recovery_timeout(breaker)
 
         with patch.object(
-            stock_service.requests, "get", return_value=FakeResponse(200, PRICE_OK)
+            stock_service._http, "get", return_value=FakeResponse(200, PRICE_OK)
         ):
             result = KISAPIClient.get_stock_price("005930")
 
@@ -263,7 +263,7 @@ class TestTokenPath:
 
         # 실제 시세 조회가 복구 프로브를 가져간다
         with patch.object(
-            stock_service.requests, "get", return_value=FakeResponse(200, PRICE_OK)
+            stock_service._http, "get", return_value=FakeResponse(200, PRICE_OK)
         ) as mock_get:
             assert KISAPIClient.get_stock_price("005930") is not None
             assert mock_get.call_count == 1

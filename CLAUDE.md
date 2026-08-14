@@ -169,7 +169,7 @@ KIS_RANK_TIMEOUT=3.0                      # 순위 조회 타임아웃 (초). 30
 KIS_REFRESH_TIMEOUT=20.0                  # 배경 순위 갱신 타임아웃 (초). SLA가 없어 넉넉하다
 KIS_REFRESH_INTERVAL=45                   # 배경 순위 갱신 주기 (초). 0이면 배경 갱신 끔
 KIS_RANK_CACHE_TTL=180                    # 순위 캐시 TTL (초). 갱신 주기보다 길어야 한다
-KIS_CONNECT_TIMEOUT=2.0                   # 연결 단계 타임아웃 (초). 나머지가 응답 대기 몫
+KIS_CONNECT_TIMEOUT=5.0                   # 연결 단계 타임아웃 (초). 나머지가 응답 대기 몫
 KIS_TOKEN_TIMEOUT=5.0                     # KIS 토큰 발급 전용 타임아웃 (초)
 KIS_MAX_CONCURRENT_CALLS=5                # 프로세스 전역 동시 KIS 호출 상한
 KIS_SLOT_WAIT_CAP=1.0                     # 동시 호출 슬롯 대기 상한 (초)
@@ -268,8 +268,17 @@ ruff format --check .     # Format check
   로그는 `서킷 브레이커[시세]` / `서킷 브레이커[순위]`로 구분된다
 - **`requests`의 타임아웃은 (연결, 응답 대기)에 각각 적용된다.** 스칼라로 8초를 주면
   최악 16초를 기다린다(실측: 상한 8초에 10.07초 대기). `_http_timeout()`이 연결 몫을
-  `KIS_CONNECT_TIMEOUT`(기본 2초)으로 잘라내고 나머지를 응답 대기에 줘서 상한이
-  실제 벽시계 시간을 뜻하게 만든다. KIS HTTP 호출은 전부 이 함수를 거친다
+  `KIS_CONNECT_TIMEOUT`(기본 5초)으로 잘라내고 나머지를 응답 대기에 줘서 상한이
+  실제 벽시계 시간을 뜻하게 만든다. KIS HTTP 호출은 전부 이 함수를 거친다.
+  연결 몫을 2초로 뒀다가 상한 20초짜리 호출이 2.2초에 죽은 적이 있다 -
+  타임아웃 로그가 `연결`/`응답` 중 어느 단계인지 함께 찍는 이유다
+- **KIS 호출은 공용 `requests.Session`(`_http`)을 쓴다.** `requests.get()`은 호출마다
+  새 Session을 만들어 매번 TCP 3-way + TLS 핸드셰이크를 한다. 서버(오리건)와
+  KIS(서울) 사이에서는 그 비용이 커서 연결 단계에서만 타임아웃이 났다. keep-alive로
+  재사용하면 두 번째 호출부터 핸드셰이크가 사라진다 - 상한이 1.5초뿐인 매매 경로에서
+  특히 크다. 어댑터 재시도는 **0**이다. 재시도 판단은 서킷 브레이커와 폴백 캐시의
+  몫이고, urllib3가 몰래 한 번 더 부르면 우리가 계산한 상한이 배가 된다.
+  테스트는 `services.stock_service._http`를 patch한다(`requests`가 아니다)
 - **응답 실패 경로에서 새 외부 호출을 하지 말 것.** `_popular_stock_btn()`이 캐시가 비면
   KIS를 직접 불렀는데, 순위 조회가 실패한 화면에서 버튼을 만들려다 KIS를 한 번 더 부르는
   일이 생겼다. 첫 호출이 예산을 다 써서 두 번째는 0.6초만 받고 같이 죽었다.

@@ -171,7 +171,7 @@ class TestKisCallsRespectLimit:
         def worker(i):
             KISAPIClient.get_stock_price(f"00000{i % 10}")
 
-        with patch.object(stock_service.requests, "get", side_effect=slow_get):
+        with patch.object(stock_service._http, "get", side_effect=slow_get):
             threads = [
                 threading.Thread(target=worker, args=(i,)) for i in range(thread_count)
             ]
@@ -217,7 +217,7 @@ class TestKisCallsRespectLimit:
 
         # 상한만큼 슬롯을 붙잡아 둔다
         holders = []
-        with patch.object(stock_service.requests, "get", side_effect=slow_get):
+        with patch.object(stock_service._http, "get", side_effect=slow_get):
             try:
                 for i in range(limit):
                     t = threading.Thread(
@@ -273,7 +273,7 @@ class TestKisCallsRespectLimit:
             raise stock_service.RequestException("네트워크 끊김")
 
         stock_service.StockService._price_cache.clear()
-        with patch.object(stock_service.requests, "get", side_effect=boom):
+        with patch.object(stock_service._http, "get", side_effect=boom):
             for _ in range(KISConfig.MAX_CONCURRENT_CALLS * 2):
                 assert KISAPIClient.get_stock_price("005930") is None
 

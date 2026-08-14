@@ -14,7 +14,12 @@ from cachetools import TTLCache
 import threading
 import time
 import requests
-from requests.exceptions import RequestException, Timeout
+from requests.exceptions import (
+    ConnectTimeout,
+    ReadTimeout,
+    RequestException,
+    Timeout,
+)
 from sqlalchemy.exc import SQLAlchemyError
 
 from game_config import GameConfig
@@ -68,6 +73,34 @@ _kis_throttle = CallThrottle(KISConfig.MIN_CALL_INTERVAL)
 _kis_limiter = BoundedConcurrency(KISConfig.MAX_CONCURRENT_CALLS)
 
 
+def _build_session() -> requests.Session:
+    """KIS 호출용 공용 세션 (커넥션 재사용).
+
+    `requests.get()`은 호출마다 새 Session을 만든다 = 매번 TCP 3-way +
+    TLS 핸드셰이크다. 서버는 오리건, KIS는 서울이라 왕복만 100ms대이고
+    핸드셰이크는 그 몇 배가 든다. 상한 20초짜리 호출이 2.2초 만에
+    '연결' 단계에서 죽은 실측이 이 비용을 그대로 보여준다.
+
+    keep-alive로 연결을 재사용하면 두 번째 호출부터 핸드셰이크가 사라진다.
+    시세 상한이 1.5초뿐인 매매 경로에서 특히 크다.
+
+    재시도는 0으로 둔다. 재시도 판단은 서킷 브레이커와 폴백 캐시의 몫이고,
+    urllib3가 몰래 한 번 더 부르면 우리가 계산한 상한이 두 배가 된다.
+    """
+    session = requests.Session()
+    adapter = requests.adapters.HTTPAdapter(
+        pool_connections=2,  # 조회용·순위용 호스트는 같지만 풀은 여유 있게
+        pool_maxsize=max(KISConfig.MAX_CONCURRENT_CALLS, 1),
+        max_retries=0,
+    )
+    session.mount("https://", adapter)
+    session.mount("http://", adapter)
+    return session
+
+
+_http = _build_session()
+
+
 @contextmanager
 def _kis_call(breaker: Optional[CircuitBreaker] = None):
     """
@@ -96,21 +129,34 @@ def _http_timeout(total: float) -> Tuple[float, float]:
     상한 8초를 줬는데 실측 10.07초를 기다린 로그가 그 증거다. 상한이
     벽시계 시간을 뜻하지 않으면 예산 계산도 진단 로그도 전부 거짓말이 된다.
 
-    연결은 짧게 자르고 나머지를 응답 대기에 준다. 연결은 몇백 ms면 끝나는
-    일이고, 오래 걸리는 쪽은 언제나 KIS가 데이터를 만드는 시간이다.
+    연결 몫은 짧게 자르고 나머지를 응답 대기에 준다. 다만 너무 짧으면
+    연결 단계에서만 죽는다 - 상한 20초를 줬는데 2.2초 만에 타임아웃이 난
+    실측이 그 경우로, 연결 몫 2초가 부족했던 것이다.
     """
     connect = min(KISConfig.CONNECT_TIMEOUT, total / 2)
     return (connect, max(0.1, total - connect))
 
 
-def _timeout_detail(started: float, applied: float) -> str:
+def _timeout_detail(
+    started: float, applied: float, exc: Optional[BaseException] = None
+) -> str:
     """타임아웃 로그에 붙일 진단 문구.
 
     '타임아웃'만 찍으면 상류가 느린 건지 우리가 상한을 너무 좁게 준 건지
     구분할 수 없다. 실제 대기 시간과 그때 적용한 상한을 함께 남긴다.
-    남은 예산이 작아 상한이 깎였다면 그 사실도 여기서 드러난다.
+
+    연결/응답 중 어느 단계가 죽었는지도 남긴다. 상한 20초에 2.2초 만에
+    실패한 로그를 보고 어느 단계인지 몰라 대기 시간으로 역산해야 했다.
+    전체 상한만 찍으면 실제 적용된 단계별 상한이 로그에 안 나온다.
     """
-    return f"{time.monotonic() - started:.2f}초 대기 / 상한 {applied:.2f}초"
+    connect, read = _http_timeout(applied)
+    if isinstance(exc, ConnectTimeout):
+        phase, cap = "연결", connect
+    elif isinstance(exc, ReadTimeout):
+        phase, cap = "응답", read
+    else:
+        phase, cap = "전체", applied
+    return f"{phase} {time.monotonic() - started:.2f}초 대기 / 상한 {cap:.2f}초"
 
 
 class _RankCache:
@@ -329,7 +375,7 @@ class KISAPIClient:
                     if not _kis_throttle.wait(max_wait=budget.remaining()):
                         logger.warning("응답 예산 부족 - KIS 토큰 발급 스킵")
                         return None
-                    resp = requests.post(
+                    resp = _http.post(
                         url,
                         headers=headers,
                         json=body,
@@ -440,6 +486,8 @@ class KISAPIClient:
         if not headers:
             return None
 
+        started = time.monotonic()
+        applied = budget.timeout_for(KISConfig.API_TIMEOUT)
         try:
             with _kis_call() as call:
                 url = f"{KISConfig.BASE_URL}/uapi/domestic-stock/v1/quotations/inquire-price"
@@ -452,11 +500,13 @@ class KISAPIClient:
                 if not _kis_throttle.wait(max_wait=budget.remaining()):
                     logger.debug(f"응답 예산 부족 - 시세 조회 스킵 ({stock_code})")
                     return None
-                resp = requests.get(
+                applied = budget.timeout_for(KISConfig.API_TIMEOUT)
+                started = time.monotonic()
+                resp = _http.get(
                     url,
                     headers=headers,
                     params=params,
-                    timeout=_http_timeout(budget.timeout_for(KISConfig.API_TIMEOUT)),
+                    timeout=_http_timeout(applied),
                 )
 
                 if resp.status_code != 200:
@@ -498,8 +548,11 @@ class KISAPIClient:
             logger.debug(f"KIS 동시 호출 상한 - 시세 조회 스킵 ({stock_code}): {e}")
         except CircuitOpenError:
             logger.debug(f"KIS API 서킷 브레이커 열림 - 시세 조회 스킵 ({stock_code})")
-        except Timeout:
-            logger.warning(f"주식 시세 조회 타임아웃 ({stock_code})")
+        except Timeout as e:
+            logger.warning(
+                f"주식 시세 조회 타임아웃 ({stock_code}) - "
+                f"{_timeout_detail(started, applied, e)}"
+            )
         except RequestException as e:
             logger.error(f"주식 시세 조회 네트워크 에러 ({stock_code}): {e}")
         except (ValueError, KeyError) as e:
@@ -572,7 +625,7 @@ class KISAPIClient:
                 # 느리다. 같은 상한을 쓰면 장중에 통째로 실패한다.
                 applied = budget.timeout_for(timeout_cap or KISConfig.RANK_TIMEOUT)
                 started = time.monotonic()
-                resp = requests.get(
+                resp = _http.get(
                     url,
                     headers=headers,
                     params=params,
@@ -623,9 +676,9 @@ class KISAPIClient:
             logger.debug(f"KIS 동시 호출 상한 - {label} 순위 조회 스킵: {e}")
         except CircuitOpenError:
             logger.debug(f"KIS API 서킷 브레이커 열림 - {label} 순위 조회 스킵")
-        except Timeout:
+        except Timeout as e:
             logger.warning(
-                f"{label} 순위 조회 타임아웃 - {_timeout_detail(started, applied)}"
+                f"{label} 순위 조회 타임아웃 - {_timeout_detail(started, applied, e)}"
             )
         except RequestException as e:
             logger.error(f"{label} 순위 조회 네트워크 에러: {e}")
@@ -711,7 +764,7 @@ class KISAPIClient:
                 if not _kis_throttle.wait(max_wait=budget.remaining()):
                     logger.debug(f"응답 예산 부족 - 지수 조회 스킵 ({index_code})")
                     return None
-                resp = requests.get(
+                resp = _http.get(
                     url,
                     headers=headers,
                     params=params,
