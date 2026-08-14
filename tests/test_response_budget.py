@@ -126,7 +126,7 @@ class TestKisRespectsBudget:
             captured["timeout"] = timeout
             return FakeResponse(200, PRICE_OK)
 
-        with patch.object(stock_service.requests, "get", side_effect=fake_get):
+        with patch.object(stock_service._http, "get", side_effect=fake_get):
             with budget.request_budget(1.0):
                 KISAPIClient.get_stock_price("005930")
 
@@ -136,7 +136,7 @@ class TestKisRespectsBudget:
 
     def test_exhausted_budget_skips_http_call(self, valid_token):
         """예산이 남지 않으면 아예 호출하지 않는다 (카카오는 이미 타임아웃)"""
-        with patch.object(stock_service.requests, "get") as mock_get:
+        with patch.object(stock_service._http, "get") as mock_get:
             with budget.request_budget(0.01):
                 time.sleep(0.02)
                 assert KISAPIClient.get_stock_price("005930") is None
@@ -154,7 +154,7 @@ class TestKisRespectsBudget:
             return FakeResponse(200, PRICE_OK)
 
         StockService._price_cache.clear()
-        with patch.object(stock_service.requests, "get", side_effect=fake_get):
+        with patch.object(stock_service._http, "get", side_effect=fake_get):
             with budget.request_budget(2.0):
                 StockService.batch_get_prices({"005930", "000660"})
 
@@ -179,7 +179,7 @@ class TestKisRespectsBudget:
 
         StockService._price_cache.clear()
         started = time.monotonic()
-        with patch.object(stock_service.requests, "get", side_effect=slow_get):
+        with patch.object(stock_service._http, "get", side_effect=slow_get):
             with budget.request_budget(0.8):
                 StockService.batch_get_prices({"005930", "000660", "035420"})
         elapsed = time.monotonic() - started
@@ -204,7 +204,7 @@ class TestKisRespectsBudget:
 
         StockService._price_cache.clear()
         started = time.monotonic()
-        with patch.object(stock_service.requests, "get", side_effect=hanging_get):
+        with patch.object(stock_service._http, "get", side_effect=hanging_get):
             with budget.request_budget(SkillConfig.RESPONSE_BUDGET):
                 for _ in range(5):  # 여러 번 시도해도
                     KISAPIClient.get_stock_price("005930")

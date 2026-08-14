@@ -5,7 +5,8 @@ import time
 from unittest.mock import MagicMock, patch
 
 import pytest
-from requests.exceptions import Timeout
+import requests
+from requests.exceptions import ConnectTimeout, ReadTimeout, Timeout
 
 from services.stock_service import KISAPIClient, StockService
 from settings import KISConfig
@@ -21,7 +22,7 @@ def test_rank_uses_its_own_timeout(caplog):
 
     with (
         patch.object(KISAPIClient, "_get_headers", return_value={"x": "y"}),
-        patch("services.stock_service.requests.get", side_effect=fake_get),
+        patch("services.stock_service._http.get", side_effect=fake_get),
     ):
         result = KISAPIClient.get_volume_rank("J")
 
@@ -41,7 +42,7 @@ def test_timeout_log_shows_elapsed_and_cap(caplog):
 
     with (
         patch.object(KISAPIClient, "_get_headers", return_value={"x": "y"}),
-        patch("services.stock_service.requests.get", side_effect=slow_then_timeout),
+        patch("services.stock_service._http.get", side_effect=slow_then_timeout),
         caplog.at_level("WARNING"),
     ):
         KISAPIClient.get_volume_rank("J")
@@ -93,7 +94,7 @@ class TestRankCache:
 
         with (
             patch.object(KISAPIClient, "_get_headers", return_value={"x": "y"}),
-            patch("services.stock_service.requests.get", side_effect=fake_get),
+            patch("services.stock_service._http.get", side_effect=fake_get),
         ):
             first = KISAPIClient.get_volume_rank("J")
             second = KISAPIClient.get_volume_rank("J")
@@ -111,7 +112,7 @@ class TestRankCache:
 
         with (
             patch.object(KISAPIClient, "_get_headers", return_value={"x": "y"}),
-            patch("services.stock_service.requests.get", side_effect=fake_get),
+            patch("services.stock_service._http.get", side_effect=fake_get),
         ):
             KISAPIClient.get_volume_rank("J", blng_cls_code="0")
             KISAPIClient.get_volume_rank("J", blng_cls_code="3")
@@ -125,7 +126,7 @@ class TestRankCache:
         with (
             patch.object(KISAPIClient, "_get_headers", return_value={"x": "y"}),
             patch(
-                "services.stock_service.requests.get",
+                "services.stock_service._http.get",
                 return_value=self._ok_response(["삼성전자", "카카오"]),
             ),
         ):
@@ -136,7 +137,7 @@ class TestRankCache:
         _rank_cache._fresh.clear()
         with (
             patch.object(KISAPIClient, "_get_headers", return_value={"x": "y"}),
-            patch("services.stock_service.requests.get", side_effect=Timeout),
+            patch("services.stock_service._http.get", side_effect=Timeout),
         ):
             stale = KISAPIClient.get_volume_rank("J")
 
@@ -146,7 +147,7 @@ class TestRankCache:
         """한 번도 성공한 적이 없으면 빈 목록이 맞다"""
         with (
             patch.object(KISAPIClient, "_get_headers", return_value={"x": "y"}),
-            patch("services.stock_service.requests.get", side_effect=Timeout),
+            patch("services.stock_service._http.get", side_effect=Timeout),
         ):
             assert KISAPIClient.get_volume_rank("J") == []
 
@@ -165,7 +166,7 @@ class TestRankCache:
         with (
             patch.object(KISAPIClient, "_get_headers", return_value={"x": "y"}),
             patch(
-                "services.stock_service.requests.get",
+                "services.stock_service._http.get",
                 return_value=self._ok_response(["삼성전자"]),
             ),
         ):
@@ -175,7 +176,7 @@ class TestRankCache:
         _rank_cache._fresh.clear()
         with (
             patch.object(KISAPIClient, "_get_headers", return_value={"x": "y"}),
-            patch("services.stock_service.requests.get", return_value=Err()),
+            patch("services.stock_service._http.get", return_value=Err()),
         ):
             assert KISAPIClient.get_volume_rank("J") == good
 
@@ -220,7 +221,7 @@ class TestBackgroundRefresh:
 
         with (
             patch.object(KISAPIClient, "_get_headers", return_value={"x": "y"}),
-            patch("services.stock_service.requests.get", side_effect=fake_get),
+            patch("services.stock_service._http.get", side_effect=fake_get),
         ):
             StockService.refresh_rankings()
 
@@ -237,14 +238,14 @@ class TestBackgroundRefresh:
         with (
             patch.object(KISAPIClient, "_get_headers", return_value={"x": "y"}),
             patch(
-                "services.stock_service.requests.get",
+                "services.stock_service._http.get",
                 return_value=self._ok_response(),
             ),
         ):
             assert StockService.refresh_rankings() == len(StockService._WARM_RANK_KEYS)
 
         with patch(
-            "services.stock_service.requests.get",
+            "services.stock_service._http.get",
             side_effect=AssertionError("요청 경로에서 KIS 호출됨"),
         ):
             for market, blng in StockService._WARM_RANK_KEYS:
@@ -261,15 +262,34 @@ class TestBackgroundRefresh:
 class TestHttpTimeoutIsWallClock:
     """상한이 벽시계 시간을 뜻하지 않으면 예산 계산도 로그도 거짓말이 된다"""
 
-    def test_split_into_connect_and_read(self):
+    def test_sum_never_exceeds_the_cap(self):
+        """합이 상한을 넘으면 예산 계산이 통째로 거짓말이 된다"""
         from services.stock_service import _http_timeout
 
-        connect, read = _http_timeout(8.0)
-        assert connect + read <= 8.0, (
-            f"연결 {connect} + 응답 {read} = {connect + read}초, "
-            "requests는 스칼라 상한을 연결·응답에 각각 적용한다"
+        for total in (1.5, 3.0, 8.0, 20.0):
+            connect, read = _http_timeout(total)
+            assert connect + read <= total, (
+                f"상한 {total}초인데 연결 {connect} + 응답 {read} = {connect + read}초"
+            )
+
+    def test_connect_share_grows_with_the_cap(self):
+        """연결 몫이 고정 2초라 상한 20초짜리가 2.2초에 죽었다"""
+        from services.stock_service import _http_timeout
+
+        small_connect, _ = _http_timeout(KISConfig.RANK_TIMEOUT)
+        big_connect, _ = _http_timeout(KISConfig.REFRESH_TIMEOUT)
+        assert big_connect > small_connect, (
+            "넉넉한 배경 호출인데 연결 몫이 요청 경로와 같다"
         )
-        assert read > connect, "오래 걸리는 쪽은 언제나 응답 대기다"
+        # 상한이 넉넉하면 설정값이 그대로 전선까지 가야 한다.
+        # 여기가 하드코딩되면 20초짜리 호출이 또 2.2초에 죽는다.
+        assert big_connect == KISConfig.CONNECT_TIMEOUT, (
+            f"연결 몫 {big_connect}초 - 설정({KISConfig.CONNECT_TIMEOUT}초)이 안 쓰인다"
+        )
+
+    def test_connect_cap_clears_the_observed_failure(self):
+        """실측 2.2초에 연결이 죽었다. 설정이 그보다 낮으면 같은 일이 반복된다"""
+        assert KISConfig.CONNECT_TIMEOUT > 2.2
 
     def test_rank_call_passes_a_tuple(self):
         """스칼라로 넘기면 8초 상한이 최악 16초가 된다"""
@@ -281,12 +301,80 @@ class TestHttpTimeoutIsWallClock:
 
         with (
             patch.object(KISAPIClient, "_get_headers", return_value={"x": "y"}),
-            patch("services.stock_service.requests.get", side_effect=fake_get),
+            patch("services.stock_service._http.get", side_effect=fake_get),
         ):
             KISAPIClient.get_volume_rank("J")
 
         assert isinstance(seen["timeout"], tuple), f"스칼라다: {seen['timeout']}"
         assert sum(seen["timeout"]) <= KISConfig.RANK_TIMEOUT
+
+
+class TestConnectionReuse:
+    """호출마다 TLS 핸드셰이크를 새로 하면 연결 단계에서만 죽는다"""
+
+    def test_calls_go_through_a_shared_session(self):
+        from services import stock_service
+
+        assert isinstance(stock_service._http, requests.Session), (
+            "requests.get()는 호출마다 새 Session을 만든다 = 매번 핸드셰이크"
+        )
+
+    def test_session_does_not_retry_behind_our_back(self):
+        """urllib3가 몰래 재시도하면 우리가 계산한 상한이 배가 된다"""
+        from services import stock_service
+
+        adapter = stock_service._http.get_adapter("https://openapi.koreainvestment.com")
+        assert adapter.max_retries.total == 0, (
+            f"재시도가 {adapter.max_retries.total}회 - 상한이 그만큼 늘어난다"
+        )
+
+    def test_pool_covers_concurrent_calls(self):
+        """동시 호출 상한보다 풀이 작으면 남는 호출이 새로 연결한다"""
+        from services import stock_service
+
+        adapter = stock_service._http.get_adapter("https://openapi.koreainvestment.com")
+        assert adapter._pool_maxsize >= KISConfig.MAX_CONCURRENT_CALLS
+
+
+class TestTimeoutLogNamesThePhase:
+    """어느 단계가 죽었는지 모르면 대기 시간으로 역산해야 한다"""
+
+    def setup_method(self):
+        from services.stock_service import _rank_cache, _rank_circuit_breaker
+
+        _rank_cache.clear()
+        _rank_circuit_breaker.reset()
+
+    teardown_method = setup_method
+
+    def _log_for(self, exc, caplog):
+        with (
+            patch.object(KISAPIClient, "_get_headers", return_value={"x": "y"}),
+            patch("services.stock_service._http.get", side_effect=exc),
+            caplog.at_level("WARNING"),
+        ):
+            KISAPIClient.get_volume_rank("J")
+        msgs = [r.message for r in caplog.records if "순위 조회 타임아웃" in r.message]
+        assert msgs, "타임아웃 로그가 없다"
+        return msgs[0]
+
+    def test_connect_timeout_says_connect_and_its_own_cap(self, caplog):
+        from services.stock_service import _http_timeout
+
+        msg = self._log_for(ConnectTimeout, caplog)
+        connect, _ = _http_timeout(KISConfig.RANK_TIMEOUT)
+        assert "연결" in msg, f"단계가 없다: {msg}"
+        assert f"상한 {connect:.2f}초" in msg, (
+            f"전체 상한을 찍으면 실제 적용된 연결 상한을 알 수 없다: {msg}"
+        )
+
+    def test_read_timeout_says_read_and_its_own_cap(self, caplog):
+        from services.stock_service import _http_timeout
+
+        msg = self._log_for(ReadTimeout, caplog)
+        _, read = _http_timeout(KISConfig.RANK_TIMEOUT)
+        assert "응답" in msg, f"단계가 없다: {msg}"
+        assert f"상한 {read:.2f}초" in msg
 
 
 class TestRankCircuitIsSeparate:
@@ -309,7 +397,7 @@ class TestRankCircuitIsSeparate:
 
         with (
             patch.object(KISAPIClient, "_get_headers", return_value={"x": "y"}),
-            patch("services.stock_service.requests.get", side_effect=Timeout),
+            patch("services.stock_service._http.get", side_effect=Timeout),
         ):
             for _ in range(KISConfig.CIRCUIT_FAILURE_THRESHOLD + 2):
                 KISAPIClient.get_volume_rank("J")
@@ -328,7 +416,7 @@ class TestRankCircuitIsSeparate:
 
         with (
             patch.object(KISAPIClient, "_get_headers", return_value={"x": "y"}),
-            patch("services.stock_service.requests.get", side_effect=Timeout),
+            patch("services.stock_service._http.get", side_effect=Timeout),
         ):
             for _ in range(KISConfig.CIRCUIT_FAILURE_THRESHOLD + 2):
                 KISAPIClient.get_volume_rank("J")
@@ -358,7 +446,7 @@ class TestRankCircuitIsSeparate:
 
         with (
             patch.object(KISAPIClient, "_get_headers", return_value={"x": "y"}),
-            patch("services.stock_service.requests.get", side_effect=fake_get),
+            patch("services.stock_service._http.get", side_effect=fake_get),
         ):
             price = KISAPIClient.get_stock_price("005930")
 

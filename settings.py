@@ -163,7 +163,11 @@ class KISConfig:
     # requests의 스칼라 timeout은 연결과 응답 대기에 '각각' 적용된다.
     # 8초를 줬는데 10.07초를 기다린 실측이 그 결과다. 연결만 따로 짧게
     # 잘라 두면 전체 상한이 벽시계 시간을 뜻하게 된다 (_http_timeout 참고).
-    CONNECT_TIMEOUT = float(os.getenv("KIS_CONNECT_TIMEOUT", "2.0"))
+    #
+    # 2초로 잡았더니 이번엔 연결 단계에서만 죽었다(상한 20초에 2.2초 실패).
+    # 서버는 오리건, KIS는 서울이라 TLS 핸드셰이크가 그만큼 든다.
+    # 실제 해법은 커넥션 재사용(_build_session)이고 이 값은 그 위의 여유다.
+    CONNECT_TIMEOUT = float(os.getenv("KIS_CONNECT_TIMEOUT", "5.0"))
 
     # 순위 배경 갱신 주기 (초). 0이면 배경 갱신을 끈다.
     REFRESH_INTERVAL = float(os.getenv("KIS_REFRESH_INTERVAL", "45"))
