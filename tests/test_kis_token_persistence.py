@@ -255,8 +255,9 @@ class TestTokenTimeout:
         with patch.object(stock_service.requests, "post", side_effect=capture_post):
             KISAPIClient.get_access_token()
 
-        assert captured["timeout"] == KISConfig.TOKEN_TIMEOUT, (
-            f"발급 타임아웃이 {captured['timeout']}초 — "
+        # timeout은 (연결, 응답 대기) 튜플이다 - 합이 곧 벽시계 상한
+        assert sum(captured["timeout"]) == KISConfig.TOKEN_TIMEOUT, (
+            f"발급 타임아웃이 {captured['timeout']}초 - "
             f"토큰 전용({KISConfig.TOKEN_TIMEOUT}초)이 적용되지 않았다"
         )
 
@@ -281,6 +282,6 @@ class TestTokenTimeout:
             with budget.request_budget(1.0):
                 KISAPIClient.get_access_token()
 
-        assert captured["timeout"] <= 1.0, (
+        assert sum(captured["timeout"]) <= 1.0, (
             f"남은 예산(1.0초)을 넘는 타임아웃 {captured['timeout']}초를 썼다"
         )

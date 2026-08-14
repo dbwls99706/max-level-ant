@@ -96,7 +96,14 @@ class CircuitBreaker:
     허가증을 반드시 반납한다. 블록 안에서 예외가 나면 실패로 기록된다.
     """
 
-    def __init__(self, failure_threshold: int = 5, recovery_timeout: float = 60.0):
+    def __init__(
+        self,
+        failure_threshold: int = 5,
+        recovery_timeout: float = 60.0,
+        name: str = "KIS",
+    ):
+        # 서킷이 여러 개면 로그에 누가 열렸는지 없이는 원인을 못 찾는다
+        self._name = name
         self._failure_threshold = failure_threshold
         self._recovery_timeout = recovery_timeout
         self._failure_count = 0
@@ -138,7 +145,9 @@ class CircuitBreaker:
                     return None
                 # 복구 타임아웃 경과 → 프로브 1건만 통과시킨다
                 self._state = CircuitState.HALF_OPEN
-                logger.info("서킷 브레이커: HALF_OPEN (복구 프로브 시작)")
+                logger.info(
+                    f"서킷 브레이커[{self._name}]: HALF_OPEN (복구 프로브 시작)"
+                )
                 self._probe_permit = CallPermit(
                     is_probe=True, generation=self._generation
                 )
@@ -170,7 +179,9 @@ class CircuitBreaker:
                 # reset() 등으로 무효화된 옛 프로브가 뒤늦게 도착해도
                 # 현재 진행 중인 프로브의 슬롯을 풀어서는 안 된다.
                 if self._probe_permit is not permit:
-                    logger.debug("서킷 브레이커: 무효화된 프로브 결과 무시")
+                    logger.debug(
+                        f"서킷 브레이커[{self._name}]: 무효화된 프로브 결과 무시"
+                    )
                     return
                 self._probe_permit = None
 
@@ -187,7 +198,7 @@ class CircuitBreaker:
                 or self._state != CircuitState.CLOSED
             ):
                 logger.debug(
-                    f"서킷 브레이커: 뒤늦은 결과 무시 "
+                    f"서킷 브레이커[{self._name}]: 뒤늦은 결과 무시 "
                     f"(failed={permit.failed}, state={self._state})"
                 )
                 return
@@ -238,14 +249,14 @@ class CircuitBreaker:
         # 세대를 올려 이 시점 이전에 발급된 허가증의 결과를 모두 무효화한다
         self._generation += 1
         logger.warning(
-            f"서킷 브레이커: OPEN ({reason}, "
+            f"서킷 브레이커[{self._name}]: OPEN ({reason}, "
             f"{self._recovery_timeout:.0f}초 후 복구 시도)"
         )
 
     def _close_locked(self):
         """서킷 닫기 (락 보유 상태에서 호출)"""
         if self._state != CircuitState.CLOSED:
-            logger.info("서킷 브레이커: CLOSED (복구 완료)")
+            logger.info(f"서킷 브레이커[{self._name}]: CLOSED (복구 완료)")
         self._state = CircuitState.CLOSED
         self._failure_count = 0
         self._opened_at = None
