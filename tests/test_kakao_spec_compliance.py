@@ -155,9 +155,14 @@ class TestComponentLimits:
         assert card["buttonLayout"] == "horizontal"
         assert len(card["buttons"]) == 2, "가로 배치에서 버튼이 잘리면 안 된다"
 
-    @pytest.mark.parametrize("count", [1, 3])
-    def test_other_counts_stay_vertical(self, count):
-        """1개는 가로로 둘 이유가 없고, 3개는 가로 한도(2개)를 넘는다"""
+    @pytest.mark.parametrize("count", [1, 2, 3, 5])
+    def test_horizontal_is_the_default(self, count):
+        """기본은 가로 2개다.
+
+        세로로 쌓으면 버튼 하나가 한 줄씩 먹어 그룹방 대화창을 그만큼
+        가린다. 선택지를 둘로 좁히는 편이 화면도 아끼고 다음 행동도
+        분명해진다. 셋 이상이 꼭 필요한 화면만 force_vertical을 쓴다.
+        """
         btns = [
             {"label": f"버튼{i}", "action": "message", "messageText": f"/{i}"}
             for i in range(count)
@@ -166,13 +171,25 @@ class TestComponentLimits:
         assert_valid_skill_response(resp, f"{count} buttons")
 
         card = resp["template"]["outputs"][0]["textCard"]
-        assert card["buttonLayout"] == "vertical"
-        assert len(card["buttons"]) == count
+        assert card["buttonLayout"] == "horizontal"
+        assert len(card["buttons"]) == min(count, SPEC_BUTTONS_HORIZONTAL)
 
-    def test_horizontal_layout_never_drops_a_button(self):
-        """
-        버튼 4개를 넘겨도 가로(2개 한도)로 잘라 2개만 남기면 안 된다.
-        세로를 유지해 3개를 보여주는 쪽이 정보 손실이 적다.
+    def test_force_vertical_opts_out(self):
+        """정말 셋 이상이 필요한 화면은 명시적으로 세로를 요청한다"""
+        btns = [
+            {"label": f"버튼{i}", "action": "message", "messageText": f"/{i}"}
+            for i in range(3)
+        ]
+        resp = KakaoResponse.text_with_buttons("본문", btns, force_vertical=True)
+        card = resp["template"]["outputs"][0]["textCard"]
+        assert card["buttonLayout"] == "vertical"
+        assert len(card["buttons"]) == 3
+
+    def test_extra_buttons_are_dropped_not_wrapped(self):
+        """가로 한도를 넘는 버튼은 잘린다.
+
+        핸들러가 버튼을 셋 이상 넘기면 앞의 두 개만 남는다는 뜻이므로,
+        가장 중요한 행동을 앞에 두어야 한다.
         """
         btns = [
             {"label": f"버튼{i}", "action": "message", "messageText": f"/{i}"}
@@ -181,8 +198,9 @@ class TestComponentLimits:
         card = KakaoResponse.text_with_buttons("본문", btns)["template"]["outputs"][0][
             "textCard"
         ]
-        assert card["buttonLayout"] == "vertical"
-        assert len(card["buttons"]) == SPEC_BUTTONS_VERTICAL
+        assert card["buttonLayout"] == "horizontal"
+        assert [b["label"] for b in card["buttons"]] == ["버튼0", "버튼1"]
+        assert len(card["buttons"]) == SPEC_BUTTONS_HORIZONTAL
 
     def test_long_button_label_is_trimmed(self):
         """
@@ -347,7 +365,9 @@ class TestGroupButtonAllowance:
 
     def test_one_to_one_still_caps_at_three(self):
         """1:1 기본 명세는 여전히 3개다. 넓은 한도를 기본값으로 두면 안 된다"""
-        resp = KakaoResponse.text_with_buttons("본문", self._buttons(5))
+        resp = KakaoResponse.text_with_buttons(
+            "본문", self._buttons(5), force_vertical=True
+        )
         assert_valid_skill_response(resp, "1:1 버튼")
         assert len(resp["template"]["outputs"][0]["textCard"]["buttons"]) == 3
 
@@ -356,13 +376,16 @@ class TestGroupButtonAllowance:
             "본문",
             self._buttons(7),
             button_cap=KakaoResponse.MAX_VERTICAL_BUTTONS_GROUP,
+            force_vertical=True,
         )
         assert_valid_skill_response(resp, "그룹 버튼", in_group=True)
         assert len(resp["template"]["outputs"][0]["textCard"]["buttons"]) == 5
 
     def test_group_cap_never_exceeds_spec(self):
         """호출부가 과한 값을 넘겨도 스펙을 넘지 않아야 한다"""
-        resp = KakaoResponse.text_with_buttons("본문", self._buttons(9), button_cap=99)
+        resp = KakaoResponse.text_with_buttons(
+            "본문", self._buttons(9), button_cap=99, force_vertical=True
+        )
         assert_valid_skill_response(resp, "과한 cap", in_group=True)
         assert (
             len(resp["template"]["outputs"][0]["textCard"]["buttons"])

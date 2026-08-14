@@ -164,7 +164,8 @@ ADMIN_TOKEN=<관리자 API 토큰>              # 미설정 시 임시 토큰 �
 DB_POOL_TIMEOUT=2.0                       # DB 커넥션 풀 대기 상한 (초)
 DEV_MODE=false                            # true면 CORS 전체 허용 + 디버그 엔드포인트
 KIS_MIN_CALL_INTERVAL=0.1                 # KIS 호출 간 최소 간격 (초). 모의투자면 1.0 이상
-KIS_API_TIMEOUT=1.5                       # KIS 개별 호출 타임아웃 (초)
+KIS_API_TIMEOUT=1.5                       # KIS 개별 시세 조회 타임아웃 (초)
+KIS_RANK_TIMEOUT=2.5                      # 순위 조회 타임아웃 (초). 30여 종목이라 더 느리다
 KIS_TOKEN_TIMEOUT=5.0                     # KIS 토큰 발급 전용 타임아웃 (초)
 KIS_MAX_CONCURRENT_CALLS=5                # 프로세스 전역 동시 KIS 호출 상한
 KIS_SLOT_WAIT_CAP=1.0                     # 동시 호출 슬롯 대기 상한 (초)
@@ -258,7 +259,7 @@ ruff format --check .     # Format check
   so `CommandHandler.handle()` retries registration after dispatch when the pre-check found no
   user. A unique-constraint violation there means a concurrent request already registered — it
   is treated as success, not failure
-- **Kakao response spec** (enforced in `utils/kakao_response.py`, verified by `tests/test_kakao_spec_compliance.py`): `outputs` ≤ 3; textCard title+description ≤ 400; basicCard description ≤ 230; listCard items ≤ 5; button label ≤ 14; buttons ≤ 2 horizontal. 세로 버튼은 **1:1이 3개, 그룹방이 5개**(그룹 가이드 v1.10.0)라 기본값은 좁은 쪽이고, 방을 아는 핸들러가 `self.button_cap`으로 넓힌다. `KakaoResponse.BODY_LIMIT` (350) is a deliberately stricter UX limit — the group beta guide requires responses not to cover the whole chat screen
+- **Kakao response spec** (enforced in `utils/kakao_response.py`, verified by `tests/test_kakao_spec_compliance.py`): `outputs` ≤ 3; textCard title+description ≤ 400; basicCard description ≤ 230; listCard items ≤ 5; button label ≤ 14; buttons ≤ 2 horizontal. **버튼은 기본이 가로 2개**다 - 세로로 쌓으면 버튼 하나가 한 줄씩 대화창을 가린다. 셋 이상이 꼭 필요한 화면만 `force_vertical=True`를 쓰고, 그때 세로 한도는 **1:1이 3개, 그룹방이 5개**(그룹 가이드 v1.10.0)라 핸들러가 `self.button_cap`으로 넓힌다. `KakaoResponse.BODY_LIMIT` (350) is a deliberately stricter UX limit — the group beta guide requires responses not to cover the whole chat screen
 - **각성 정체성은 (계열 × 직군 × 종 × 성장) 네 축이다.** 직군·종은 `users.enhance_job`/
   `enhance_rarity`에 저장하고 성장은 레벨에서 파생한다(`enhance_classes.growth_stage`).
   이 좌표가 곧 이미지 파일명이고 각성 성공 문구도 같은 좌표로 조립되므로,

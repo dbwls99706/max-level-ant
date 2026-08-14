@@ -50,13 +50,24 @@ class TestSingleCardInvariant:
         assert len(outs) == 1
         assert len(outs[0]["textCard"]["description"]) <= LIMIT
 
-    def test_buttons_capped_at_vertical_limit(self):
-        """buttonLayout='vertical'은 최대 3개까지만 노출된다 (카카오 명세)"""
+    def test_buttons_capped_at_horizontal_limit(self):
+        """기본은 가로 2개다. 세로로 쌓으면 그만큼 대화창을 가린다"""
         btns = [
             {"label": f"B{i}", "action": "message", "messageText": f"/{i}"}
             for i in range(8)
         ]
         resp = KakaoResponse.text_with_buttons("hi", btns)
+        card = _outputs(resp)[0]["textCard"]
+        assert card["buttonLayout"] == "horizontal"
+        assert len(card["buttons"]) == KakaoResponse.MAX_HORIZONTAL_BUTTONS == 2
+
+    def test_vertical_is_opt_in(self):
+        """세로가 꼭 필요한 화면만 명시적으로 요청한다"""
+        btns = [
+            {"label": f"B{i}", "action": "message", "messageText": f"/{i}"}
+            for i in range(8)
+        ]
+        resp = KakaoResponse.text_with_buttons("hi", btns, force_vertical=True)
         card = _outputs(resp)[0]["textCard"]
         assert card["buttonLayout"] == "vertical"
         assert len(card["buttons"]) == KakaoResponse.MAX_VERTICAL_BUTTONS == 3

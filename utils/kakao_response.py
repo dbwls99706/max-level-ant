@@ -397,14 +397,18 @@ class KakaoResponse:
 
     @staticmethod
     def text_with_buttons(
-        text: str, buttons: List[Dict], button_cap: Optional[int] = None
+        text: str,
+        buttons: List[Dict],
+        button_cap: Optional[int] = None,
+        force_vertical: bool = False,
     ) -> Dict:
         """
         본문 + 액션 버튼을 함께 담은 응답.
 
         ⚠️ 카카오 그룹(팀채팅) 챗봇은 quickReplies 컴포넌트를 지원하지 않으므로,
         본문과 버튼을 하나의 textCard로 합쳐 노출한다.
-        버튼이 2개면 가로(horizontal), 그 외에는 세로(vertical)로 배치한다.
+        기본은 가로 2개다(넘치는 버튼은 잘린다). 세 개 이상을 반드시
+        보여야 하는 화면만 force_vertical=True로 세로 배치를 요청한다.
         세로 한도는 1:1이 3개, 그룹방이 5개다(button_cap으로 지정).
         본문은 항상 '단일 카드'로만 보내며, 카드 한도(TEXT_CARD_LIMIT)를
         넘으면 줄 단위로 잘라 생략 표시를 붙인다(본문을 별도 말풍선으로 쪼개지 않음).
@@ -422,14 +426,11 @@ class KakaoResponse:
                 "template": {"outputs": [{"simpleText": {"text": text}}]},
             }
 
-        # 버튼이 정확히 2개면 가로로 배치한다. 세로로 쌓으면 짧은 라벨 두 줄이
-        # 화면만 차지하는데, 그룹방에서는 응답 높이가 그대로 대화창을 가린다.
-        # 3개 이상은 가로 한도(2개)를 넘으므로 세로를 유지한다.
-        layout = (
-            "horizontal"
-            if len(buttons) == KakaoResponse.MAX_HORIZONTAL_BUTTONS
-            else "vertical"
-        )
+        # 기본은 가로 2개다. 세로로 쌓으면 버튼 하나가 한 줄씩 먹어서
+        # 그룹방 대화창을 그만큼 가린다. 선택지를 두 개로 좁히는 편이
+        # 화면도 아끼고 다음 행동도 분명해진다.
+        # 정말 더 필요한 화면만 layout="vertical"을 명시한다.
+        layout = "vertical" if force_vertical else "horizontal"
         card_buttons = KakaoResponse._fit_buttons(buttons, layout, button_cap)
         # title이 없으므로 스펙상 400자까지 가능하지만, 그룹방 화면을 덮지 않도록
         # 더 보수적인 BODY_LIMIT을 적용한다.
