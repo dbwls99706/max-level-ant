@@ -1048,7 +1048,9 @@ class GameHandlerMixin(BaseHandlerMixin):
         stem = result.get("art_stem")
         image_url = AssetConfig.image_url(stem) if stem else ""
         if not image_url:
-            return KakaoResponse.text_with_buttons(msg, buttons)
+            return KakaoResponse.text_with_buttons(
+                msg, buttons, button_cap=self.button_cap
+            )
 
         level = result["new_level"]
         title = f"{result['new_emoji']} Lv.{level} {result['job_label']}"
@@ -1077,7 +1079,13 @@ class GameHandlerMixin(BaseHandlerMixin):
             lines.append("")
             lines.append("📖 도감 신규 해금!")
 
-        return KakaoResponse.basic_card(title, "\n".join(lines), image_url, buttons)
+        return KakaoResponse.basic_card(
+            title,
+            "\n".join(lines),
+            image_url,
+            buttons,
+            button_cap=self.button_cap,
+        )
 
     @staticmethod
     def _generate_quiz_lesson(quiz: dict) -> str:

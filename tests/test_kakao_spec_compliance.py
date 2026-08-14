@@ -31,11 +31,17 @@ SPEC_TEXT_CARD_CHARS = 400
 SPEC_BASIC_CARD_CHARS = 230
 SPEC_LIST_ITEMS = 5
 SPEC_BUTTONS_VERTICAL = 3
+# 그룹(팀채팅) 챗봇 스킬 서버 가이드 v1.10.0:
+# buttonLayout이 vertical이면 최대 5개까지 노출된다.
+SPEC_BUTTONS_VERTICAL_GROUP = 5
 SPEC_BUTTONS_HORIZONTAL = 2
+
+# 팀채팅 챗봇이 지원하지 않는 컴포넌트. 만들면 응답 자체가 안 그려진다.
+UNSUPPORTED_COMPONENTS = {"quickReplies", "commerceCard", "carousel"}
 SPEC_BUTTON_LABEL_CHARS = 14
 
 
-def assert_valid_skill_response(resp: dict, label: str = ""):
+def assert_valid_skill_response(resp: dict, label: str = "", in_group: bool = False):
     """카카오 스킬 응답이 명세 한도를 지키는지 검증"""
     where = f"[{label}] " if label else ""
 
@@ -95,12 +101,17 @@ def assert_valid_skill_response(resp: dict, label: str = ""):
             )
             for item in items:
                 assert item.get("title"), f"{where}listCard item title 필수"
+        elif kind in UNSUPPORTED_COMPONENTS:
+            raise AssertionError(f"{where}팀채팅에서 지원하지 않는 컴포넌트: {kind}")
         else:
             raise AssertionError(f"{where}알 수 없는 컴포넌트: {kind}")
 
         buttons = body.get("buttons") or []
         layout = body.get("buttonLayout", "vertical")
-        cap = SPEC_BUTTONS_VERTICAL if layout == "vertical" else SPEC_BUTTONS_HORIZONTAL
+        if layout == "vertical":
+            cap = SPEC_BUTTONS_VERTICAL_GROUP if in_group else SPEC_BUTTONS_VERTICAL
+        else:
+            cap = SPEC_BUTTONS_HORIZONTAL
         assert len(buttons) <= cap, (
             f"{where}{kind} 버튼 {len(buttons)}개 > {layout} 한도 {cap}개"
         )
@@ -320,4 +331,122 @@ class TestHandlerResponses:
             db, test_user.kakao_id, command, "테스터", "group-key-1"
         )
         resp = handler.handle()
-        assert_valid_skill_response(resp, f"group:{command or '(빈 발화)'}")
+        assert_valid_skill_response(
+            resp, f"group:{command or '(빈 발화)'}", in_group=True
+        )
+
+
+class TestGroupButtonAllowance:
+    """그룹방에서만 넓어지는 버튼 한도"""
+
+    def _buttons(self, n):
+        return [
+            {"label": f"B{i}", "action": "message", "messageText": f"/{i}"}
+            for i in range(n)
+        ]
+
+    def test_one_to_one_still_caps_at_three(self):
+        """1:1 기본 명세는 여전히 3개다. 넓은 한도를 기본값으로 두면 안 된다"""
+        resp = KakaoResponse.text_with_buttons("본문", self._buttons(5))
+        assert_valid_skill_response(resp, "1:1 버튼")
+        assert len(resp["template"]["outputs"][0]["textCard"]["buttons"]) == 3
+
+    def test_group_allows_five(self):
+        resp = KakaoResponse.text_with_buttons(
+            "본문",
+            self._buttons(7),
+            button_cap=KakaoResponse.MAX_VERTICAL_BUTTONS_GROUP,
+        )
+        assert_valid_skill_response(resp, "그룹 버튼", in_group=True)
+        assert len(resp["template"]["outputs"][0]["textCard"]["buttons"]) == 5
+
+    def test_group_cap_never_exceeds_spec(self):
+        """호출부가 과한 값을 넘겨도 스펙을 넘지 않아야 한다"""
+        resp = KakaoResponse.text_with_buttons("본문", self._buttons(9), button_cap=99)
+        assert_valid_skill_response(resp, "과한 cap", in_group=True)
+        assert (
+            len(resp["template"]["outputs"][0]["textCard"]["buttons"])
+            == SPEC_BUTTONS_VERTICAL_GROUP
+        )
+
+    def test_horizontal_stays_two_even_in_group(self):
+        """가로 정렬은 그룹에서도 2개가 상한이다.
+
+        text_with_buttons는 버튼이 정확히 2개일 때만 가로로 배치하므로,
+        상한이 지켜지는지는 _fit_buttons를 직접 불러 확인해야 한다.
+        (2개만 넘기면 cap이 3이든 5든 결과가 같아 구분이 안 된다.)
+        """
+        fitted = KakaoResponse._fit_buttons(
+            self._buttons(5), layout="horizontal", button_cap=5
+        )
+        assert len(fitted) == SPEC_BUTTONS_HORIZONTAL
+
+    def test_horizontal_layout_is_chosen_for_two(self):
+        resp = KakaoResponse.text_with_buttons("본문", self._buttons(2), button_cap=5)
+        card = resp["template"]["outputs"][0]["textCard"]
+        assert card["buttonLayout"] == "horizontal"
+        assert len(card["buttons"]) == SPEC_BUTTONS_HORIZONTAL
+
+    def test_handler_cap_follows_the_room(self, db, test_user):
+        """핸들러가 방 종류에 따라 한도를 고른다"""
+        from handlers import CommandHandler
+
+        solo = CommandHandler(db, test_user.kakao_id, "/각성", "테스터", "")
+        group = CommandHandler(db, test_user.kakao_id, "/각성", "테스터", "gk-1")
+        assert solo.button_cap == SPEC_BUTTONS_VERTICAL
+        assert group.button_cap == SPEC_BUTTONS_VERTICAL_GROUP
+
+
+class TestPluginButtons:
+    """그룹 챗봇 버튼 플러그인 (guide/share/invite 등)"""
+
+    def test_plugin_buttons_survive_the_fitter(self):
+        """messageText나 URL이 없어도 버튼이 유지돼야 한다"""
+        buttons = [
+            {"label": "도움말", "action": "guide"},
+            {"label": "공유하기", "action": "share"},
+        ]
+        resp = KakaoResponse.text_with_buttons("본문", buttons)
+        assert_valid_skill_response(resp, "플러그인 버튼")
+        actions = [
+            b["action"] for b in resp["template"]["outputs"][0]["textCard"]["buttons"]
+        ]
+        assert actions == ["guide", "share"]
+
+    def test_declared_plugin_actions_are_known(self):
+        """가이드에 있는 action 타입이 상수에 다 들어 있어야 한다"""
+        documented = {
+            "guide",
+            "share",
+            "invite",
+            "inviteMember",
+            "mention",
+            "settings",
+            "webViewLink",
+        }
+        assert documented == set(KakaoResponse.PLUGIN_ACTIONS)
+
+
+class TestUnsupportedComponents:
+    """팀채팅이 지원하지 않는 컴포넌트를 만들지 않는지"""
+
+    @pytest.mark.parametrize("kind", sorted(UNSUPPORTED_COMPONENTS))
+    def test_unsupported_component_is_rejected(self, kind):
+        """검사기가 이걸 못 잡으면 응답이 통째로 안 그려지는 걸 배포까지 모른다"""
+        resp = {"version": "2.0", "template": {"outputs": [{kind: {}}]}}
+        with pytest.raises(AssertionError, match="지원하지 않는"):
+            assert_valid_skill_response(resp, kind)
+
+    def test_builders_never_emit_them(self):
+        """헬퍼가 만드는 응답에는 미지원 컴포넌트가 없어야 한다"""
+        made = [
+            KakaoResponse.simple_text("본문"),
+            KakaoResponse.text_card("제목", "설명"),
+            KakaoResponse.basic_card("제목", "설명", "https://img/x.png"),
+            KakaoResponse.list_card("헤더", [{"title": "항목"}]),
+            KakaoResponse.simple_image("https://img/x.png", "alt"),
+            KakaoResponse.text_with_buttons("본문", []),
+        ]
+        for resp in made:
+            for out in resp["template"]["outputs"]:
+                assert not (set(out) & UNSUPPORTED_COMPONENTS), out

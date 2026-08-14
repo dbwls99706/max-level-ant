@@ -258,7 +258,7 @@ ruff format --check .     # Format check
   so `CommandHandler.handle()` retries registration after dispatch when the pre-check found no
   user. A unique-constraint violation there means a concurrent request already registered — it
   is treated as success, not failure
-- **Kakao response spec** (enforced in `utils/kakao_response.py`, verified by `tests/test_kakao_spec_compliance.py`): `outputs` ≤ 3; textCard title+description ≤ 400; basicCard description ≤ 230; listCard items ≤ 5; buttons ≤ 3 vertical / 2 horizontal. `KakaoResponse.BODY_LIMIT` (350) is a deliberately stricter UX limit — the group beta guide requires responses not to cover the whole chat screen
+- **Kakao response spec** (enforced in `utils/kakao_response.py`, verified by `tests/test_kakao_spec_compliance.py`): `outputs` ≤ 3; textCard title+description ≤ 400; basicCard description ≤ 230; listCard items ≤ 5; button label ≤ 14; buttons ≤ 2 horizontal. 세로 버튼은 **1:1이 3개, 그룹방이 5개**(그룹 가이드 v1.10.0)라 기본값은 좁은 쪽이고, 방을 아는 핸들러가 `self.button_cap`으로 넓힌다. `KakaoResponse.BODY_LIMIT` (350) is a deliberately stricter UX limit — the group beta guide requires responses not to cover the whole chat screen
 - **각성 정체성은 (계열 × 직군 × 종 × 성장) 네 축이다.** 직군·종은 `users.enhance_job`/
   `enhance_rarity`에 저장하고 성장은 레벨에서 파생한다(`enhance_classes.growth_stage`).
   이 좌표가 곧 이미지 파일명이고 각성 성공 문구도 같은 좌표로 조립되므로,
@@ -277,4 +277,12 @@ ruff format --check .     # Format check
   **공개 HTTPS 절대 URL만** 받으므로 `PUBLIC_BASE_URL`이 없으면 이미지 카드를 못 만든다
   (그때는 예외를 던지지 않고 빈 문자열을 돌려줘 텍스트로 물러선다). 원본 PNG(1.4GB)는
   `.gitignore`·`.dockerignore` 대상이고, 파일명 규칙은 `enhance_art.image_stem()` 한곳에만 있다
-- `listLayout: "ranking"` is a **group-chatbot-only** bubble ('리스트(랭킹)', beta guide slide 32); it is not in the public 1:1 spec
+- `listLayout: "ranking"` is a **group-chatbot-only** bubble ('리스트(랭킹)'); the group skill guide
+  v1.11.1 documents the field name and a JSON example, so it is confirmed - not in the public 1:1 spec
+- **팀채팅 미지원 컴포넌트: `quickReplies` / `commerceCard` / `carousel`.** 셋 다 만들지 않는다
+  (스펙 테스트가 막는다). 카드를 여러 장 넘겨 보여주는 연출은 carousel이 없어 불가능하므로
+  목록은 `listCard`로 낸다. `BasicCard`/`ItemCard`는 지원된다
+- **버튼 플러그인**(`guide`/`share`/`invite`/`inviteMember`/`mention`/`settings`/`webViewLink`)은
+  `messageText`나 URL 없이 `action`만으로 동작한다. `KakaoResponse.PLUGIN_ACTIONS` 참고
+- **SkillRequest에는 하위 호환 필드가 추가될 수 있다.** `main.py`는 전부 `.get()`으로 읽어
+  알 수 없는 필드가 와도 터지지 않는다. 이 성질을 깨지 말 것

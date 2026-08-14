@@ -25,6 +25,22 @@ class BaseHandlerMixin:
     group_key: str
 
     # ===========================================
+    # 응답 한도
+    # ===========================================
+
+    @property
+    def button_cap(self) -> int:
+        """이 방에서 세로로 노출 가능한 버튼 수.
+
+        그룹 챗봇 가이드는 세로 정렬 최대 5개를 허용하지만 1:1 기본 명세는
+        3개다. 이 앱은 둘 다 받으므로 방을 아는 여기서만 판단한다.
+        group_key가 없으면(1:1) 좁은 쪽을 쓴다.
+        """
+        if self.group_key:
+            return KakaoResponse.MAX_VERTICAL_BUTTONS_GROUP
+        return KakaoResponse.MAX_VERTICAL_BUTTONS
+
+    # ===========================================
     # 유저 표시명
     # ===========================================
 

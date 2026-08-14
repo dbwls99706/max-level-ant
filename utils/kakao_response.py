@@ -12,13 +12,36 @@ class KakaoResponse:
     아래 한도는 카카오 스킬 응답 JSON 공식 명세를 따른다.
     https://kakaobusiness.gitbook.io/main/tool/chatbot/skill_guide/answer_json_format
 
-    그룹(팀채팅) 챗봇은 일반채팅에 제공되는 기능의 부분집합이므로,
-    표준 명세보다 넉넉한 한도를 가정하지 않는다.
+    그룹(팀채팅) 챗봇은 대체로 일반채팅 기능의 부분집합이지만, 버튼 개수처럼
+    오히려 넓어진 항목도 있다. 그런 항목은 아래에 GROUP 접미사로 따로 둔다.
+    이 앱은 1:1과 그룹방을 모두 받으므로 기본값은 좁은 쪽(1:1)으로 두고,
+    방을 아는 호출부만 넓은 한도를 명시적으로 넘긴다.
+
+    미지원 컴포넌트(팀채팅): QuickReplies, CommerceCard, Carousel.
+    이 셋은 만들지 않는다.
     """
 
-    # 버튼 개수: 세로 정렬 최대 3개, 가로 정렬 최대 2개
+    # 버튼 개수
+    # - 1:1 기본 명세: 세로 3 / 가로 2
+    # - 그룹 챗봇 가이드 v1.10.0: 세로 정렬은 최대 5개까지 노출
+    #   (가로는 그대로 2개)
     MAX_VERTICAL_BUTTONS = 3
+    MAX_VERTICAL_BUTTONS_GROUP = 5
     MAX_HORIZONTAL_BUTTONS = 2
+
+    # 버튼 플러그인 action 타입 (그룹 챗봇 전용).
+    # message/webLink처럼 별도 URL·문구 없이 동작만 지정하는 버튼들이다.
+    PLUGIN_ACTIONS = frozenset(
+        {
+            "guide",  # 챗봇 도움말
+            "share",  # 말풍선을 다른 채팅방에 공유
+            "invite",  # 챗봇을 다른 채팅방에 초대
+            "inviteMember",  # 현재 방에 친구 초대
+            "mention",  # 입력창에 챗봇 멘션 입력
+            "settings",  # 챗봇 설정(알림) 페이지
+            "webViewLink",  # 주소표시줄 없는 웹뷰로 URL 열기
+        }
+    )
 
     # listCard items: 단일형 최대 5개
     MAX_LIST_ITEMS = 5
@@ -94,6 +117,7 @@ class KakaoResponse:
         description: str,
         thumbnail_url: str,
         buttons: Optional[List[Dict]] = None,
+        button_cap: Optional[int] = None,
     ) -> Dict:
         """
         기본 카드 응답 (피드형)
@@ -119,13 +143,16 @@ class KakaoResponse:
         }
 
         if buttons:
-            card["buttons"] = KakaoResponse._fit_buttons(buttons)
+            card["buttons"] = KakaoResponse._fit_buttons(buttons, button_cap=button_cap)
 
         return {"version": "2.0", "template": {"outputs": [{"basicCard": card}]}}
 
     @staticmethod
     def text_card(
-        title: str, description: str, buttons: Optional[List[Dict]] = None
+        title: str,
+        description: str,
+        buttons: Optional[List[Dict]] = None,
+        button_cap: Optional[int] = None,
     ) -> Dict:
         """
         텍스트 카드 응답 (썸네일 없음)
@@ -145,7 +172,7 @@ class KakaoResponse:
             card["title"] = title
 
         if buttons:
-            card["buttons"] = KakaoResponse._fit_buttons(buttons)
+            card["buttons"] = KakaoResponse._fit_buttons(buttons, button_cap=button_cap)
 
         return {"version": "2.0", "template": {"outputs": [{"textCard": card}]}}
 
@@ -155,19 +182,15 @@ class KakaoResponse:
         items: List[Dict],
         buttons: Optional[List[Dict]] = None,
         list_layout: Optional[str] = None,
+        button_cap: Optional[int] = None,
     ) -> Dict:
         """
         리스트 카드 응답
 
         list_layout="ranking": 그룹(팀채팅) 챗봇 전용 '리스트(랭킹)' 말풍선.
-
-        ⚠️ 검증 상태: 그룹 챗봇 beta 가이드 슬라이드 32는 사용 가능한 말풍선으로
-        텍스트 / 텍스트(링크) / 이미지 / 리스트 / 피드 / **리스트(랭킹)**을 명시한다.
-        즉 '랭킹 리스트 말풍선이 존재한다'는 것까지는 확인됐다.
-        다만 그 말풍선을 지정하는 JSON 필드가 정확히 `listLayout: "ranking"`인지는
-        공개 기본 명세에 없고 beta 문서의 JSON 예제로도 확인하지 못했다.
-        개발 채널에서 실제 렌더링을 확인하기 전까지는 미검증 상태로 둔다.
-        (렌더링 실패 시 이 인자만 빼면 일반 리스트로 정상 노출된다.)
+        그룹 챗봇 스킬 서버 가이드 v1.11.1이 `"listLayout": "ranking"` 필드와
+        JSON 예제를 명시한다. 필드 이름까지 확인된 값이다.
+        (그래도 렌더링 실패 시 이 인자만 빼면 일반 리스트로 정상 노출된다.)
 
         items 예시:
         [
@@ -189,23 +212,31 @@ class KakaoResponse:
             card["listLayout"] = list_layout
 
         if buttons:
-            card["buttons"] = KakaoResponse._fit_buttons(buttons)
+            card["buttons"] = KakaoResponse._fit_buttons(buttons, button_cap=button_cap)
 
         return {"version": "2.0", "template": {"outputs": [{"listCard": card}]}}
 
     @staticmethod
-    def _fit_buttons(buttons: List[Dict], layout: str = "vertical") -> List[Dict]:
+    def _fit_buttons(
+        buttons: List[Dict],
+        layout: str = "vertical",
+        button_cap: Optional[int] = None,
+    ) -> List[Dict]:
         """
         버튼을 스펙에 맞춘다.
-          - 개수: 레이아웃 한도(세로 3 / 가로 2)까지만
+          - 개수: 레이아웃 한도(세로 3, 그룹방은 5 / 가로 2)까지만
           - 라벨: 14자 한도. 넘으면 카카오가 말없이 잘라 뒤가 사라지므로,
             여기서 잘라 최소한 잘렸다는 표시(…)라도 남긴다.
+
+        button_cap: 세로 정렬일 때만 쓰이는 상한. 그룹방을 아는 호출부가
+            MAX_VERTICAL_BUTTONS_GROUP을 넘긴다. 가로 정렬은 그룹에서도
+            2개가 상한이라 이 값을 무시한다.
         """
-        cap = (
-            KakaoResponse.MAX_VERTICAL_BUTTONS
-            if layout == "vertical"
-            else KakaoResponse.MAX_HORIZONTAL_BUTTONS
-        )
+        if layout == "vertical":
+            cap = button_cap or KakaoResponse.MAX_VERTICAL_BUTTONS
+            cap = min(cap, KakaoResponse.MAX_VERTICAL_BUTTONS_GROUP)
+        else:
+            cap = KakaoResponse.MAX_HORIZONTAL_BUTTONS
         return [KakaoResponse._fit_label(b) for b in list(buttons)[:cap]]
 
     @staticmethod
@@ -284,13 +315,16 @@ class KakaoResponse:
         return join([header] + kept + more + tail)
 
     @staticmethod
-    def text_with_buttons(text: str, buttons: List[Dict]) -> Dict:
+    def text_with_buttons(
+        text: str, buttons: List[Dict], button_cap: Optional[int] = None
+    ) -> Dict:
         """
         본문 + 액션 버튼을 함께 담은 응답.
 
         ⚠️ 카카오 그룹(팀채팅) 챗봇은 quickReplies 컴포넌트를 지원하지 않으므로,
         본문과 버튼을 하나의 textCard로 합쳐 노출한다.
-        버튼이 2개면 가로(horizontal), 그 외에는 세로(vertical, 최대 3개)로 배치한다.
+        버튼이 2개면 가로(horizontal), 그 외에는 세로(vertical)로 배치한다.
+        세로 한도는 1:1이 3개, 그룹방이 5개다(button_cap으로 지정).
         본문은 항상 '단일 카드'로만 보내며, 카드 한도(TEXT_CARD_LIMIT)를
         넘으면 줄 단위로 잘라 생략 표시를 붙인다(본문을 별도 말풍선으로 쪼개지 않음).
         길이가 가변적인 목록은 핸들러에서 fit_items()로 미리 줄여 보내는 것을 권장한다.
@@ -315,7 +349,7 @@ class KakaoResponse:
             if len(buttons) == KakaoResponse.MAX_HORIZONTAL_BUTTONS
             else "vertical"
         )
-        card_buttons = KakaoResponse._fit_buttons(buttons, layout)
+        card_buttons = KakaoResponse._fit_buttons(buttons, layout, button_cap)
         # title이 없으므로 스펙상 400자까지 가능하지만, 그룹방 화면을 덮지 않도록
         # 더 보수적인 BODY_LIMIT을 적용한다.
         card_text = KakaoResponse._fit_card(text, KakaoResponse.BODY_LIMIT)
