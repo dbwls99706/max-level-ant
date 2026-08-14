@@ -473,11 +473,19 @@ class KISAPIClient:
         return None
 
     @classmethod
-    def get_volume_rank(cls, market: str = "J", blng_cls_code: str = "0") -> List[Dict]:
+    def get_volume_rank(
+        cls,
+        market: str = "J",
+        blng_cls_code: str = "0",
+        timeout_cap: Optional[float] = None,
+    ) -> List[Dict]:
         """
         거래량/거래대금 순위 조회
         tr_id: FHPST01710000
         blng_cls_code: 0=평균거래량, 1=거래증가율, 2=평균거래회전율, 3=거래금액순, 4=평균거래금액회전율
+
+        timeout_cap: 배경 갱신처럼 카카오 SLA가 없는 호출용 상한.
+            요청 경로에서는 넘기지 않는다(예산이 다시 잘라준다).
         """
         label = "거래대금" if blng_cls_code == "3" else "거래량"
         cache_key = f"volume:{market}:{blng_cls_code}"
@@ -486,16 +494,24 @@ class KISAPIClient:
         if cached is not None:
             return cached
 
+        def fallback() -> List[Dict]:
+            """조회에 실패했을 때의 응답. 빈 화면보다 조금 지난 순위가 낫다."""
+            stale = _rank_cache.get_stale(cache_key)
+            if stale:
+                logger.info(f"{label} 순위 - 직전 성공값으로 응답 ({len(stale)}종목)")
+                return stale
+            return []
+
         if budget.exhausted(SkillConfig.MIN_CALL_BUDGET):
             logger.debug(f"응답 예산 소진 - {label} 순위 조회 스킵")
-            return _rank_cache.get_stale(cache_key) or []
+            return fallback()
         headers = cls._get_headers(cls.TR_ID_VOLUME_RANK)
         if not headers:
             logger.warning(f"{label} 순위: 헤더 생성 실패")
-            return _rank_cache.get_stale(cache_key) or []
+            return fallback()
 
         started = time.monotonic()
-        applied = KISConfig.RANK_TIMEOUT
+        applied = timeout_cap or KISConfig.RANK_TIMEOUT
         try:
             with _kis_call() as call:
                 url = f"{KISConfig.BASE_URL}/uapi/domestic-stock/v1/quotations/volume-rank"
@@ -516,10 +532,10 @@ class KISAPIClient:
                 # 초당 거래건수 초과 방지 (대기도 예산 안에서만)
                 if not _kis_throttle.wait(max_wait=budget.remaining()):
                     logger.debug(f"응답 예산 부족 - {label} 순위 조회 스킵")
-                    return []
+                    return fallback()
                 # 순위 API는 30여 종목을 한 번에 돌려주므로 단일 시세보다
                 # 느리다. 같은 상한을 쓰면 장중에 통째로 실패한다.
-                applied = budget.timeout_for(KISConfig.RANK_TIMEOUT)
+                applied = budget.timeout_for(timeout_cap or KISConfig.RANK_TIMEOUT)
                 started = time.monotonic()
                 resp = requests.get(
                     url,
@@ -534,7 +550,7 @@ class KISAPIClient:
                         f"{label} 순위 조회 HTTP 에러: status={resp.status_code} "
                         f"{cls._describe_error_body(resp)}"
                     )
-                    return []
+                    return fallback()
 
                 data = resp.json()
                 if data.get("rt_cd") != "0":
@@ -543,7 +559,7 @@ class KISAPIClient:
                         f"{label} 순위 조회 응답 에러: "
                         f"rt_cd={data.get('rt_cd')} msg={data.get('msg1')}"
                     )
-                    return []
+                    return fallback()
 
                 results = []
                 for item in data.get("output", [])[: cls.VOLUME_RANK_FETCH_SIZE]:
@@ -562,6 +578,10 @@ class KISAPIClient:
                     except (ValueError, TypeError, KeyError):
                         continue
                 _rank_cache.put(cache_key, results)
+                logger.debug(
+                    f"{label} 순위 {len(results)}종목 "
+                    f"({time.monotonic() - started:.2f}초)"
+                )
                 return results
 
         except ConcurrencyLimitError as e:
@@ -577,12 +597,7 @@ class KISAPIClient:
         except ValueError as e:
             logger.error(f"{label} 순위 응답 파싱 실패: {e}")
 
-        # 조회가 실패했다. 빈 화면보다 조금 지난 순위가 낫다.
-        stale = _rank_cache.get_stale(cache_key)
-        if stale:
-            logger.info(f"{label} 순위 - 직전 성공값으로 응답 ({len(stale)}종목)")
-            return stale
-        return []
+        return fallback()
 
     @staticmethod
     def _is_excluded_from_ranking(name: str) -> bool:
@@ -1028,6 +1043,33 @@ class StockService:
             f"시세 조회 실패: 종목 인식 OK이나 KIS 응답 없음 ({name}/{code})"
         )
         return None
+
+    # 배경 갱신이 미리 채워 둘 순위 조합.
+    # 핸들러는 전부 KOSPI("J")를 쓰고, 급등·급락은 거래량 순위를 재정렬해
+    # 만들므로 실제로 필요한 건 두 가지뿐이다.
+    _WARM_RANK_KEYS = (("J", "0"), ("J", "3"))
+
+    @classmethod
+    def refresh_rankings(cls) -> int:
+        """순위 캐시를 배경에서 미리 채운다. 성공한 조합 수를 돌려준다.
+
+        요청 경로에서 KIS를 부르면 3.5초 예산에 묶여, KIS가 3초 걸리는
+        시간대에는 통째로 실패한다. 여기는 카카오 SLA가 없으므로 넉넉한
+        상한을 줄 수 있고, 유저는 항상 메모리에서 읽는다.
+
+        예외를 밖으로 내보내지 않는다. 갱신 실패가 배경 루프를 멈추면
+        그 뒤로는 영영 낡은 데이터만 남는다.
+        """
+        ok = 0
+        for market, blng in cls._WARM_RANK_KEYS:
+            try:
+                if KISAPIClient.get_volume_rank(
+                    market, blng, timeout_cap=KISConfig.REFRESH_TIMEOUT
+                ):
+                    ok += 1
+            except Exception as e:  # noqa: BLE001 - 루프를 죽이지 않는다
+                logger.warning(f"순위 배경 갱신 실패 ({market}/{blng}): {e}")
+        return ok
 
     @classmethod
     def get_top_volume(cls, market: str = "KOSPI", limit: int = 10) -> List[Dict]:

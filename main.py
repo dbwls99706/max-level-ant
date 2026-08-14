@@ -2,6 +2,7 @@
 만렙개미 카카오톡 챗봇 - 메인 서버
 """
 
+import asyncio
 import os
 import uuid
 import secrets
@@ -24,7 +25,8 @@ from utils import KakaoResponse, configure_root_logger, get_main_logger
 from services.stock_service import KISAPIClient, StockService
 from services.battle_service import BattleService
 from security import SecurityConfig
-from settings import AssetConfig, SkillConfig, validate_config
+from market_calendar import is_market_open
+from settings import AssetConfig, KISConfig, SkillConfig, validate_config
 from utils import budget
 
 # 로깅 설정
@@ -166,9 +168,55 @@ async def lifespan(app: FastAPI):
     if SecurityConfig.DEV_MODE:
         logger.warning("개발 모드 활성화됨 - CORS 제한 해제")
 
+    # 순위 배경 갱신 시작.
+    # 기동 직후 한 번 채워 둬야 첫 유저가 느린 호출을 안 문다.
+    refresh_task = None
+    if KISConfig.REFRESH_INTERVAL > 0 and KISConfig.is_configured():
+        await run_in_threadpool(StockService.refresh_rankings)
+        refresh_task = asyncio.create_task(_rank_refresh_loop())
+        logger.info(f"순위 배경 갱신 시작 ({KISConfig.REFRESH_INTERVAL:.0f}초 주기)")
+
     yield
+
     # 종료 시
+    if refresh_task:
+        refresh_task.cancel()
+        try:
+            await refresh_task
+        except asyncio.CancelledError:
+            pass
     logger.info("만렙개미 봇 서버 종료!")
+
+
+# ===========================================
+# 순위 배경 갱신
+# ===========================================
+async def _rank_refresh_loop() -> None:
+    """급등/급락/거래량/거래대금 순위를 배경에서 주기적으로 채운다.
+
+    요청 경로에서 KIS를 부르면 카카오 5초 SLA 때문에 3.5초 예산에 묶인다.
+    KIS 순위 API가 3초 가까이 걸리는 시간대에는 그 안에 못 들어와 통째로
+    실패했다. 배경 작업에는 SLA가 없으므로 넉넉히 기다려 받아둘 수 있고,
+    유저 요청은 메모리만 읽는다.
+
+    - DB·HTTP는 이벤트 루프 밖(스레드풀)에서 돈다
+    - 실패해도 루프를 멈추지 않는다. 멈추면 그 뒤로 영영 낡은 값만 남는다
+    - 장이 닫혀 있으면 순위가 변하지 않으므로 건너뛴다 (KIS 호출 절약)
+    """
+    interval = KISConfig.REFRESH_INTERVAL
+    while True:
+        try:
+            if is_market_open():
+                count = await run_in_threadpool(StockService.refresh_rankings)
+                if count:
+                    logger.debug(f"순위 배경 갱신 {count}건")
+                else:
+                    logger.warning("순위 배경 갱신 실패 - 캐시 유지")
+        except asyncio.CancelledError:
+            raise
+        except Exception as e:  # noqa: BLE001 - 루프는 어떤 이유로도 죽지 않는다
+            logger.warning(f"순위 배경 갱신 중 예외: {e}")
+        await asyncio.sleep(interval)
 
 
 # ===========================================
