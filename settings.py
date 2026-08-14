@@ -52,7 +52,7 @@ class SkillConfig:
     # 카카오가 보장하는 스킬 타임아웃 (초)
     KAKAO_TIMEOUT = 5.0
 
-    # 요청 처리에 허용할 총 시간 (초) — 외부 호출 전체가 이 안에서 끝나야 한다
+    # 요청 처리에 허용할 총 시간 (초) - 외부 호출 전체가 이 안에서 끝나야 한다
     RESPONSE_BUDGET = float(os.getenv("SKILL_RESPONSE_BUDGET", "3.5"))
 
     # 남은 예산이 이보다 적으면 새 외부 호출을 시작하지 않는다 (초)

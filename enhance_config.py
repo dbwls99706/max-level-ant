@@ -42,7 +42,7 @@ class EnhanceConfig:
     BASE_COST = 10_000
     COST_PER_LEVEL = 3_000
 
-    # 레벨별 성공 확률 (%) — 레벨 0→1 부터 29→30
+    # 레벨별 성공 확률 (%) - 레벨 0→1 부터 29→30
     #
     # 실패하면 무조건 0으로 떨어지므로 Lv.N 도달 확률은 N개 확률의 곱이다.
     # 곱이라 개별 확률을 조금만 내려도 도달 확률이 무너진다. 예전 곡선은
@@ -68,7 +68,7 @@ class EnhanceConfig:
     # 직군 배정 레벨 (레벨 9 → 10 각성 성공 시 3개 직군 중 하나 랜덤 배정)
     CLASS_LEVEL_THRESHOLD = 10
 
-    # 데이터 테이블 (enhance_titles) — 기존 호출부 호환을 위해 클래스 속성으로 노출
+    # 데이터 테이블 (enhance_titles) - 기존 호출부 호환을 위해 클래스 속성으로 노출
     SUCCESS_FLAVORS = SUCCESS_FLAVORS
     FAIL_FLAVORS = FAIL_FLAVORS
     TITLE_NAMES = TITLE_NAMES
@@ -91,7 +91,7 @@ class EnhanceConfig:
 
     @classmethod
     def get_fail_penalty(cls, current_level: int) -> Tuple[int, int]:
-        """실패 시 페널티 — 항상 레벨 0으로 초기화"""
+        """실패 시 페널티 - 항상 레벨 0으로 초기화"""
         if current_level <= 0:
             return 0, 0
         return 100, current_level  # 100% 확률로 현재 레벨만큼 하락 = 0으로

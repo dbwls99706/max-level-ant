@@ -152,9 +152,9 @@ def get_rival_msg(my_rank: int, above_nickname: str, gap_rate: float) -> str:
     elif gap_abs < 5:
         return f"🔥 {above_nickname}까지 {gap_abs:.1f}% 차이! 충분히 잡을 수 있어요!"
     elif gap_abs < 15:
-        return f"📈 {above_nickname}까지 {gap_abs:.1f}% — 급등주 한 방이면 역전!"
+        return f"📈 {above_nickname}까지 {gap_abs:.1f}% - 급등주 한 방이면 역전!"
     else:
-        return f"💪 {above_nickname}까지 {gap_abs:.1f}% — 꾸준히 가면 됩니다!"
+        return f"💪 {above_nickname}까지 {gap_abs:.1f}% - 꾸준히 가면 됩니다!"
 
 
 def get_sell_exclamation(profit_rate: float, profit: int = 0) -> str:

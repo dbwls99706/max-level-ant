@@ -70,7 +70,7 @@ class AssetService:
         """
         총 자산과 수익금(총 자산 - 초기 자금) 조회
         수익 마일스톤/업적은 수익금 기준으로 판정 (초기 자금만으로는 0원)
-        Returns: (total_asset, total_profit) — 유저 없으면 (None, None)
+        Returns: (total_asset, total_profit) - 유저 없으면 (None, None)
         """
         user = db.query(User).filter(User.kakao_id == kakao_id).first()
         if not user:

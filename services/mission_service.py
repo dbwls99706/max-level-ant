@@ -241,7 +241,7 @@ class MissionService:
     ) -> List[Dict]:
         """
         업적 달성 체크 및 보상 지급
-        total_profit: 수익금 (총 자산 - 초기 자금) — millionaire 판정용 (None이면 스킵)
+        total_profit: 수익금 (총 자산 - 초기 자금) - millionaire 판정용 (None이면 스킵)
         Returns: 새로 달성한 업적 목록
         """
         # FOR UPDATE로 동시 요청 시 보상 lost update 방지

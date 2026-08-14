@@ -37,6 +37,11 @@ class KakaoResponse:
     TEXT_CARD_LIMIT = 400
     # basicCard: description 최대 230자
     BASIC_CARD_DESC_LIMIT = 230
+    # button: label 최대 14자.
+    # 넘으면 카카오가 말없이 잘라내므로 "각성하기 (500,00…" 처럼
+    # 정작 중요한 정보가 사라진다. 금액·횟수 같은 가변 정보는 라벨이 아니라
+    # 본문에 적고, 라벨은 동작 이름만 짧게 유지한다.
+    BUTTON_LABEL_LIMIT = 14
 
     # ── UX 한도 (스펙보다 보수적인 자체 기준) ──
     # 그룹 챗봇 beta 가이드: "챗봇 응답이 채팅창 전체를 가리지 않아야 해요.
@@ -190,13 +195,28 @@ class KakaoResponse:
 
     @staticmethod
     def _fit_buttons(buttons: List[Dict], layout: str = "vertical") -> List[Dict]:
-        """버튼 개수를 레이아웃 한도(세로 3 / 가로 2)에 맞춰 자른다"""
+        """
+        버튼을 스펙에 맞춘다.
+          - 개수: 레이아웃 한도(세로 3 / 가로 2)까지만
+          - 라벨: 14자 한도. 넘으면 카카오가 말없이 잘라 뒤가 사라지므로,
+            여기서 잘라 최소한 잘렸다는 표시(…)라도 남긴다.
+        """
         cap = (
             KakaoResponse.MAX_VERTICAL_BUTTONS
             if layout == "vertical"
             else KakaoResponse.MAX_HORIZONTAL_BUTTONS
         )
-        return list(buttons)[:cap]
+        return [KakaoResponse._fit_label(b) for b in list(buttons)[:cap]]
+
+    @staticmethod
+    def _fit_label(button: Dict) -> Dict:
+        """버튼 라벨을 14자 한도로 맞춘다 (원본 dict은 건드리지 않는다)"""
+        label = button.get("label")
+        if not isinstance(label, str) or len(label) <= KakaoResponse.BUTTON_LABEL_LIMIT:
+            return button
+        trimmed = dict(button)
+        trimmed["label"] = label[: KakaoResponse.BUTTON_LABEL_LIMIT - 1] + "…"
+        return trimmed
 
     @staticmethod
     def _fit_card(text: str, limit: int) -> str:
@@ -269,8 +289,9 @@ class KakaoResponse:
         본문 + 액션 버튼을 함께 담은 응답.
 
         ⚠️ 카카오 그룹(팀채팅) 챗봇은 quickReplies 컴포넌트를 지원하지 않으므로,
-        본문과 버튼을 하나의 textCard(buttonLayout="vertical", 최대 3개)로 합쳐
-        노출한다. 본문은 항상 '단일 카드'로만 보내며, 카드 한도(TEXT_CARD_LIMIT)를
+        본문과 버튼을 하나의 textCard로 합쳐 노출한다.
+        버튼이 2개면 가로(horizontal), 그 외에는 세로(vertical, 최대 3개)로 배치한다.
+        본문은 항상 '단일 카드'로만 보내며, 카드 한도(TEXT_CARD_LIMIT)를
         넘으면 줄 단위로 잘라 생략 표시를 붙인다(본문을 별도 말풍선으로 쪼개지 않음).
         길이가 가변적인 목록은 핸들러에서 fit_items()로 미리 줄여 보내는 것을 권장한다.
 
@@ -286,8 +307,15 @@ class KakaoResponse:
                 "template": {"outputs": [{"simpleText": {"text": text}}]},
             }
 
-        # vertical 레이아웃은 최대 3개까지만 노출되므로 초과분은 잘라낸다
-        card_buttons = KakaoResponse._fit_buttons(buttons, "vertical")
+        # 버튼이 정확히 2개면 가로로 배치한다. 세로로 쌓으면 짧은 라벨 두 줄이
+        # 화면만 차지하는데, 그룹방에서는 응답 높이가 그대로 대화창을 가린다.
+        # 3개 이상은 가로 한도(2개)를 넘으므로 세로를 유지한다.
+        layout = (
+            "horizontal"
+            if len(buttons) == KakaoResponse.MAX_HORIZONTAL_BUTTONS
+            else "vertical"
+        )
+        card_buttons = KakaoResponse._fit_buttons(buttons, layout)
         # title이 없으므로 스펙상 400자까지 가능하지만, 그룹방 화면을 덮지 않도록
         # 더 보수적인 BODY_LIMIT을 적용한다.
         card_text = KakaoResponse._fit_card(text, KakaoResponse.BODY_LIMIT)
@@ -300,7 +328,7 @@ class KakaoResponse:
                         "textCard": {
                             "description": card_text or " ",
                             "buttons": card_buttons,
-                            "buttonLayout": "vertical",
+                            "buttonLayout": layout,
                         }
                     }
                 ]

@@ -82,7 +82,7 @@ class CircuitBreaker:
        허가증의 세대(generation)와 자격(is_probe)을 확인해 이런 결과는 무시한다.
        → OPEN을 닫을 수 있는 것은 오직 HALF_OPEN 프로브의 성공뿐이다.
 
-    사용법 — guard() 컨텍스트 매니저 권장:
+    사용법 - guard() 컨텍스트 매니저 권장:
 
         try:
             with breaker.guard() as call:
@@ -369,7 +369,7 @@ class CallThrottle:
             now = time.monotonic()
             sleep_for = self._next_allowed_at - now
             if max_wait is not None and sleep_for > max_wait:
-                # 예산 안에 슬롯을 못 잡는다 — 예약하지 않고 물러난다
+                # 예산 안에 슬롯을 못 잡는다 - 예약하지 않고 물러난다
                 return False
             # 다음 호출 허용 시각을 먼저 확정해 두면, 대기 중 들어온 다른 스레드도
             # 자기 슬롯을 예약하고 순서대로 나가게 된다 (락 유지로 직렬화).

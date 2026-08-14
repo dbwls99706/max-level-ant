@@ -11,7 +11,7 @@
 - textCard: title 50자, title+description 합산 400자, title/description 중 하나 필수
 - basicCard: title 50자, description 230자, thumbnail 필수
 - listCard: header 필수, items 최대 5개
-- 버튼: 세로 3 / 가로 2
+- 버튼: 세로 3 / 가로 2, label 최대 14자
 
 한계: 핸들러 검증 대상은 외부 API가 필요 없는 OFFLINE_COMMANDS 뿐이다.
 /시세·/검색·/급등 같은 KIS 의존 경로는 여기서 다루지 않는다.
@@ -32,6 +32,7 @@ SPEC_BASIC_CARD_CHARS = 230
 SPEC_LIST_ITEMS = 5
 SPEC_BUTTONS_VERTICAL = 3
 SPEC_BUTTONS_HORIZONTAL = 2
+SPEC_BUTTON_LABEL_CHARS = 14
 
 
 def assert_valid_skill_response(resp: dict, label: str = ""):
@@ -105,6 +106,11 @@ def assert_valid_skill_response(resp: dict, label: str = ""):
         )
         for btn in buttons:
             assert "label" in btn and "action" in btn, f"{where}버튼 필드 누락: {btn}"
+            btn_label = btn.get("label", "")
+            assert len(btn_label) <= SPEC_BUTTON_LABEL_CHARS, (
+                f"{where}버튼 라벨 {len(btn_label)}자 > {SPEC_BUTTON_LABEL_CHARS}자: "
+                f"{btn_label!r} — 카카오가 말없이 잘라 뒷부분이 사라진다"
+            )
 
 
 class TestComponentLimits:
@@ -117,6 +123,96 @@ class TestComponentLimits:
         ]
         resp = KakaoResponse.text_with_buttons("본문", btns)
         assert_valid_skill_response(resp, "text_with_buttons")
+
+    def test_two_buttons_use_horizontal_layout(self):
+        """
+        버튼 2개는 가로로 배치한다. 짧은 라벨을 세로로 쌓으면
+        응답 높이만 늘어나 그룹방 대화창을 가린다.
+        """
+        btns = [
+            {
+                "label": "💼 포트폴리오",
+                "action": "message",
+                "messageText": "/포트폴리오",
+            },
+            {"label": "📈 인기종목", "action": "message", "messageText": "/인기"},
+        ]
+        resp = KakaoResponse.text_with_buttons("본문", btns)
+        assert_valid_skill_response(resp, "2 buttons")
+
+        card = resp["template"]["outputs"][0]["textCard"]
+        assert card["buttonLayout"] == "horizontal"
+        assert len(card["buttons"]) == 2, "가로 배치에서 버튼이 잘리면 안 된다"
+
+    @pytest.mark.parametrize("count", [1, 3])
+    def test_other_counts_stay_vertical(self, count):
+        """1개는 가로로 둘 이유가 없고, 3개는 가로 한도(2개)를 넘는다"""
+        btns = [
+            {"label": f"버튼{i}", "action": "message", "messageText": f"/{i}"}
+            for i in range(count)
+        ]
+        resp = KakaoResponse.text_with_buttons("본문", btns)
+        assert_valid_skill_response(resp, f"{count} buttons")
+
+        card = resp["template"]["outputs"][0]["textCard"]
+        assert card["buttonLayout"] == "vertical"
+        assert len(card["buttons"]) == count
+
+    def test_horizontal_layout_never_drops_a_button(self):
+        """
+        버튼 4개를 넘겨도 가로(2개 한도)로 잘라 2개만 남기면 안 된다.
+        세로를 유지해 3개를 보여주는 쪽이 정보 손실이 적다.
+        """
+        btns = [
+            {"label": f"버튼{i}", "action": "message", "messageText": f"/{i}"}
+            for i in range(4)
+        ]
+        card = KakaoResponse.text_with_buttons("본문", btns)["template"]["outputs"][0][
+            "textCard"
+        ]
+        assert card["buttonLayout"] == "vertical"
+        assert len(card["buttons"]) == SPEC_BUTTONS_VERTICAL
+
+    def test_long_button_label_is_trimmed(self):
+        """
+        14자를 넘는 라벨은 헬퍼가 잘라야 한다.
+
+        그대로 두면 카카오가 말없이 잘라 "각성하기 (500,00…"처럼
+        정작 중요한 정보가 사라진다.
+        """
+        btns = [
+            {
+                "label": "🧬 각성하기 (5,000,000원)",
+                "action": "message",
+                "messageText": "/각성 시도",
+            }
+        ]
+        resp = KakaoResponse.text_with_buttons("본문", btns)
+        assert_valid_skill_response(resp, "long label")
+
+        out = resp["template"]["outputs"][0]
+        rendered = next(iter(out.values()))["buttons"][0]["label"]
+        assert len(rendered) <= SPEC_BUTTON_LABEL_CHARS
+        assert rendered.endswith("…"), "잘렸다는 표시가 없다"
+
+    def test_button_label_at_limit_is_untouched(self):
+        """정확히 14자면 손대지 않는다 (경계값)"""
+        exact = "가" * SPEC_BUTTON_LABEL_CHARS
+        resp = KakaoResponse.text_with_buttons(
+            "본문", [{"label": exact, "action": "message", "messageText": "/x"}]
+        )
+        out = resp["template"]["outputs"][0]
+        assert next(iter(out.values()))["buttons"][0]["label"] == exact
+
+    def test_trimming_does_not_mutate_caller_dict(self):
+        """호출부가 넘긴 dict을 그대로 바꿔버리면 안 된다"""
+        original = {
+            "label": "🧬 각성하기 (5,000,000원)",
+            "action": "message",
+            "messageText": "/각성 시도",
+        }
+        KakaoResponse.text_with_buttons("본문", [original])
+        assert original["label"] == "🧬 각성하기 (5,000,000원)"
 
     def test_text_card_title_counts_toward_limit(self):
         """textCard는 title+description 합산 400자이므로 title도 예산을 쓴다"""
