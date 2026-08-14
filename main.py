@@ -8,9 +8,11 @@ import secrets
 import time
 import threading
 from collections import defaultdict
+from pathlib import Path
 from fastapi import FastAPI, Request, HTTPException, Header, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
 from starlette.concurrency import run_in_threadpool
 import uvicorn
 from contextlib import asynccontextmanager
@@ -22,7 +24,7 @@ from utils import KakaoResponse, configure_root_logger, get_main_logger
 from services.stock_service import KISAPIClient, StockService
 from services.battle_service import BattleService
 from security import SecurityConfig
-from settings import SkillConfig, validate_config
+from settings import AssetConfig, SkillConfig, validate_config
 from utils import budget
 
 # 로깅 설정
@@ -124,7 +126,7 @@ async def lifespan(app: FastAPI):
         logger.error(f"설정 검증 실패: {errors}")
         # 중요: 대부분의 설정 오류는 경고만 하고 서버를 시작한다.
 
-    # 스킬 키는 예외 — 없으면 /skill이 사실상 무인증 공개 엔드포인트가 되므로
+    # 스킬 키는 예외 - 없으면 /skill이 사실상 무인증 공개 엔드포인트가 되므로
     # 운영 환경에서는 기동 자체를 막는다.
     if not SecurityConfig.is_skill_key_configured() and not SecurityConfig.DEV_MODE:
         raise RuntimeError(
@@ -174,10 +176,53 @@ async def lifespan(app: FastAPI):
 # ===========================================
 app = FastAPI(
     title="만렙개미 카카오톡 챗봇",
-    description="주식 던전 RPG 챗봇 API — 쪼렙 개미에서 만렙 개미로",
+    description="주식 던전 RPG 챗봇 API - 쪼렙 개미에서 만렙 개미로",
     version="1.0.0",
     lifespan=lifespan,
 )
+
+
+# ===========================================
+# 각성 직군 이미지 정적 서빙 (/art)
+# ===========================================
+class _ImmutableStaticFiles(StaticFiles):
+    """이미지에 장기 캐시 헤더를 붙인 StaticFiles.
+
+    파일 내용이 바뀌지 않으므로(파일명이 곧 조합) 오래 캐시해도 안전하다.
+    카카오가 카드를 그릴 때마다 원본을 다시 받아가면 무료 인스턴스가
+    이미지 서빙에 시간을 다 쓴다.
+    """
+
+    def file_response(self, *args, **kwargs) -> Response:
+        resp = super().file_response(*args, **kwargs)
+        resp.headers["Cache-Control"] = (
+            f"public, max-age={AssetConfig.CACHE_MAX_AGE}, immutable"
+        )
+        return resp
+
+
+# 디렉터리가 없으면 마운트하지 않는다. 이미지 없이도 서버는 떠야 하고
+# (텍스트 카드로 물러선다), 없는 경로를 마운트하면 기동 자체가 실패한다.
+_art_dir = Path(AssetConfig.DIRECTORY)
+if _art_dir.is_dir():
+    app.mount(
+        AssetConfig.URL_PREFIX,
+        _ImmutableStaticFiles(directory=_art_dir),
+        name="art",
+    )
+    logger.info(
+        f"직군 이미지 서빙: {AssetConfig.URL_PREFIX} -> {_art_dir} "
+        f"({len(list(_art_dir.glob('*.webp')))}장)"
+    )
+else:
+    logger.warning(f"직군 이미지 디렉터리 없음: {_art_dir} - 이미지 카드 비활성")
+
+if not AssetConfig.is_configured():
+    logger.warning(
+        "PUBLIC_BASE_URL 미설정 - 카카오는 절대 HTTPS URL만 받으므로 "
+        "이미지 카드 대신 텍스트로 표시됩니다"
+    )
+
 
 # CORS 설정 (카카오톡 도메인만 허용, 개발 모드에서는 전체 허용)
 # 참고: CORS는 브라우저에서만 적용됨. 서버-to-서버 요청(Render keep-alive 등)은 영향 없음
@@ -277,7 +322,7 @@ async def kakao_skill(request: Request):
     카카오 챗봇 관리자센터에서 이 URL을 스킬 서버로 등록합니다.
     예: https://your-domain.com/skill
     """
-    # 공유 비밀키 검증 — 본문을 파싱하기 전에 먼저 막는다.
+    # 공유 비밀키 검증 - 본문을 파싱하기 전에 먼저 막는다.
     # 이 검사가 없으면 누구나 임의의 user.id로 게임 명령을 실행할 수 있다.
     if not SecurityConfig.verify_skill_key(
         request.headers.get(SecurityConfig.SKILL_API_KEY_HEADER)

@@ -380,7 +380,7 @@ class KISAPIClient:
 
                 data = resp.json()
                 if data.get("rt_cd") != "0":
-                    # rt_cd != "0"은 잘못된 종목코드 등 "데이터 없음" 응답 —
+                    # rt_cd != "0"은 잘못된 종목코드 등 "데이터 없음" 응답 -
                     # API 자체는 정상 동작 중이므로 서킷 실패로 집계하지 않는다
                     # (존재하지 않는 종목 몇 번 조회로 전체 시세가 차단되는 오탐 방지)
                     logger.warning(
@@ -470,7 +470,7 @@ class KISAPIClient:
 
                 data = resp.json()
                 if data.get("rt_cd") != "0":
-                    # 데이터 없음 응답 — API는 정상이므로 서킷 실패로 집계하지 않는다
+                    # 데이터 없음 응답 - API는 정상이므로 서킷 실패로 집계하지 않는다
                     logger.warning(
                         f"{label} 순위 조회 응답 에러: "
                         f"rt_cd={data.get('rt_cd')} msg={data.get('msg1')}"
@@ -602,7 +602,7 @@ class KISAPIClient:
 
                 data = resp.json()
                 if data.get("rt_cd") != "0":
-                    # 데이터 없음 응답 — API는 정상이므로 서킷 실패로 집계하지 않는다
+                    # 데이터 없음 응답 - API는 정상이므로 서킷 실패로 집계하지 않는다
                     logger.warning(
                         f"지수 조회 응답 에러 ({index_code}): "
                         f"rt_cd={data.get('rt_cd')} msg={data.get('msg1')}"
@@ -770,7 +770,7 @@ class StockService:
         if cls._dynamic_stocks_by_code.get(code) == name:
             return
 
-        # 메모리 캐시 (쓰기는 락으로 보호 — 순회 스냅샷과의 경합 방지)
+        # 메모리 캐시 (쓰기는 락으로 보호 - 순회 스냅샷과의 경합 방지)
         with cls._cache_load_lock:
             cls._dynamic_stocks_by_name[name] = code
             cls._dynamic_stocks_by_code[code] = name
@@ -833,7 +833,7 @@ class StockService:
             if query in name:
                 return {"code": code, "name": name}
 
-        # 6. 부분 이름 매칭 (동적 캐시) — 순회 중 변경 방지 위해 스냅샷 사용
+        # 6. 부분 이름 매칭 (동적 캐시) - 순회 중 변경 방지 위해 스냅샷 사용
         for name, code in list(cls._dynamic_stocks_by_name.items()):
             if query in name:
                 return {"code": code, "name": name}
@@ -1115,7 +1115,7 @@ class StockService:
             with budget.adopt(deadline):
                 return code, cls.get_price(code)
 
-        # with 대신 직접 관리 — 이유는 batch_get_prices의 주석 참고
+        # with 대신 직접 관리 - 이유는 batch_get_prices의 주석 참고
         executor = ThreadPoolExecutor(max_workers=min(5, len(stock_codes)))
         futures = {executor.submit(fetch_info, code): code for code in stock_codes}
         try:

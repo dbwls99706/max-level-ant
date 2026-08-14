@@ -182,7 +182,7 @@ class TradeService:
         if not is_valid:
             return error_response(ErrorCode.INVALID_QUANTITY, qty_error)
 
-        # 종목 시세 조회 — 락을 잡기 전에 수행한다
+        # 종목 시세 조회 - 락을 잡기 전에 수행한다
         stock_info, stock_error = TradeService._get_stock_info(
             db, kakao_id, stock_query
         )
@@ -224,7 +224,7 @@ class TradeService:
         매수 실행 (락 보유 상태 전용)
 
         호출자는 user를 FOR UPDATE로 잠근 뒤 넘겨야 한다.
-        외부 API 호출은 하지 않는다 — 락 보유 시간을 늘리기 때문이다.
+        외부 API 호출은 하지 않는다 - 락 보유 시간을 늘리기 때문이다.
         """
         kakao_id = user.kakao_id
         code = stock_info["code"]
@@ -250,7 +250,7 @@ class TradeService:
                 ErrorCode.INVALID_AMOUNT, "거래 금액이 너무 큽니다. 수량을 줄여주세요."
             )
 
-        # 잔고 확인 — 락을 잡고 읽은 최신 cash 기준
+        # 잔고 확인 - 락을 잡고 읽은 최신 cash 기준
         if user.cash < required_cash:
             return error_response(
                 ErrorCode.INSUFFICIENT_BALANCE,
@@ -382,7 +382,7 @@ class TradeService:
         매도 대상 종목 resolve + 시세 조회 (락 없음)
 
         포트폴리오를 먼저 뒤지고, 없으면 일반 검색으로 넘어간다.
-        여기서 읽은 보유 수량은 신뢰하지 않는다 — 락 이후 다시 읽는다.
+        여기서 읽은 보유 수량은 신뢰하지 않는다 - 락 이후 다시 읽는다.
 
         Returns:
             (stock_info, error_response)
@@ -440,7 +440,7 @@ class TradeService:
         if not is_valid:
             return error_response(ErrorCode.INVALID_QUANTITY, qty_error)
 
-        # 종목 resolve + 시세 조회 — 락을 잡기 전에 수행한다
+        # 종목 resolve + 시세 조회 - 락을 잡기 전에 수행한다
         stock_info, stock_error = TradeService._resolve_stock_for_sell(
             db, kakao_id, stock_query
         )
@@ -647,7 +647,7 @@ class TradeService:
         if time_error:
             return time_error
 
-        # 시세 조회 — 락 밖에서
+        # 시세 조회 - 락 밖에서
         stock_info, stock_error = TradeService._get_stock_info(
             db, kakao_id, stock_query
         )
@@ -688,7 +688,7 @@ class TradeService:
         if time_error:
             return time_error
 
-        # 시세 조회 — 락 밖에서
+        # 시세 조회 - 락 밖에서
         stock_info, stock_error = TradeService._resolve_stock_for_sell(
             db, kakao_id, stock_query
         )

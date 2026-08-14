@@ -5,6 +5,8 @@
 - 등급별 이모지
 """
 
+import unicodedata
+
 
 def get_streak_display(streak: int) -> str:
     """
@@ -152,9 +154,9 @@ def get_rival_msg(my_rank: int, above_nickname: str, gap_rate: float) -> str:
     elif gap_abs < 5:
         return f"🔥 {above_nickname}까지 {gap_abs:.1f}% 차이! 충분히 잡을 수 있어요!"
     elif gap_abs < 15:
-        return f"📈 {above_nickname}까지 {gap_abs:.1f}% — 급등주 한 방이면 역전!"
+        return f"📈 {above_nickname}까지 {gap_abs:.1f}% - 급등주 한 방이면 역전!"
     else:
-        return f"💪 {above_nickname}까지 {gap_abs:.1f}% — 꾸준히 가면 됩니다!"
+        return f"💪 {above_nickname}까지 {gap_abs:.1f}% - 꾸준히 가면 됩니다!"
 
 
 def get_sell_exclamation(profit_rate: float, profit: int = 0) -> str:
@@ -186,3 +188,34 @@ def get_sell_exclamation(profit_rate: float, profit: int = 0) -> str:
         return "😢 분할매매로 리스크 관리 추천!"
     else:
         return "💪 포기 금지! 급등주에서 재기 가능!"
+
+
+# ===========================================
+# 표시 폭 (한글·이모지는 두 칸을 차지한다)
+# ===========================================
+def display_width(text: str) -> int:
+    """터미널이 아니라 '카카오 말풍선에서 몇 칸을 먹는가'의 근사치.
+
+    한글과 대부분의 이모지는 라틴 문자의 두 배 폭을 차지한다. len()으로
+    재면 한글 문장을 실제보다 절반으로 착각해서, 한 줄에 들어간다고
+    생각한 문구가 폰에서는 두 줄로 접힌다.
+    """
+    return sum(2 if unicodedata.east_asian_width(c) in ("W", "F") else 1 for c in text)
+
+
+def fit_width(text: str, limit: int) -> str:
+    """표시 폭 기준으로 자른다. 잘리면 끝에 …을 붙인다."""
+    if display_width(text) <= limit:
+        return text
+    if limit <= 1:
+        return "…"
+
+    out = []
+    used = 0
+    for ch in text:
+        cw = 2 if unicodedata.east_asian_width(ch) in ("W", "F") else 1
+        if used + cw > limit - 1:  # …(1칸) 자리를 남긴다
+            break
+        out.append(ch)
+        used += cw
+    return "".join(out).rstrip() + "…"

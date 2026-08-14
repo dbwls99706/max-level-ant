@@ -47,6 +47,7 @@ from enhance_art import (  # noqa: E402
     RARITY_ART,
     all_combinations,
     build_prompt,
+    image_stem,
 )
 
 API_URL = "https://api.openai.com/v1/images/generations"
@@ -106,7 +107,7 @@ def family_sample():
 
 
 def out_path(outdir: Path, class_key: str, rarity: str, growth: int) -> Path:
-    return outdir / f"{class_key}__{rarity}__g{growth}.png"
+    return outdir / f"{image_stem(class_key, rarity, growth)}.png"
 
 
 def already_have(outdir: Path, class_key: str, rarity: str, growth: int) -> bool:

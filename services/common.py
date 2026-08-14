@@ -214,9 +214,17 @@ def validate_quantity(
 # ===========================================
 
 
-def check_market_closed_for_game(game_emoji: str = "🎰") -> Tuple[bool, Optional[Dict]]:
+def check_market_closed_for_game(
+    game_emoji: str = "🎰", activity: str = "예측 게임"
+) -> Tuple[bool, Optional[Dict]]:
     """
     게임 가능 시간 체크 (장 마감 시간에만 가능)
+
+    Args:
+        game_emoji: 안내 문구 앞에 붙일 이모지
+        activity: 무엇이 막혔는지. 각성처럼 예측 게임이 아닌 곳에서도 쓰이므로
+            호출부가 자기 이름을 넘긴다. 이걸 안 넘기면 각성을 눌러도
+            "예측 게임은 장 마감 후에만"이 떠서 원인을 알 수 없다.
 
     Returns:
         (can_play: bool, error_response: Optional[Dict])
@@ -227,7 +235,9 @@ def check_market_closed_for_game(game_emoji: str = "🎰") -> Tuple[bool, Option
             "success": False,
             "error_code": ErrorCode.MARKET_CLOSED,
             "message": f"{game_emoji} "
-            + Messages.MARKET_CLOSED_GAME.format(status_msg=status_msg),
+            + Messages.MARKET_CLOSED_GAME.format(
+                activity=activity, status_msg=status_msg
+            ),
         }
     return True, None
 

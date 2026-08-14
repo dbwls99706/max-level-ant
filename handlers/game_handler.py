@@ -3,12 +3,16 @@
 - 복권, 시장예측(역사 퀴즈), 업다운(멀티라운드), 각성(투자 감각 각성)
 """
 
-from typing import Dict
+from typing import Dict, List, Optional
 
 from services import GameService
+from services.collection_service import CollectionService
 from services.enhance_service import EnhanceService
+import enhance_classes as ec
+from enhance_art import FAMILIES, RARITY_ART
 from enhance_config import EnhanceConfig
 from game_config import GameConfig
+from settings import AssetConfig
 from utils import KakaoResponse
 
 from .base_handler import BaseHandlerMixin
@@ -94,7 +98,7 @@ class GameHandlerMixin(BaseHandlerMixin):
             effect = ""
             reveal = "스르르..."
 
-        # 남은 횟수 — 긴급성 연출
+        # 남은 횟수 - 긴급성 연출
         if remaining == 0:
             remaining_msg = "🚫 오늘 보물상자 모두 소진!"
         elif remaining == 1:
@@ -134,7 +138,7 @@ class GameHandlerMixin(BaseHandlerMixin):
         if remaining > 0:
             buttons.append(
                 {
-                    "label": f"🎁 한번 더! ({remaining}회 남음)",
+                    "label": "🎁 한번 더",
                     "action": "message",
                     "messageText": "/보물상자",
                 }
@@ -169,7 +173,7 @@ class GameHandlerMixin(BaseHandlerMixin):
     # ==========================================
 
     def handle_stock_quiz(self) -> Dict:
-        """시장예측 — 역사 퀴즈"""
+        """시장예측 - 역사 퀴즈"""
         parts = self.utterance.split()
 
         if len(parts) < 2:
@@ -230,7 +234,7 @@ class GameHandlerMixin(BaseHandlerMixin):
             return self._quiz_issued_response(result)
 
         # 선택지가 있으면 정답 확인
-        # (판정은 서버가 출제해 저장한 퀴즈로만 — 메시지로 퀴즈를 지정할 수 없음)
+        # (판정은 서버가 출제해 저장한 퀴즈로만 - 메시지로 퀴즈를 지정할 수 없음)
         choice = parts[2].strip()
         result = GameService.answer_stock_quiz(self.db, self.kakao_id, choice)
 
@@ -264,7 +268,7 @@ class GameHandlerMixin(BaseHandlerMixin):
 
         answer_emoji = "📈" if quiz["answer"] == "상승" else "📉"
 
-        # 투자 교훈 생성 — 역사 데이터 기반 맥락 제공
+        # 투자 교훈 생성 - 역사 데이터 기반 맥락 제공
         lesson = self._generate_quiz_lesson(quiz)
 
         name = self._display_name()
@@ -366,7 +370,7 @@ class GameHandlerMixin(BaseHandlerMixin):
     # ==========================================
 
     def handle_updown(self) -> Dict:
-        """업다운 게임 — 시작 또는 라운드 진행"""
+        """업다운 게임 - 시작 또는 라운드 진행"""
         parts = self.utterance.split()
 
         # /업다운 만 입력한 경우
@@ -377,7 +381,7 @@ class GameHandlerMixin(BaseHandlerMixin):
                 return self._updown_status_response(status)
 
             return KakaoResponse.text_with_buttons(
-                "🔢 업다운 — 숫자 예측 게임!\n\n"
+                "🔢 업다운 - 숫자 예측 게임!\n\n"
                 "1~100 숫자가 나오면\n"
                 "다음 숫자가 높을지 낮을지 예측!\n\n"
                 "✅ 맞추면: 배율 누적, 계속 도전!\n"
@@ -403,12 +407,12 @@ class GameHandlerMixin(BaseHandlerMixin):
                 ],
             )
 
-        # /업다운 [상승/하락] — 진행중인 게임의 라운드 진행
+        # /업다운 [상승/하락] - 진행중인 게임의 라운드 진행
         if len(parts) == 2 and not parts[1].replace(",", "").isdigit():
             choice = parts[1]
             return self._handle_updown_round(choice)
 
-        # /업다운 [금액] — 새 게임 시작
+        # /업다운 [금액] - 새 게임 시작
         try:
             bet = int(parts[1].replace(",", ""))
         except ValueError:
@@ -428,7 +432,7 @@ class GameHandlerMixin(BaseHandlerMixin):
                 ],
             )
 
-        # /업다운 [금액] [상승/하락] — 새 게임은 금액만, 라운드는 별도
+        # /업다운 [금액] [상승/하락] - 새 게임은 금액만, 라운드는 별도
         if len(parts) >= 3:
             # 혹시 진행중인 게임이 있으면 라운드로 처리
             choice = parts[2]
@@ -522,10 +526,10 @@ class GameHandlerMixin(BaseHandlerMixin):
                             fee_notice = f"\n⚡ 라운드 수수료: 배율 -{pct}%"
                         break
 
-            msg = f"""🔢 업다운 — 라운드 {current_round - 1}
+            msg = f"""🔢 업다운 - 라운드 {current_round - 1}
 
 {arrow} {prev} → {next_num}
-🎯 예측: {result["choice"]} — {streak_effect}
+🎯 예측: {result["choice"]} - {streak_effect}
 
 이번 배율: x{round_mult}
 📊 누적 배율: x{total_mult}
@@ -574,7 +578,7 @@ class GameHandlerMixin(BaseHandlerMixin):
                 fail_msg = "💨 빗나갔어요"
 
             name = self._display_name()
-            msg = f"""🔢 {name}의 업다운 — 게임 오버!
+            msg = f"""🔢 {name}의 업다운 - 게임 오버!
 
 {arrow} {prev} → {next_num}
 🎯 예측: {result["choice"]} / 정답: {result["actual"]}
@@ -630,7 +634,7 @@ class GameHandlerMixin(BaseHandlerMixin):
         is_big_cashout = result["multiplier"] >= 3  # 3배 이상 정산 = 대박
 
         name = self._display_name()
-        msg = f"""🔢 {name}의 업다운 — 정산!
+        msg = f"""🔢 {name}의 업다운 - 정산!
 
 {effect}
 
@@ -675,7 +679,7 @@ class GameHandlerMixin(BaseHandlerMixin):
         down_mult = status["down_multiplier"]
         potential = status["potential_winnings"]
 
-        msg = f"""🔢 업다운 — 진행 중!
+        msg = f"""🔢 업다운 - 진행 중!
 
 🎲 현재 숫자: {number}
 📊 라운드: {status["round"]}
@@ -737,7 +741,7 @@ class GameHandlerMixin(BaseHandlerMixin):
     # ==========================================
 
     def handle_enhance(self) -> Dict:
-        """각성 — 정보 보기 또는 각성 시도"""
+        """각성 - 정보 보기 또는 각성 시도"""
         parts = self.utterance.split()
 
         # /각성 시도 → 실제 각성 실행 (장 마감 후만 가능)
@@ -761,9 +765,6 @@ class GameHandlerMixin(BaseHandlerMixin):
         title_emoji = result["title_emoji"]
         att_mult = result["attendance_multiplier"]
         lot_mult = result["lottery_multiplier"]
-        class_name = result.get("class_name")
-        class_emoji = result.get("class_emoji", "")
-
         # 보너스 계산
         att_bonus = int((att_mult - 1) * 100)
         lot_bonus = int((lot_mult - 1) * 100)
@@ -772,13 +773,25 @@ class GameHandlerMixin(BaseHandlerMixin):
         gauge = self._make_gauge(level, EnhanceConfig.MAX_LEVEL)
 
         # 장 마감 여부 확인 (각성 버튼 노출 제어)
-        can_enhance, _ = check_market_closed_for_game("🧬")
+        can_enhance, _ = check_market_closed_for_game("🧬", "각성")
 
-        # 직군 표시 줄 (Lv.10 이상이고 직군 배정 완료)
-        class_line = f"\n{class_emoji} 직군: {class_name}" if class_name else ""
+        # 직군·종 표시 (Lv.10 이상이고 배정 완료)
+        class_line = ""
+        if result.get("job_label"):
+            class_line = (
+                f"\n{result['family_emoji']} {result['family_name']} 계열"
+                f"\n{result['job_label']}  {result['rarity_label']}"
+                f" · {result['growth_name']}"
+            )
+            bonus = result.get("rarity_bonus") or 0
+            if bonus:
+                class_line += f"\n💹 랭킹 수익률 +{bonus:g}%"
+        elif level < EnhanceConfig.CLASS_LEVEL_THRESHOLD:
+            remain = EnhanceConfig.CLASS_LEVEL_THRESHOLD - level
+            class_line = f"\n🎖️ Lv.{EnhanceConfig.CLASS_LEVEL_THRESHOLD}에서 직군 배정 (앞으로 {remain}레벨)"
 
         name = self._display_name()
-        msg = f"""{title_emoji} {name} — {title_name}
+        msg = f"""{title_emoji} {name} - {title_name}
 
 🧬 각성 레벨: Lv.{level} / {EnhanceConfig.MAX_LEVEL}
 {gauge}{class_line}
@@ -803,7 +816,7 @@ class GameHandlerMixin(BaseHandlerMixin):
             next_name = result.get("next_title_name", title_name)
             next_emoji = result.get("next_title_emoji", title_emoji)
 
-            # 위험도 표시 — 실패 시 항상 Lv.0 초기화
+            # 위험도 표시 - 실패 시 항상 Lv.0 초기화
             if level == 0:
                 risk = "🟢 실패해도 Lv.0 유지"
             else:
@@ -825,7 +838,7 @@ class GameHandlerMixin(BaseHandlerMixin):
             else:
                 buttons.append(
                     {
-                        "label": f"🧬 각성하기 ({cost:,}원)",
+                        "label": "🧬 각성하기",
                         "action": "message",
                         "messageText": "/각성 시도",
                     }
@@ -844,7 +857,7 @@ class GameHandlerMixin(BaseHandlerMixin):
         """실제 각성 실행 (장 마감 후만 가능)"""
         from services.common import check_market_closed_for_game
 
-        can_play, market_error = check_market_closed_for_game("🧬")
+        can_play, market_error = check_market_closed_for_game("🧬", "각성")
         if not can_play:
             return self._market_closed_response(market_error["message"])
 
@@ -858,23 +871,34 @@ class GameHandlerMixin(BaseHandlerMixin):
         cost = result["cost"]
 
         if result["enhanced"]:
-            # 성공 — 레벨별 고유 연출
+            # 성공 - 레벨별 고유 연출
             new_emoji = result["new_emoji"]
             new_name = result["new_title"]
 
-            if result.get("class_assigned"):
-                # 레벨 10 직군 배정 — 특별 연출
-                class_emoji = result.get("class_emoji", "")
-                class_name = result.get("class_name", "")
-                class_info = EnhanceConfig.CLASS_INFO.get(
-                    result.get("enhance_class", 0), {}
-                )
-                class_desc = class_info.get("desc", "")
+            if result.get("job_assigned"):
+                # 직군 배정 - 이 판의 정체성이 정해지는 순간
                 evolution_msg = (
                     f"\n\n🎖️ 직군 배정!\n"
-                    f"{class_emoji} {class_name}\n"
-                    f"└ {class_desc}\n"
-                    f"이제 {class_name} 트리로 성장합니다!"
+                    f"{result['family_emoji']} {result['family_name']} 계열\n"
+                    f"{result['job_label']}  {result['rarity_label']}"
+                )
+                bonus = result.get("rarity_bonus") or 0
+                if bonus:
+                    evolution_msg += f"\n💹 랭킹 수익률 +{bonus:g}%"
+            elif result.get("rarity_rerolled"):
+                # 종 재추첨 - 올라갔는지 내려갔는지가 핵심이다
+                delta = result.get("rarity_delta", 0)
+                arrow = {1: "🔼 상승!", -1: "🔽 하락...", 0: "➖ 유지"}[delta]
+                evolution_msg = (
+                    f"\n\n🎲 종 재추첨 {arrow}\n"
+                    f"{result['job_label']}  {result['rarity_label']}"
+                )
+                bonus = result.get("rarity_bonus") or 0
+                evolution_msg += f"\n💹 랭킹 수익률 +{bonus:g}%"
+            elif result.get("growth_changed") and result.get("job_label"):
+                evolution_msg = (
+                    f"\n\n🔥 성장 단계 진입 - {result['growth_name']}\n"
+                    f"{result['job_label']}의 모습이 달라집니다."
                 )
             elif result["title_changed"]:
                 evolution_msg = f"\n\n🆙 직업 승급!\n{result['old_emoji']} {result['old_title']} → {new_emoji} {new_name}"
@@ -891,11 +915,13 @@ class GameHandlerMixin(BaseHandlerMixin):
                 else ""
             )
 
-            # 이펙트 — 레벨 구간별
-            if new_lv >= 20:
+            # 이펙트 - 레벨 구간별.
+            # 만렙 판정은 MAX_LEVEL을 봐야 한다. 20으로 박아두면 만렙을
+            # 30으로 올렸을 때 Lv.20에서 "만렙 달성"이라고 거짓말을 한다.
+            if new_lv >= EnhanceConfig.MAX_LEVEL:
                 effect = "🎆🎇🎆🎇🎆"
                 header = "👑 만렙 개미 달성!"
-            elif new_lv >= 16:
+            elif new_lv >= EnhanceConfig.MAX_LEVEL - 4:
                 effect = "✨🎉✨🎉✨"
                 header = f"⚡ Lv.{new_lv} 각성 성공!"
             elif new_lv >= 10:
@@ -922,7 +948,7 @@ class GameHandlerMixin(BaseHandlerMixin):
 💰 현재 골드: {result["cash"]:,}원"""
 
         else:
-            # 실패 — 레벨 0으로 초기화 + 레벨별 고유 문구
+            # 실패 - 레벨 0으로 초기화 + 레벨별 고유 문구
             new_emoji = result["new_emoji"]
             new_name = result["new_title"]
 
@@ -949,14 +975,23 @@ class GameHandlerMixin(BaseHandlerMixin):
                 )
             else:
                 header = "💨 각성 실패!"
-                reset_msg = "🛡️ Lv.0 유지 — 잃을 레벨도 없었습니다."
+                reset_msg = "🛡️ Lv.0 유지 - 잃을 레벨도 없었습니다."
+
+            # 무엇을 잃었는지 이름으로 말해줘야 실패가 사건이 된다.
+            # "Lv.12 → 0"만 보면 숫자가 줄어든 것으로만 읽힌다.
+            lost_msg = ""
+            if result.get("lost_job"):
+                lost_msg = (
+                    f"\n\n💔 잃은 것: {result['lost_rarity']} {result['lost_job']}"
+                    f"\n📖 도감 기록은 그대로 남습니다."
+                )
 
             name = self._display_name()
             msg = f"""{header} {name}...
 
 {new_emoji} {new_name}
 {reset_msg}
-💬 {fail_flavor}
+💬 {fail_flavor}{lost_msg}
 
 🪙 사용: -{cost:,}원
 💰 현재 골드: {result["cash"]:,}원"""
@@ -964,14 +999,17 @@ class GameHandlerMixin(BaseHandlerMixin):
         # 다시 각성 가능 여부 체크 (장마감 여부도 확인)
         from services.common import check_market_closed_for_game
 
-        can_enhance, _ = check_market_closed_for_game("🧬")
+        can_enhance, _ = check_market_closed_for_game("🧬", "각성")
         buttons = []
         if new_lv < EnhanceConfig.MAX_LEVEL:
             next_cost = EnhanceConfig.get_cost(new_lv)
             if result["cash"] >= next_cost and can_enhance:
+                # 비용은 본문에 적는다. 버튼 라벨은 14자 한도라
+                # 금액을 붙이면 잘려서 오히려 안 보인다.
+                msg += f"\n\n📋 다음 각성 비용: {next_cost:,}원"
                 buttons.append(
                     {
-                        "label": f"🧬 다시 각성! ({next_cost:,}원)",
+                        "label": "🧬 다시 각성",
                         "action": "message",
                         "messageText": "/각성 시도",
                     }
@@ -998,7 +1036,56 @@ class GameHandlerMixin(BaseHandlerMixin):
             {"label": "📈 급등주", "action": "message", "messageText": "/급등"}
         )
 
-        return KakaoResponse.text_with_buttons(msg, buttons)
+        return self._enhance_response(result, msg, buttons)
+
+    def _enhance_response(self, result: Dict, msg: str, buttons: List[Dict]) -> Dict:
+        """각성 결과를 이미지 카드로, 안 되면 텍스트로 응답한다.
+
+        카카오 basicCard는 공개 HTTPS 절대 URL이 있어야 하고 설명이 230자로
+        잘린다. PUBLIC_BASE_URL이 없거나 직군이 아직 없는 저레벨이면 이미지가
+        없으므로 텍스트로 물러선다. 여기서 예외를 던지면 각성 자체가 실패한다.
+        """
+        stem = result.get("art_stem")
+        image_url = AssetConfig.image_url(stem) if stem else ""
+        if not image_url:
+            return KakaoResponse.text_with_buttons(
+                msg, buttons, button_cap=self.button_cap
+            )
+
+        level = result["new_level"]
+        title = f"{result['new_emoji']} Lv.{level} {result['job_label']}"
+
+        # 카드 본문은 짧아야 한다(230자). 수치는 텍스트 경로에 있고,
+        # 카드에서는 그림과 그 그림을 설명하는 문장이 주인공이다.
+        #
+        # 다만 이번 각성에서 '무엇이 바뀌었는지'는 카드에도 있어야 한다.
+        # 종이 올랐는지 내렸는지가 안 보이면 재추첨이 무작위 소음이 된다.
+        lines = []
+        if result.get("job_assigned"):
+            lines.append("🎖️ 직군 배정!")
+        elif result.get("rarity_rerolled"):
+            arrow = {1: "🔼 종 상승!", -1: "🔽 종 하락...", 0: "➖ 종 유지"}[
+                result.get("rarity_delta", 0)
+            ]
+            lines.append(arrow)
+        elif result.get("growth_changed"):
+            lines.append(f"🔥 {result['growth_name']} 단계 진입!")
+
+        lines.append(f"{result['rarity_label']} · {result['growth_name']}")
+        if result.get("flavor"):
+            lines.append("")
+            lines.append(result["flavor"])
+        if result.get("newly_unlocked"):
+            lines.append("")
+            lines.append("📖 도감 신규 해금!")
+
+        return KakaoResponse.basic_card(
+            title,
+            "\n".join(lines),
+            image_url,
+            buttons,
+            button_cap=self.button_cap,
+        )
 
     @staticmethod
     def _generate_quiz_lesson(quiz: dict) -> str:
@@ -1026,16 +1113,106 @@ class GameHandlerMixin(BaseHandlerMixin):
             "커머스": "📖 플랫폼 기업은 이용자 수와 거래액이 핵심 지표! 성장률 둔화 시그널에 주의하세요.",
         }
 
-        # 키워드 매칭 — 첫 번째 매칭되는 교훈 사용
+        # 키워드 매칭 - 첫 번째 매칭되는 교훈 사용
         for keyword, lesson in lessons.items():
             if keyword in desc:
                 return lesson
 
-        # 기본 교훈 — 상승/하락에 따른 일반적 인사이트
+        # 기본 교훈 - 상승/하락에 따른 일반적 인사이트
         if answer == "상승":
             return f"📖 {stock}의 상승에는 분명한 이유가 있었어요. 실적·테마·정책 중 하나가 동력이었답니다."
         else:
-            return "📖 하락에도 패턴이 있어요. 과열 후 조정, 실적 악화, 외부 악재 — 이 세 가지가 대부분이에요."
+            return "📖 하락에도 패턴이 있어요. 과열 후 조정, 실적 악화, 외부 악재 - 이 세 가지가 대부분이에요."
+
+    # ==========================================
+    # 도감
+    # ==========================================
+
+    def handle_collection(self) -> Dict:
+        """도감 - 인자가 없으면 전체 요약, 있으면 계열 상세"""
+        parts = self.utterance.split()
+        if len(parts) >= 2:
+            family = self._resolve_family(parts[1])
+            if family:
+                return self._collection_family(family)
+            return KakaoResponse.text_with_buttons(
+                f"'{parts[1]}' 계열을 찾을 수 없습니다.\n\n"
+                + " / ".join(f"{e} {n}" for n, e in FAMILIES.values()),
+                [{"label": "📖 도감", "action": "message", "messageText": "/도감"}],
+            )
+        return self._collection_summary()
+
+    @staticmethod
+    def _resolve_family(word: str) -> Optional[str]:
+        """유저가 친 한글 계열명(또는 영문 키)을 계열 키로"""
+        word = word.strip()
+        for key, (name, _emoji) in FAMILIES.items():
+            if word in (key, name):
+                return key
+        return None
+
+    def _collection_summary(self) -> Dict:
+        summary = CollectionService.get_summary(self.db, self.kakao_id)
+        gauge = self._make_gauge(summary["owned"], summary["total"], length=12)
+
+        lines = []
+        for key, (name, emoji) in FAMILIES.items():
+            f = summary["by_family"][key]
+            mark = "✅" if f["owned"] == f["total"] else "　"
+            lines.append(f"{mark}{emoji} {name} {f['owned']}/{f['total']}")
+
+        rarity_line = "  ".join(
+            f"{RARITY_ART[r][1]}{summary['by_rarity'][r]}" for r in RARITY_ART
+        )
+
+        name = self._display_name()
+        msg = f"""📖 {name}의 각성 도감
+
+{gauge} ({summary["percent"]}%)
+🎖️ 직군 {summary["jobs_owned"]}/{summary["jobs_total"]}종
+
+{chr(10).join(lines)}
+
+종별: {rarity_line}
+
+💡 /도감 트레이더 처럼 계열을 붙이면 자세히 볼 수 있어요."""
+
+        # 가장 많이 모은 계열을 바로 눌러볼 수 있게 한다
+        best = max(FAMILIES, key=lambda k: summary["by_family"][k]["owned"])
+        best_name = FAMILIES[best][0]
+        return KakaoResponse.text_with_buttons(
+            msg,
+            [
+                {
+                    "label": f"📖 {best_name}"[:14],
+                    "action": "message",
+                    "messageText": f"/도감 {best_name}",
+                },
+                {"label": "🧬 각성", "action": "message", "messageText": "/각성"},
+            ],
+        )
+
+    def _collection_family(self, family: str) -> Dict:
+        detail = CollectionService.get_family_detail(self.db, self.kakao_id, family)
+        name, emoji = FAMILIES[family]
+
+        items = []
+        for job in detail["jobs"]:
+            if job["owned"] == 0:
+                desc = "미발견"
+                title = "❓ ???"
+            else:
+                best = job["best_rarity"]
+                best_label = ec.rarity_label(best) if best else ""
+                desc = f"{job['owned']}/{job['total']}칸 · 최고 {best_label}"
+                title = job["label"]
+            items.append({"title": title, "description": desc})
+
+        return KakaoResponse.list_card(
+            f"{emoji} {name} 계열 도감",
+            items,
+            [{"label": "📖 전체 도감", "action": "message", "messageText": "/도감"}],
+        )
 
     @staticmethod
     def _make_gauge(current: int, maximum: int, length: int = 10) -> str:

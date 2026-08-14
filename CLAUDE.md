@@ -42,7 +42,8 @@ stock-king-bot/
 ├── game_config.py       # GameConfig (balance) + GameProbability (odds, EV checks)
 ├── quiz_history.py      # 시장예측 quiz dataset (pure data)
 ├── enhance_config.py    # EnhanceConfig: 각성 cost/odds/multipliers, title lookup
-├── enhance_titles.py    # 각성 title trees & flavor text (pure data)
+├── enhance_titles.py    # 레벨별 칭호·문구 (pure data)
+├── enhance_classes.py   # 계열·직군·종·성장 + 각성 문구 조립 (게임 쪽 데이터)
 ├── market_calendar.py   # KST, holidays, market hours → 장 상태 판정
 ├── messages.py          # Kakao response message templates
 ├── errors.py            # ErrorCode constants
@@ -68,11 +69,15 @@ stock-king-bot/
 │   ├── mission_service.py   # Daily missions
 │   ├── challenge_service.py # Weekly challenges
 │   ├── milestone_service.py # Asset milestones
+│   ├── collection_service.py # 도감 기록·직군/종 추첨
 │   ├── asset_service.py     # Asset history tracking
 │   └── quiz_data_service.py # Stock quiz data from public API
 ├── .github/workflows/   # CI (ruff + pytest, PostgreSQL 동시성/마이그레이션 job 포함)
 ├── alembic.ini          # Alembic 설정 (DB URL은 env.py가 환경변수에서 읽음)
 ├── migrations/          # Alembic 리비전 (env.py, versions/)
+├── enhance_art.py       # 도감 이미지 프롬프트 데이터 (40직군 × 5종 × 3성장)
+├── art/web/             # 생성된 도감 이미지 600장 (webp, 앱이 /art로 서빙)
+├── scripts/             # 이미지 생성·변환·검사 (운영 코드 아님)
 ├── utils/
 │   ├── kakao_response.py    # Kakao chatbot response format builder (spec limits)
 │   ├── budget.py            # Per-request time budget for the 5s Kakao skill SLA
@@ -130,7 +135,7 @@ mutation + commit
 - Error codes defined in `errors.ErrorCode`
 
 ### Database
-- Models in `models.py`, 11 tables: `users`, `holdings`, `transactions`, `battles`, `weekly_challenges`, `user_challenges`, `milestones`, `asset_history`, `chatroom_members`, `stock_cache`, `api_tokens`
+- Models in `models.py`, 12 tables: `users`, `holdings`, `transactions`, `battles`, `weekly_challenges`, `user_challenges`, `milestones`, `asset_history`, `chatroom_members`, `stock_cache`, `api_tokens`, `class_collections`
 - `api_tokens`는 KIS 접근 토큰을 영속 저장한다. 토큰이 프로세스 메모리에만 있으면
   재배포·콜드스타트마다 재발급을 시도하는데, KIS는 토큰 발급 자체에 유량 제한이 있어
   재기동이 잦으면 시세 조회가 통째로 멈춘다
@@ -168,6 +173,9 @@ PUBLIC_DATA_API_TIMEOUT=2.0               # 공공데이터 API 타임아웃 (�
 KIS_CIRCUIT_FAILURE_THRESHOLD=5           # 서킷 차단 임계 실패 횟수
 KIS_CIRCUIT_RECOVERY_TIMEOUT=60           # 차단 후 복구 프로브까지 대기 (초)
 PUBLIC_DATA_SERVICE_KEY=<공공데이터포털 key>
+PUBLIC_BASE_URL=https://stock-king-bot.onrender.com   # 각성 도감 이미지 절대 URL의 앞부분
+ART_DIR=art/web                           # 이미지 디렉터리 (기본값)
+ART_EXT=webp                              # 이미지 확장자. 카카오가 webp를 못 그리면 jpeg
 ```
 
 ## Testing
@@ -250,5 +258,39 @@ ruff format --check .     # Format check
   so `CommandHandler.handle()` retries registration after dispatch when the pre-check found no
   user. A unique-constraint violation there means a concurrent request already registered — it
   is treated as success, not failure
-- **Kakao response spec** (enforced in `utils/kakao_response.py`, verified by `tests/test_kakao_spec_compliance.py`): `outputs` ≤ 3; textCard title+description ≤ 400; basicCard description ≤ 230; listCard items ≤ 5; buttons ≤ 3 vertical / 2 horizontal. `KakaoResponse.BODY_LIMIT` (350) is a deliberately stricter UX limit — the group beta guide requires responses not to cover the whole chat screen
-- `listLayout: "ranking"` is a **group-chatbot-only** bubble ('리스트(랭킹)', beta guide slide 32); it is not in the public 1:1 spec
+- **Kakao response spec** (enforced in `utils/kakao_response.py`, verified by `tests/test_kakao_spec_compliance.py`): `outputs` ≤ 3; textCard title+description ≤ 400; basicCard description ≤ 230; listCard items ≤ 5; button label ≤ 14; buttons ≤ 2 horizontal. 세로 버튼은 **1:1이 3개, 그룹방이 5개**(그룹 가이드 v1.10.0)라 기본값은 좁은 쪽이고, 방을 아는 핸들러가 `self.button_cap`으로 넓힌다. `KakaoResponse.BODY_LIMIT` (350) is a deliberately stricter UX limit — the group beta guide requires responses not to cover the whole chat screen
+- **각성 정체성은 (계열 × 직군 × 종 × 성장) 네 축이다.** 직군·종은 `users.enhance_job`/
+  `enhance_rarity`에 저장하고 성장은 레벨에서 파생한다(`enhance_classes.growth_stage`).
+  이 좌표가 곧 이미지 파일명이고 각성 성공 문구도 같은 좌표로 조립되므로,
+  한쪽만 바꾸면 유저가 A 그림을 받고 B 설명을 읽는다. 파일명 규칙은
+  `enhance_art.image_stem()` 한곳에만 있다
+- **직군은 Lv.10 도달 시 배정되고, 실패해 Lv.0이 되면 직군·종이 함께 풀린다.**
+  종은 Lv.10/20/30에서 재추첨되며 내려갈 수도 있다. **도감 기록(`class_collections`)만은
+  실패해도 남는다** - 판을 넘어 남는 유일한 자산이라 여기가 무너지면 다시 시작할 이유가 없다
+- **종 수익률 보정은 랭킹에만 적용한다** (상한 10%). 잔고·포트폴리오의 수익률은 보정 없는
+  값이다. `RankingService._build_rankings`가 `profit_rate`(보정 후)와 `raw_profit_rate`를
+  함께 돌려주므로 화면이 "실력 + 보정"을 나눠 보여줄 수 있다
+- **도감 기록은 SAVEPOINT 안에서 쓴다.** 유니크 제약에 걸렸을 때 `db.rollback()`을 부르면
+  같은 트랜잭션의 레벨업·비용 차감까지 사라진다. 도감은 부가 기록이지 각성의 조건이 아니다
+- **각성 직군 도감 이미지는 저장소에 함께 들어 있다** (`art/web/*.webp`, 600장 약 45MB).
+  앱이 `/art`로 정적 서빙하고 `AssetConfig.image_url()`이 절대 URL을 만든다. 카카오 카드는
+  **공개 HTTPS 절대 URL만** 받으므로 `PUBLIC_BASE_URL`이 없으면 이미지 카드를 못 만든다
+  (그때는 예외를 던지지 않고 빈 문자열을 돌려줘 텍스트로 물러선다). 원본 PNG(1.4GB)는
+  `.gitignore`·`.dockerignore` 대상이고, 파일명 규칙은 `enhance_art.image_stem()` 한곳에만 있다
+- `listLayout: "ranking"` is a **group-chatbot-only** bubble ('리스트(랭킹)'); the group skill guide
+  v1.11.1 documents the field name and a JSON example, so it is confirmed - not in the public 1:1 spec
+- **팀채팅 미지원 컴포넌트: `quickReplies` / `commerceCard` / `carousel`.** 셋 다 만들지 않는다
+  (스펙 테스트가 막는다). 카드를 여러 장 넘겨 보여주는 연출은 carousel이 없어 불가능하므로
+  목록은 `listCard`로 낸다. `BasicCard`/`ItemCard`는 지원된다
+- **listCard 항목은 한 줄에 들어가야 한다.** 카카오는 글자 수를 막지 않고 폰에서 줄이
+  접힐 뿐인데, 5줄짜리 랭킹이 10줄이 되면 그룹방 화면을 덮는다. `KakaoResponse.list_card()`가
+  표시 폭(`utils.display_width`, 한글·이모지=2칸)으로 제목 20 / 설명 24에 맞춘다.
+  **폭만 검사하면 잘라주니 항상 통과한다** - 테스트는 `…`로 끝나는지(정보 손실)를 본다
+- **멘션은 `simpleText`에서만 동작한다.** `KakaoResponse.simple_text_with_mentions()`가
+  `{{#mentions.key}}` 자리표시자와 `extra.mentions`를 함께 만든다(한 응답 15명 상한).
+  카드에 자리표시자를 넣으면 치환되지 않고 문자 그대로 노출되고, simpleText에는 버튼을
+  달 수 없다. 그래서 `/랭킹`처럼 버튼이 필요한 화면은 `listCard`를 유지한다
+- **버튼 플러그인**(`guide`/`share`/`invite`/`inviteMember`/`mention`/`settings`/`webViewLink`)은
+  `messageText`나 URL 없이 `action`만으로 동작한다. `KakaoResponse.PLUGIN_ACTIONS` 참고
+- **SkillRequest에는 하위 호환 필드가 추가될 수 있다.** `main.py`는 전부 `.get()`으로 읽어
+  알 수 없는 필드가 와도 터지지 않는다. 이 성질을 깨지 말 것

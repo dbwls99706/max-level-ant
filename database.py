@@ -79,7 +79,7 @@ def init_db():
     데이터베이스 테이블 생성 및 마이그레이션
     앱 시작 시 호출
     """
-    # 모든 모델 임포트 (Base.metadata에 테이블 등록 — 임포트 순서와 무관하게 동작 보장)
+    # 모든 모델 임포트 (Base.metadata에 테이블 등록 - 임포트 순서와 무관하게 동작 보장)
     import models  # noqa: F401
 
     # 테이블 생성
@@ -123,6 +123,8 @@ def _migrate_db():
         "enhance_level": "INTEGER DEFAULT 0",
         "enhance_title_seed": "INTEGER DEFAULT 0",
         "enhance_class": "INTEGER DEFAULT 0",
+        "enhance_job": "VARCHAR(32)",
+        "enhance_rarity": "VARCHAR(16)",
         "pending_quiz": "VARCHAR(2000)",
         "pending_quiz_bet": "BIGINT DEFAULT 0",
     }
@@ -143,6 +145,8 @@ def _migrate_db():
         "INTEGER DEFAULT 1",
         "FLOAT DEFAULT 1.0",
         "VARCHAR(1000) DEFAULT '[]'",
+        "VARCHAR(16)",
+        "VARCHAR(32)",
         "DATE",
         "BOOLEAN DEFAULT FALSE",
         "BOOLEAN DEFAULT TRUE",

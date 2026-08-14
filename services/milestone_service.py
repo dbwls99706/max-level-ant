@@ -28,7 +28,7 @@ class MilestoneService:
     # 마일스톤 정의
     MILESTONES = {
         # 수익 달성 마일스톤 (수익금 = 총 자산 - 초기 자금)
-        # 초기 자금만으로는 0원부터 시작 — 실제 투자 성과 기준으로 판정
+        # 초기 자금만으로는 0원부터 시작 - 실제 투자 성과 기준으로 판정
         "ASSET_10M": {
             "name": "🌱 천만장자",
             "description": "수익금 1,000만원 달성",
@@ -135,7 +135,7 @@ class MilestoneService:
     ) -> List[Dict]:
         """
         마일스톤 달성 체크 & 자동 보상 지급
-        total_profit: 수익금 (총 자산 - 초기 자금) — asset 카테고리 판정 기준
+        total_profit: 수익금 (총 자산 - 초기 자금) - asset 카테고리 판정 기준
         Returns: 새로 달성한 마일스톤 리스트 (보상 이미 지급됨)
         """
         # FOR UPDATE로 동시 요청 시 보상 lost update 방지

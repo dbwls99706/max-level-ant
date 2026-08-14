@@ -15,7 +15,8 @@ from services import (
     MilestoneService,
     AssetService,
 )
-from utils import KakaoResponse, get_rival_msg
+from enhance_art import RARITY_ART
+from utils import KakaoResponse, display_width, fit_width, get_rival_msg
 from game_config import GameConfig
 
 from .base_handler import BaseHandlerMixin
@@ -39,6 +40,18 @@ class SocialHandlerMixin(BaseHandlerMixin):
             body = title + ("\n\n" + "\n".join(lines) if lines else "")
             return KakaoResponse.text_with_buttons(body, buttons)
         return KakaoResponse.list_card(title, items, buttons, list_layout="ranking")
+
+    @staticmethod
+    def _rank_title(medal: str, nickname: str, marks: str) -> str:
+        """랭킹 항목 제목을 한 줄 폭에 맞춘다.
+
+        긴 닉네임을 그대로 붙이면 뒤에 오는 종·본인 표시가 먼저 잘려나간다.
+        마커는 정보량이 크므로 닉네임 쪽을 먼저 줄인다.
+        """
+        fixed = display_width(medal) + display_width(marks) + 2  # 공백 두 칸
+        budget = max(4, KakaoResponse.LIST_ITEM_TITLE_WIDTH - fixed)
+        name = fit_width(nickname, budget)
+        return f"{medal} {name} {marks}".rstrip()
 
     def handle_ranking(self) -> Dict:
         """랭킹 조회 (그룹 챗봇: 채팅방별 랭킹, 1:1: 내 순위만)"""
@@ -76,29 +89,33 @@ class SocialHandlerMixin(BaseHandlerMixin):
                 medal = f"{r['rank']}위"
 
             profit_emoji = "📈" if r["profit_rate"] >= 0 else "📉"
-            profit_amount = r.get("profit_amount", 0)
-            amount_str = (
-                f"+{profit_amount:,}원"
-                if profit_amount >= 0
-                else f"{profit_amount:,}원"
-            )
 
-            # 각성 칭호 (한 줄에 압축)
+            # 각성 정보 (한 줄에 압축)
             enhance_lv = r.get("enhance_level", 0)
-            enhance_tag = (
-                f" · {r.get('enhance_emoji', '')}Lv.{enhance_lv}"
-                if enhance_lv > 0
-                else ""
-            )
+            enhance_tag = f" · 🧬Lv.{enhance_lv}" if enhance_lv > 0 else ""
 
             is_me = r.get("kakao_id") == self.kakao_id
-            name = r["nickname"]
             if is_me:
                 my_rank_in_top = r["rank"]
+
+            # 종은 숫자(+10) 대신 이모지로 이름 옆에 붙인다. 보정이 순위를
+            # 바꾸는데 아무 표시가 없으면 "쟤는 왜 앞서지?"가 되고, 숫자로
+            # 적으면 한 줄을 넘겨 줄바꿈이 난다. 정확한 보정치는 /내순위에서 본다.
+            rarity = r.get("rarity")
+            marks = ""
+            if rarity:
+                marks += RARITY_ART[rarity][1]
+            if is_me:
+                marks += "⭐"
+
             items.append(
                 {
-                    "title": f"{medal} @{name}" + (" ⭐나" if is_me else ""),
-                    "description": f"{profit_emoji} {r['profit_rate']:+.2f}% ({amount_str}){enhance_tag}",
+                    "title": self._rank_title(medal, r["nickname"], marks),
+                    # 금액은 뺐다. 수익률과 같은 말을 하면서 폭은 제일 많이 먹어
+                    # 폰에서 줄이 접히고, 5줄짜리 랭킹이 10줄이 된다.
+                    "description": (
+                        f"{profit_emoji} {r['profit_rate']:+.2f}%{enhance_tag}"
+                    ),
                 }
             )
 
@@ -112,15 +129,14 @@ class SocialHandlerMixin(BaseHandlerMixin):
             )
             if my_rank:
                 desc = f"📊 {my_rank['profit_rate']:+.2f}%"
+                # 라이벌 문구는 30폭이 넘어 항목 한 줄을 통째로 넘긴다.
+                # 윗사람 이름은 바로 위 줄에 이미 있으므로 격차만 적는다.
                 if my_rank.get("above_nickname"):
-                    gap = (my_rank.get("above_profit_rate", 0) or 0) - my_rank[
-                        "profit_rate"
-                    ]
-                    rival = get_rival_msg(
-                        my_rank["rank"], my_rank["above_nickname"], gap
+                    gap = abs(
+                        (my_rank.get("above_profit_rate", 0) or 0)
+                        - my_rank["profit_rate"]
                     )
-                    if rival:
-                        desc += f" · {rival}"
+                    desc += f" · ⚡역전까지 {gap:.2f}%"
                 items = items[:4] + [
                     {
                         "title": f"📍 내 순위 {my_rank['rank']}위 / {my_rank['total']}명",
@@ -135,7 +151,7 @@ class SocialHandlerMixin(BaseHandlerMixin):
         return self._ranking_list_card(title, items, buttons)
 
     def _handle_ranking_solo(self) -> Dict:
-        """1:1 채널 랭킹 — 내 자산/수익률 요약만 (다른 유저 데이터 없이)"""
+        """1:1 채널 랭킹 - 내 자산/수익률 요약만 (다른 유저 데이터 없이)"""
         user = UserService.get_user(self.db, self.kakao_id)
         if not user:
             return KakaoResponse.text_with_buttons(
@@ -309,7 +325,7 @@ class SocialHandlerMixin(BaseHandlerMixin):
         return self._ranking_list_card(title, items, buttons)
 
     def _handle_enhance_ranking_solo(self) -> Dict:
-        """1:1 채널 각성 랭킹 — 내 각성 정보만"""
+        """1:1 채널 각성 랭킹 - 내 각성 정보만"""
         from services.enhance_service import EnhanceService
 
         result = EnhanceService.get_enhance_info(self.db, self.kakao_id)
@@ -490,7 +506,7 @@ class SocialHandlerMixin(BaseHandlerMixin):
             return None
 
         # 진행도 + 도전 중(액션 유도)은 헤더에 담아 항상 노출
-        header = f"🏆 업적 — {done}/{total}개 달성\n[{gauge}]"
+        header = f"🏆 업적 - {done}/{total}개 달성\n[{gauge}]"
         if status["available_achievements"]:
             header += "\n\n🎯 도전 중 (보상 자동 지급)"
             for ach in status["available_achievements"][:4]:
@@ -774,7 +790,7 @@ class SocialHandlerMixin(BaseHandlerMixin):
 
             if result["winner"] == "무승부":
                 result_header = "🤝 무승부!"
-                result_detail = "주가 변동 없음 — 투자금 반환"
+                result_detail = "주가 변동 없음 - 투자금 반환"
             else:
                 result_header = f"🎊 배틀 종료!{market_note}"
                 result_detail = f"🏆 승자: {result['winner']}! 예측 적중!"
@@ -963,10 +979,10 @@ class SocialHandlerMixin(BaseHandlerMixin):
         total_cnt = achieved_cnt + len(result["pending"])
 
         header = (
-            f"🎖️ 마일스톤 — {achieved_cnt}/{total_cnt}개 달성\n(달성 시 보상 자동 지급!)"
+            f"🎖️ 마일스톤 - {achieved_cnt}/{total_cnt}개 달성\n(달성 시 보상 자동 지급!)"
         )
 
-        # 다음 목표(액션 유도)는 헤더에 담아 항상 노출 — 카테고리별 진행도 표시
+        # 다음 목표(액션 유도)는 헤더에 담아 항상 노출 - 카테고리별 진행도 표시
         if result["pending"]:
             try:
                 from services.asset_service import AssetService

@@ -104,7 +104,7 @@ class GameService:
             distance = roll - boundary
             miss_ratio = distance / GameProbability.LOTTERY["빈 상자"]["prob"]
 
-            # 경계 바로 아래 등급은 "일반" — 실제 인접 등급/보상으로 안내
+            # 경계 바로 아래 등급은 "일반" - 실제 인접 등급/보상으로 안내
             if miss_ratio < 0.15:
                 near_miss_tier = "일반"
                 near_miss_reward = GameProbability.LOTTERY["일반"]["max_reward"]
@@ -145,7 +145,7 @@ class GameService:
         }
 
     # ==========================================
-    # 시장예측 — 역사 퀴즈
+    # 시장예측 - 역사 퀴즈
     # ==========================================
 
     @classmethod
@@ -235,7 +235,7 @@ class GameService:
         bet = user.pending_quiz_bet or 0
         is_valid, bet_error = validate_bet(bet, user.cash)
         if not is_valid:
-            # 출제 후 잔고가 줄어 베팅 불가 — 출제 상태를 비우고 다시 받도록 안내
+            # 출제 후 잔고가 줄어 베팅 불가 - 출제 상태를 비우고 다시 받도록 안내
             user.pending_quiz = None
             user.pending_quiz_bet = 0
             db.commit()
@@ -318,7 +318,7 @@ class GameService:
         return ""
 
     # ==========================================
-    # 업다운 — 멀티라운드
+    # 업다운 - 멀티라운드
     # ==========================================
 
     @classmethod
@@ -353,7 +353,7 @@ class GameService:
         - 맞추면 계속 진행, 틀리면 투자금 손실
         - 언제든 정산 가능
         """
-        can_play, market_error = check_market_closed_for_game("🔢")
+        can_play, market_error = check_market_closed_for_game("🔢", "업다운")
         if not can_play:
             return market_error
 
@@ -500,7 +500,7 @@ class GameService:
             user.updown_round += 1
             user.updown_multiplier = new_multiplier
 
-            # 다음 라운드 배율 미리 계산 (다음 라운드 수수료 반영 — 표시와 실제 지급 일치)
+            # 다음 라운드 배율 미리 계산 (다음 라운드 수수료 반영 - 표시와 실제 지급 일치)
             next_up_mult, next_down_mult, next_up_count, next_down_count = (
                 cls._preview_multipliers(next_number, user.updown_round)
             )
@@ -589,7 +589,7 @@ class GameService:
 
     @classmethod
     def cashout_updown(cls, db: Session, kakao_id: str) -> Dict:
-        """업다운 중간 정산 — 현재 배율로 수익 확정"""
+        """업다운 중간 정산 - 현재 배율로 수익 확정"""
         user, error = get_user_with_error_for_update(db, kakao_id)
         if error:
             return error
