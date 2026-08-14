@@ -166,7 +166,7 @@ DEV_MODE=false                            # true면 CORS 전체 허용 + 디버�
 KIS_MIN_CALL_INTERVAL=0.1                 # KIS 호출 간 최소 간격 (초). 모의투자면 1.0 이상
 KIS_API_TIMEOUT=1.5                       # KIS 개별 시세 조회 타임아웃 (초)
 KIS_RANK_TIMEOUT=3.0                      # 순위 조회 타임아웃 (초). 30여 종목이라 더 느리다
-KIS_REFRESH_TIMEOUT=20.0                  # 배경 순위 갱신 타임아웃 (초). SLA가 없어 넉넉하다
+KIS_REFRESH_TIMEOUT=40.0                  # 배경 순위 갱신 타임아웃 (초). SLA가 없어 넉넉하다
 KIS_REFRESH_INTERVAL=45                   # 배경 순위 갱신 주기 (초). 0이면 배경 갱신 끔
 KIS_RANK_CACHE_TTL=180                    # 순위 캐시 TTL (초). 갱신 주기보다 길어야 한다
 KIS_CONNECT_TIMEOUT=5.0                   # 연결 단계 타임아웃 (초). 나머지가 응답 대기 몫
@@ -252,7 +252,7 @@ ruff format --check .     # Format check
 - **순위는 요청 경로가 아니라 배경 루프가 받아온다.** `main._rank_refresh_loop()`이
   `KIS_REFRESH_INTERVAL`(기본 45초)마다 `StockService.refresh_rankings()`를 스레드풀에서
   돌려 `_WARM_RANK_KEYS`(거래량·거래대금)를 미리 채운다. 배경에는 카카오 5초 SLA가 없어
-  `budget.timeout_for()`가 상한을 깎지 않으므로 `KIS_REFRESH_TIMEOUT`(기본 20초)을 그대로
+  `budget.timeout_for()`가 상한을 깎지 않으므로 `KIS_REFRESH_TIMEOUT`(기본 40초)을 그대로
   쓸 수 있다 - 요청 경로의 3.5초 예산에서는 KIS가 3초 걸리는 시간대에 통째로 실패했다.
   루프의 불변식 셋: 장 마감이면 건너뛴다(순위가 변하지 않는다), 어떤 예외로도 죽지 않는다
   (한 번 죽으면 그 뒤로 영영 낡은 값만 남는다), `CancelledError`는 반드시 다시 던진다.
@@ -260,6 +260,12 @@ ruff format --check .     # Format check
   `KIS_RANK_CACHE_TTL`(기본 180초)은 한 갱신 주기(최악 20초×2 + 45초)보다 길어야 한다.
   짧으면 유저 요청이 만료된 캐시를 만나 3.5초 예산으로 느린 KIS를 직접 부르다 실패한다 -
   배경 갱신을 만든 이유를 정면으로 되돌리는 일이다
+- **요청 경로는 순위를 위해 KIS를 부르지 않는다** (배경 갱신이 켜져 있을 때).
+  KIS 순위 API는 실측 17.77초가 걸린다. 요청 상한은 3초라 여기서 부르면 결과는 언제나
+  '3초를 태우고 같은 `fallback()`으로 돌아옴'이다. 게다가 그 실패가 순위 서킷의 임계치를
+  채워 정작 배경 갱신이 복구 프로브를 못 얻는다. 판별 기준은 `budget.current_deadline()` -
+  카카오 요청 처리 중에만 deadline이 걸려 있고 배경 루프에는 없다.
+  캐시가 비면 화면이 비지만, 3초를 태우고도 비는 것보다 낫다
 - **서킷 브레이커는 시세용·순위용 둘이다.** 실측에서 순위(volume-rank)가 8초를 넘기는
   동안 종목별 현재가(inquire-price)는 멀쩡했다. 서킷이 하나면 느린 순위가 임계치를 채워
   서킷을 열고 그때부터 시세·매수·매도가 전부 막히며, 45초마다 도는 배경 갱신이

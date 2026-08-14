@@ -126,12 +126,16 @@ def _http_timeout(total: float) -> Tuple[float, float]:
     """requests 타임아웃을 (연결, 응답 대기)로 쪼갠다.
 
     스칼라로 주면 requests는 그 값을 연결과 응답에 **각각** 적용한다.
-    상한 8초를 줬는데 실측 10.07초를 기다린 로그가 그 증거다. 상한이
-    벽시계 시간을 뜻하지 않으면 예산 계산도 진단 로그도 전부 거짓말이 된다.
+    상한 8초를 줬는데 실측 10.07초를 기다린 로그가 그 증거다.
 
     연결 몫은 짧게 자르고 나머지를 응답 대기에 준다. 다만 너무 짧으면
     연결 단계에서만 죽는다 - 상한 20초를 줬는데 2.2초 만에 타임아웃이 난
     실측이 그 경우로, 연결 몫 2초가 부족했던 것이다.
+
+    이걸로도 벽시계 상한이 되지는 **않는다**. read 타임아웃은 소켓 읽기
+    1회마다 적용되므로, 헤더를 받고 본문에서 멈추면 (헤더 지연 + read)만큼
+    걸린다. 실측 '응답 17.77초 대기 / 상한 15.00초'가 그 경우다.
+    진짜 벽시계 보장이 필요하면 호출 자체를 스레드에 얹고 잘라내야 한다.
     """
     connect = min(KISConfig.CONNECT_TIMEOUT, total / 2)
     return (connect, max(0.1, total - connect))
@@ -589,6 +593,18 @@ class KISAPIClient:
                 logger.info(f"{label} 순위 - 직전 성공값으로 응답 ({len(stale)}종목)")
                 return stale
             return []
+
+        # 배경 갱신이 켜져 있으면 순위는 배경 루프의 소유다.
+        #
+        # KIS 순위 API는 실측 17.77초가 걸린다. 요청 경로의 상한은 3초라
+        # 여기서 부르면 결과는 언제나 '3초를 태우고 같은 fallback으로 돌아옴'
+        # 이다. 유저는 예산의 대부분을 잃고 화면은 똑같다. 게다가 그 실패가
+        # 순위 서킷의 임계치를 채워, 정작 배경 갱신이 복구 프로브를 못 얻는다.
+        #
+        # deadline이 걸려 있다 = 카카오 요청 처리 중이다. 배경 루프에는 없다.
+        if KISConfig.REFRESH_INTERVAL > 0 and budget.current_deadline() is not None:
+            logger.debug(f"{label} 순위 - 배경 갱신 담당이므로 요청 경로에선 캐시만")
+            return fallback()
 
         if budget.exhausted(SkillConfig.MIN_CALL_BUDGET):
             logger.debug(f"응답 예산 소진 - {label} 순위 조회 스킵")
