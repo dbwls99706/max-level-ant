@@ -107,30 +107,35 @@ class BaseHandlerMixin:
     _popular_stock_cache = TTLCache(maxsize=1, ttl=300)  # 5분 캐시
 
     @classmethod
+    def remember_popular_stock(cls, name: str) -> None:
+        """순위 조회가 성공했을 때 1등 종목명을 기억해 둔다.
+
+        버튼을 만들려고 따로 조회하지 않기 위해서다. 이미 순위를 받아온
+        핸들러가 그 값을 여기 넣어주면 다음 화면들이 공짜로 쓴다.
+        """
+        if name:
+            cls._popular_stock_cache["top"] = name
+
+    @classmethod
     def _get_top_popular_stock(cls) -> Optional[str]:
-        """인기 거래대금 1등 종목명 반환 (5분 캐시, 실패 시 None)"""
-        cache_key = "top"
-        if cache_key in cls._popular_stock_cache:
-            return cls._popular_stock_cache[cache_key]
+        """기억해 둔 인기 1등 종목명. **외부 호출은 하지 않는다.**
 
-        try:
-            from services import StockService
+        예전에는 캐시가 비면 여기서 KIS를 직접 불렀다. 그 결과 순위 조회가
+        실패한 화면에서 버튼을 만들려다 KIS를 한 번 더 부르는 일이 생겼다.
+        첫 호출이 예산을 다 쓴 뒤라 두 번째는 0.6초만 받고 같이 죽었고,
+        로그에는 실패가 두 줄로 찍혀 원인이 더 흐려졌다.
 
-            stocks = StockService.get_top_trading_value(limit=1)
-            if stocks and stocks[0].get("name"):
-                name = stocks[0]["name"]
-                cls._popular_stock_cache[cache_key] = name
-                return name
-        except Exception:
-            pass
-        return None
+        버튼 하나 때문에 응답 예산을 쓰지 않는다. 값이 없으면 목록 버튼으로
+        물러선다.
+        """
+        return cls._popular_stock_cache.get("top")
 
     def _popular_stock_btn(self, emoji: str = "🔥", command: str = "/시세") -> Dict:
-        """인기 1등 종목 Quick Reply 버튼 (실패 시 인기종목 목록 버튼)"""
+        """인기 1등 종목 버튼 (모르면 인기종목 목록 버튼)"""
         name = self._get_top_popular_stock()
         if name:
             return {
-                "label": f"{emoji} {name}",
+                "label": f"{emoji} {name}"[: KakaoResponse.BUTTON_LABEL_LIMIT],
                 "action": "message",
                 "messageText": f"{command} {name}",
             }

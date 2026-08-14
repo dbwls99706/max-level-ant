@@ -82,6 +82,51 @@ def _timeout_detail(started: float, applied: float) -> str:
     return f"{time.monotonic() - started:.2f}초 대기 / 상한 {applied:.2f}초"
 
 
+class _RankCache:
+    """순위 조회 결과 캐시.
+
+    순위(급등/급락/거래량/거래대금)는 유저마다 다르지 않다. 같은 데이터를
+    사람 수만큼 다시 물어볼 이유가 없고, KIS가 느려지는 장중일수록 그
+    낭비가 그대로 실패로 돌아온다.
+
+    두 층으로 나눈다.
+      - fresh: 짧은 TTL. 이 안에 있으면 KIS를 아예 안 부른다.
+      - last_good: 만료 없는 마지막 성공값. 조회가 실패했을 때 빈 화면
+        대신 조금 지난 데이터라도 보여주기 위한 것이다. 순위는 몇십 초
+        늦어도 쓸모가 있지만, 빈 화면은 아무 쓸모가 없다.
+    """
+
+    TTL = 60  # 초
+
+    def __init__(self):
+        self._fresh = TTLCache(maxsize=16, ttl=self.TTL)
+        self._last_good: Dict[str, List[Dict]] = {}
+        self._lock = threading.Lock()
+
+    def get_fresh(self, key: str) -> Optional[List[Dict]]:
+        with self._lock:
+            return self._fresh.get(key)
+
+    def put(self, key: str, value: List[Dict]) -> None:
+        if not value:
+            return
+        with self._lock:
+            self._fresh[key] = value
+            self._last_good[key] = value
+
+    def get_stale(self, key: str) -> Optional[List[Dict]]:
+        with self._lock:
+            return self._last_good.get(key)
+
+    def clear(self) -> None:
+        with self._lock:
+            self._fresh.clear()
+            self._last_good.clear()
+
+
+_rank_cache = _RankCache()
+
+
 class KISAPIClient:
     """한국투자증권 API 클라이언트"""
 
@@ -435,13 +480,19 @@ class KISAPIClient:
         blng_cls_code: 0=평균거래량, 1=거래증가율, 2=평균거래회전율, 3=거래금액순, 4=평균거래금액회전율
         """
         label = "거래대금" if blng_cls_code == "3" else "거래량"
+        cache_key = f"volume:{market}:{blng_cls_code}"
+
+        cached = _rank_cache.get_fresh(cache_key)
+        if cached is not None:
+            return cached
+
         if budget.exhausted(SkillConfig.MIN_CALL_BUDGET):
             logger.debug(f"응답 예산 소진 - {label} 순위 조회 스킵")
-            return []
+            return _rank_cache.get_stale(cache_key) or []
         headers = cls._get_headers(cls.TR_ID_VOLUME_RANK)
         if not headers:
             logger.warning(f"{label} 순위: 헤더 생성 실패")
-            return []
+            return _rank_cache.get_stale(cache_key) or []
 
         started = time.monotonic()
         applied = KISConfig.RANK_TIMEOUT
@@ -510,6 +561,7 @@ class KISAPIClient:
                         )
                     except (ValueError, TypeError, KeyError):
                         continue
+                _rank_cache.put(cache_key, results)
                 return results
 
         except ConcurrencyLimitError as e:
@@ -525,6 +577,11 @@ class KISAPIClient:
         except ValueError as e:
             logger.error(f"{label} 순위 응답 파싱 실패: {e}")
 
+        # 조회가 실패했다. 빈 화면보다 조금 지난 순위가 낫다.
+        stale = _rank_cache.get_stale(cache_key)
+        if stale:
+            logger.info(f"{label} 순위 - 직전 성공값으로 응답 ({len(stale)}종목)")
+            return stale
         return []
 
     @staticmethod
