@@ -5,6 +5,8 @@
 
 from typing import List, Dict, Optional
 
+from .visual_helpers import fit_width
+
 
 class KakaoResponse:
     """카카오톡 챗봇 응답 생성 헬퍼
@@ -48,6 +50,12 @@ class KakaoResponse:
 
     # listCard items: 단일형 최대 5개
     MAX_LIST_ITEMS = 5
+
+    # listCard 항목 한 줄 폭 (한글·이모지 = 2칸 기준).
+    # 카카오가 글자 수를 막는 게 아니라 폰 화면에서 줄이 접힌다. 5줄짜리
+    # 랭킹이 10줄이 되면 그룹방 화면을 통째로 덮으므로 여기서 한 줄로 맞춘다.
+    LIST_ITEM_TITLE_WIDTH = 20
+    LIST_ITEM_DESC_WIDTH = 24
 
     # template.outputs: 1개 이상 3개 이하
     MAX_OUTPUTS = 3
@@ -257,7 +265,10 @@ class KakaoResponse:
         """
         card = {
             "header": {"title": header},
-            "items": list(items)[: KakaoResponse.MAX_LIST_ITEMS],
+            "items": [
+                KakaoResponse._fit_item(i)
+                for i in list(items)[: KakaoResponse.MAX_LIST_ITEMS]
+            ],
         }
 
         if list_layout:
@@ -267,6 +278,24 @@ class KakaoResponse:
             card["buttons"] = KakaoResponse._fit_buttons(buttons, button_cap=button_cap)
 
         return {"version": "2.0", "template": {"outputs": [{"listCard": card}]}}
+
+    @staticmethod
+    def _fit_item(item: Dict) -> Dict:
+        """listCard 항목을 한 줄에 맞춘다 (원본 dict은 건드리지 않는다).
+
+        길이가 아니라 '표시 폭'으로 자른다. 한글은 두 칸이라 글자 수로
+        재면 실제보다 절반으로 착각한다.
+        """
+        fitted = dict(item)
+        if isinstance(fitted.get("title"), str):
+            fitted["title"] = fit_width(
+                fitted["title"], KakaoResponse.LIST_ITEM_TITLE_WIDTH
+            )
+        if isinstance(fitted.get("description"), str):
+            fitted["description"] = fit_width(
+                fitted["description"], KakaoResponse.LIST_ITEM_DESC_WIDTH
+            )
+        return fitted
 
     @staticmethod
     def _fit_buttons(

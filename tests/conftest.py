@@ -24,6 +24,22 @@ from game_config import GameConfig
 TEST_DB_URL = "sqlite:///:memory:"
 
 
+@pytest.fixture(autouse=True)
+def clear_ranking_cache():
+    """랭킹 캐시를 테스트마다 비운다.
+
+    RankingService._ranking_cache는 클래스 변수(TTL 5분)라 테스트 사이에
+    그대로 남는다. 앞 테스트가 채워둔 랭킹을 뒤 테스트가 읽으면, 방금
+    만든 유저가 랭킹에 없어서 '혼자 돌리면 통과, 전체로 돌리면 실패'하는
+    테스트가 된다. 원인을 찾기 가장 어려운 종류의 실패다.
+    """
+    from services.ranking_service import RankingService
+
+    RankingService._ranking_cache.clear()
+    yield
+    RankingService._ranking_cache.clear()
+
+
 @pytest.fixture(scope="function")
 def db():
     """각 테스트마다 깨끗한 인메모리 DB 제공"""

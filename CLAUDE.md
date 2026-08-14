@@ -282,6 +282,10 @@ ruff format --check .     # Format check
 - **팀채팅 미지원 컴포넌트: `quickReplies` / `commerceCard` / `carousel`.** 셋 다 만들지 않는다
   (스펙 테스트가 막는다). 카드를 여러 장 넘겨 보여주는 연출은 carousel이 없어 불가능하므로
   목록은 `listCard`로 낸다. `BasicCard`/`ItemCard`는 지원된다
+- **listCard 항목은 한 줄에 들어가야 한다.** 카카오는 글자 수를 막지 않고 폰에서 줄이
+  접힐 뿐인데, 5줄짜리 랭킹이 10줄이 되면 그룹방 화면을 덮는다. `KakaoResponse.list_card()`가
+  표시 폭(`utils.display_width`, 한글·이모지=2칸)으로 제목 20 / 설명 24에 맞춘다.
+  **폭만 검사하면 잘라주니 항상 통과한다** - 테스트는 `…`로 끝나는지(정보 손실)를 본다
 - **멘션은 `simpleText`에서만 동작한다.** `KakaoResponse.simple_text_with_mentions()`가
   `{{#mentions.key}}` 자리표시자와 `extra.mentions`를 함께 만든다(한 응답 15명 상한).
   카드에 자리표시자를 넣으면 치환되지 않고 문자 그대로 노출되고, simpleText에는 버튼을

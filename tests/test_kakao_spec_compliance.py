@@ -500,3 +500,111 @@ class TestMentions:
         resp = KakaoResponse.simple_text_with_mentions(text, {"u1": "bu-aaa"})
         kind = next(iter(resp["template"]["outputs"][0]))
         assert kind == "simpleText"
+
+
+class TestListItemWidth:
+    """listCard 항목이 폰에서 한 줄에 들어가는지
+
+    카카오는 글자 수를 막지 않는다. 대신 폰 화면에서 줄이 접히고,
+    5줄짜리 랭킹이 10줄이 되어 그룹방 화면을 통째로 덮는다.
+    한글·이모지는 두 칸을 차지하므로 len()이 아니라 표시 폭으로 잰다.
+    """
+
+    def _items(self, resp):
+        for out in resp["template"]["outputs"]:
+            card = out.get("listCard")
+            if card:
+                yield from card["items"]
+
+    def test_display_width_counts_wide_chars_as_two(self):
+        """폭 계산 자체를 값으로 못박는다.
+
+        다른 테스트는 display_width로 재기 때문에, 이 함수가 len()으로
+        바뀌면 재는 쪽과 재어지는 쪽이 함께 틀려서 아무도 못 잡는다.
+        """
+        from utils import display_width
+
+        assert display_width("abc") == 3
+        assert display_width("가나다") == 6, "한글은 두 칸이다"
+        assert display_width("📈") == 2, "이모지는 두 칸이다"
+        assert display_width("가a") == 3
+        assert display_width("") == 0
+
+    def test_fit_width_keeps_the_budget(self):
+        from utils import display_width, fit_width
+
+        for limit in (4, 8, 12, 20):
+            out = fit_width("가나다라마바사아자차", limit)
+            assert display_width(out) <= limit, (limit, out)
+
+    def test_fit_width_leaves_short_text_alone(self):
+        from utils import fit_width
+
+        assert fit_width("짧다", 20) == "짧다"
+
+    def test_helper_fits_long_items(self):
+        from utils import display_width
+
+        items = [
+            {
+                "title": "🥇 아주아주긴닉네임을가진사람",
+                "description": "📈 +12.34% (+1,234,000원) · 🧬Lv.30 · 추가정보",
+            }
+        ]
+        resp = KakaoResponse.list_card("헤더", items)
+        for item in self._items(resp):
+            assert display_width(item["title"]) <= KakaoResponse.LIST_ITEM_TITLE_WIDTH
+            assert (
+                display_width(item["description"]) <= KakaoResponse.LIST_ITEM_DESC_WIDTH
+            )
+
+    def test_ranking_items_fit_one_line(self, db):
+        """실제 랭킹 응답이 한 줄에 들어가야 한다"""
+        from utils import display_width
+        from handlers import CommandHandler
+        from models import ChatRoomMember, User
+
+        group_key = "width-room"
+        rows = [
+            ("w1", "유진", 12_340_000, 30, "myth"),
+            ("w2", "김지훈아주긴닉네임", 11_000_000, 14, "epic"),
+            ("w3", "하나", 9_000_000, 0, None),
+        ]
+        for uid, name, cash, lv, rarity in rows:
+            db.add(
+                User(
+                    kakao_id=uid,
+                    nickname=name,
+                    cash=cash,
+                    initial_cash=10_000_000,
+                    enhance_level=lv,
+                    enhance_rarity=rarity,
+                )
+            )
+            db.add(ChatRoomMember(group_key=group_key, kakao_id=uid))
+        db.commit()
+
+        resp = CommandHandler(db, "w1", "/랭킹", "유진", group_key).handle()
+        assert_valid_skill_response(resp, "/랭킹", in_group=True)
+
+        items = list(self._items(resp))
+        assert items, "랭킹이 listCard로 나오지 않았다"
+        for item in items:
+            title, desc = item["title"], item.get("description", "")
+            assert display_width(title) <= KakaoResponse.LIST_ITEM_TITLE_WIDTH, (
+                f"제목이 한 줄을 넘는다: {title}"
+            )
+            assert display_width(desc) <= KakaoResponse.LIST_ITEM_DESC_WIDTH, (
+                f"설명이 한 줄을 넘는다: {desc}"
+            )
+            # 폭만 재면 _fit_item이 잘라준 덕에 항상 통과한다.
+            # 정작 잡아야 하는 건 '핸들러가 한 줄에 안 들어갈 문구를 만들어
+            # 잘려나갔다'는 사실이다. 잘림 표시가 남았는지로 확인한다.
+            assert not desc.endswith("…"), f"설명이 잘렸다(정보 손실): {desc}"
+
+    def test_rank_markers_survive_a_long_nickname(self):
+        """닉네임이 길어도 종·본인 표시가 먼저 잘리면 안 된다"""
+        from handlers.social_handler import SocialHandlerMixin
+
+        title = SocialHandlerMixin._rank_title("🥇", "아주아주아주긴닉네임", "🟨⭐")
+        assert title.endswith("🟨⭐"), f"마커가 잘렸다: {title}"

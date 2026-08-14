@@ -13,6 +13,8 @@ from .visual_helpers import (
     format_money,
     get_rival_msg,
     get_sell_exclamation,
+    display_width,
+    fit_width,
 )
 from .logger import (
     setup_logger,
@@ -41,6 +43,8 @@ from .audit_logger import (
 
 __all__ = [
     "KakaoResponse",
+    "display_width",
+    "fit_width",
     "get_streak_display",
     "get_profit_bar",
     "get_rank_emoji",
