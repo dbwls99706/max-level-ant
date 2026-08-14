@@ -45,3 +45,8 @@ docs/
 *.db
 *.sqlite
 *.sqlite3
+
+# 각성 직군 이미지
+# art/web/*.webp(약 45MB)는 앱이 /art로 서빙하므로 이미지에 포함한다.
+# 원본 PNG는 장당 2MB가 넘고 서빙에 쓰이지 않으므로 제외한다.
+art/*.png

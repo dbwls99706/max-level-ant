@@ -524,6 +524,15 @@ def build_prompt(class_key: str, rarity: str, growth: int) -> str:
     return f"{STYLE_LOCK}. {body} The character is {growth_fx}. {rarity_fx}. {COMMON_FRAMING}."
 
 
+def image_stem(class_key: str, rarity: str, growth: int) -> str:
+    """이미지 파일 이름(확장자 제외).
+
+    생성 스크립트가 저장할 때와 서버가 URL을 만들 때 같은 규칙을 써야 한다.
+    양쪽에 따로 적어두면 한쪽만 바뀌었을 때 조용히 404가 나므로 여기 한곳에 둔다.
+    """
+    return f"{class_key}__{rarity}__g{growth}"
+
+
 def all_combinations():
     """생성해야 할 (직군, 종, 성장) 조합 전체"""
     for class_key in CLASS_ART:

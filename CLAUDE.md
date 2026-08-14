@@ -73,6 +73,9 @@ stock-king-bot/
 ├── .github/workflows/   # CI (ruff + pytest, PostgreSQL 동시성/마이그레이션 job 포함)
 ├── alembic.ini          # Alembic 설정 (DB URL은 env.py가 환경변수에서 읽음)
 ├── migrations/          # Alembic 리비전 (env.py, versions/)
+├── enhance_art.py       # 도감 이미지 프롬프트 데이터 (40직군 × 5종 × 3성장)
+├── art/web/             # 생성된 도감 이미지 600장 (webp, 앱이 /art로 서빙)
+├── scripts/             # 이미지 생성·변환·검사 (운영 코드 아님)
 ├── utils/
 │   ├── kakao_response.py    # Kakao chatbot response format builder (spec limits)
 │   ├── budget.py            # Per-request time budget for the 5s Kakao skill SLA
@@ -168,6 +171,8 @@ PUBLIC_DATA_API_TIMEOUT=2.0               # 공공데이터 API 타임아웃 (�
 KIS_CIRCUIT_FAILURE_THRESHOLD=5           # 서킷 차단 임계 실패 횟수
 KIS_CIRCUIT_RECOVERY_TIMEOUT=60           # 차단 후 복구 프로브까지 대기 (초)
 PUBLIC_DATA_SERVICE_KEY=<공공데이터포털 key>
+PUBLIC_BASE_URL=https://stock-king-bot.onrender.com   # 각성 도감 이미지 절대 URL의 앞부분
+ART_DIR=art/web                           # 이미지 디렉터리 (기본값)
 ```
 
 ## Testing
@@ -251,4 +256,9 @@ ruff format --check .     # Format check
   user. A unique-constraint violation there means a concurrent request already registered — it
   is treated as success, not failure
 - **Kakao response spec** (enforced in `utils/kakao_response.py`, verified by `tests/test_kakao_spec_compliance.py`): `outputs` ≤ 3; textCard title+description ≤ 400; basicCard description ≤ 230; listCard items ≤ 5; buttons ≤ 3 vertical / 2 horizontal. `KakaoResponse.BODY_LIMIT` (350) is a deliberately stricter UX limit — the group beta guide requires responses not to cover the whole chat screen
+- **각성 직군 도감 이미지는 저장소에 함께 들어 있다** (`art/web/*.webp`, 600장 약 45MB).
+  앱이 `/art`로 정적 서빙하고 `AssetConfig.image_url()`이 절대 URL을 만든다. 카카오 카드는
+  **공개 HTTPS 절대 URL만** 받으므로 `PUBLIC_BASE_URL`이 없으면 이미지 카드를 못 만든다
+  (그때는 예외를 던지지 않고 빈 문자열을 돌려줘 텍스트로 물러선다). 원본 PNG(1.4GB)는
+  `.gitignore`·`.dockerignore` 대상이고, 파일명 규칙은 `enhance_art.image_stem()` 한곳에만 있다
 - `listLayout: "ranking"` is a **group-chatbot-only** bubble ('리스트(랭킹)', beta guide slide 32); it is not in the public 1:1 spec

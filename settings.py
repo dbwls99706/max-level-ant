@@ -66,6 +66,52 @@ class SkillConfig:
 
 
 # ===========================================
+# 정적 이미지(각성 직군 도감) 서빙
+# ===========================================
+class AssetConfig:
+    """
+    각성 직군 이미지 서빙 설정.
+
+    카카오 카드(basicCard 등)는 이미지를 **공개 HTTPS 절대 URL**로만 받는다.
+    상대 경로나 http는 카드가 통째로 렌더되지 않는다. 그래서 서버가 자기
+    바깥 주소를 알아야 하는데, 요청 헤더의 Host는 프록시에 따라 달라질 수
+    있으므로 환경변수로 명시한다.
+
+    이미지는 저장소에 함께 들어 있어(art/web, 600장 약 45MB) 앱과 같이
+    배포된다. 별도 오브젝트 스토리지를 두지 않는 이유는, 이 크기에서는
+    운영할 것이 하나 늘어나는 손해가 더 크기 때문이다. 훨씬 커지면
+    그때 CDN으로 옮기고 BASE_URL만 바꾸면 된다.
+    """
+
+    # 예: https://stock-king-bot.onrender.com (뒤 슬래시 없이)
+    BASE_URL = os.getenv("PUBLIC_BASE_URL", "").rstrip("/")
+
+    # 정적 마운트 경로와 실제 디렉터리
+    URL_PREFIX = "/art"
+    DIRECTORY = os.getenv("ART_DIR", "art/web")
+
+    # 이미지는 한 번 만들면 바뀌지 않는다. 파일명이 곧 내용이므로
+    # 길게 캐시해도 안전하고, 그만큼 카카오 쪽 재요청이 줄어든다.
+    CACHE_MAX_AGE = 60 * 60 * 24 * 30  # 30일
+
+    @classmethod
+    def is_configured(cls) -> bool:
+        return bool(cls.BASE_URL)
+
+    @classmethod
+    def image_url(cls, stem: str) -> str:
+        """이미지 절대 URL. BASE_URL 미설정이면 빈 문자열.
+
+        빈 문자열을 돌려주는 이유는, 이미지 없이도 텍스트 카드로 물러설 수
+        있어야 하기 때문이다. 여기서 예외를 던지면 도감 명령 전체가 죽는다.
+        """
+        if not cls.BASE_URL:
+            return ""
+        # 환경변수에 뒤 슬래시를 붙여 넣기 쉽다. 여기서도 한 번 더 잘라낸다.
+        return f"{cls.BASE_URL.rstrip('/')}{cls.URL_PREFIX}/{stem}.webp"
+
+
+# ===========================================
 # 공공데이터포털 API 설정 (금융위원회 주식시세정보)
 # ===========================================
 class PublicDataConfig:
