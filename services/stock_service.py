@@ -12,6 +12,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from concurrent.futures import TimeoutError as FuturesTimeout
 from cachetools import TTLCache
 import threading
+import time
 import requests
 from requests.exceptions import RequestException, Timeout
 from sqlalchemy.exc import SQLAlchemyError
@@ -69,6 +70,16 @@ def _kis_call():
     with _kis_limiter.slot(timeout=budget.timeout_for(KISConfig.SLOT_WAIT_CAP)):
         with _circuit_breaker.guard() as call:
             yield call
+
+
+def _timeout_detail(started: float, applied: float) -> str:
+    """타임아웃 로그에 붙일 진단 문구.
+
+    '타임아웃'만 찍으면 상류가 느린 건지 우리가 상한을 너무 좁게 준 건지
+    구분할 수 없다. 실제 대기 시간과 그때 적용한 상한을 함께 남긴다.
+    남은 예산이 작아 상한이 깎였다면 그 사실도 여기서 드러난다.
+    """
+    return f"{time.monotonic() - started:.2f}초 대기 / 상한 {applied:.2f}초"
 
 
 class KISAPIClient:
@@ -432,6 +443,8 @@ class KISAPIClient:
             logger.warning(f"{label} 순위: 헤더 생성 실패")
             return []
 
+        started = time.monotonic()
+        applied = KISConfig.RANK_TIMEOUT
         try:
             with _kis_call() as call:
                 url = f"{KISConfig.BASE_URL}/uapi/domestic-stock/v1/quotations/volume-rank"
@@ -453,11 +466,15 @@ class KISAPIClient:
                 if not _kis_throttle.wait(max_wait=budget.remaining()):
                     logger.debug(f"응답 예산 부족 - {label} 순위 조회 스킵")
                     return []
+                # 순위 API는 30여 종목을 한 번에 돌려주므로 단일 시세보다
+                # 느리다. 같은 상한을 쓰면 장중에 통째로 실패한다.
+                applied = budget.timeout_for(KISConfig.RANK_TIMEOUT)
+                started = time.monotonic()
                 resp = requests.get(
                     url,
                     headers=headers,
                     params=params,
-                    timeout=budget.timeout_for(KISConfig.API_TIMEOUT),
+                    timeout=applied,
                 )
 
                 if resp.status_code != 200:
@@ -500,7 +517,9 @@ class KISAPIClient:
         except CircuitOpenError:
             logger.debug(f"KIS API 서킷 브레이커 열림 - {label} 순위 조회 스킵")
         except Timeout:
-            logger.warning(f"{label} 순위 조회 타임아웃")
+            logger.warning(
+                f"{label} 순위 조회 타임아웃 - {_timeout_detail(started, applied)}"
+            )
         except RequestException as e:
             logger.error(f"{label} 순위 조회 네트워크 에러: {e}")
         except ValueError as e:

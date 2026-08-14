@@ -382,26 +382,25 @@ class BaseHandlerMixin:
     # ===========================================
 
     def _market_closed_response(self, message: str = None) -> Dict:
-        """장 마감 시 공통 응답 (예측게임 유도)"""
+        """장 마감 시 공통 응답.
+
+        막힌 건 '지금 사고파는 것'이지 시세를 보는 것이 아니다. 그런데
+        버튼이 전부 게임으로만 가서, 장이 닫혔을 때 종목을 훑어볼 길이
+        끊겼다. 인기종목(거래대금 상위)을 첫 버튼으로 둔다.
+        """
         if message is None:
-            message = "📢 현재 장이 열려있지 않아요!\n\n📈 장 마감 시간에는 예측게임을 즐겨보세요!"
+            message = (
+                "📢 현재 장이 열려있지 않아요!\n\n"
+                "📊 시세는 계속 볼 수 있어요. 다음 장을 준비해보세요."
+            )
         return KakaoResponse.text_with_buttons(
             message,
             [
+                {"label": "🔥 인기종목", "action": "message", "messageText": "/인기"},
                 {
                     "label": "🎁 보물상자",
                     "action": "message",
                     "messageText": "/보물상자",
-                },
-                {
-                    "label": "🔮 시장예측",
-                    "action": "message",
-                    "messageText": f"/시장예측 {GameConfig.DEFAULT_BET}",
-                },
-                {
-                    "label": "💼 포트폴리오",
-                    "action": "message",
-                    "messageText": "/포트폴리오",
                 },
             ],
         )

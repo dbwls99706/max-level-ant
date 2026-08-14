@@ -28,12 +28,12 @@ class GameHandlerMixin(BaseHandlerMixin):
 🎁 /보물상자 - 무료 보물상자 (1일 5회)
 ⚡ /시장예측 [금액] - 과거 주가 예언 배틀!
 🔢 /업다운 [금액] - 숫자 도전 게임!
-🧬 /각성 - 캐릭터 각성! ⚠️ 장 마감 후
+🧬 /각성 - 캐릭터 각성! 언제든 가능
 
 💡 예언 배틀: 실제 역사 주가! 맞추면 2배 💰 틀리면 전멸!
 💡 업다운: 연속으로 맞출수록 배율 UP!
 💡 각성: 레벨 UP → 출석/보물상자 보상 UP!
-⏰ 예언 배틀/업다운/각성은 장 마감 후 이용 가능"""
+⏰ 예언 배틀·업다운은 장 마감 후 이용 가능"""
 
         small_bet = GameConfig.DEFAULT_BET
         return KakaoResponse.text_with_buttons(
@@ -753,8 +753,6 @@ class GameHandlerMixin(BaseHandlerMixin):
 
     def _show_enhance_info(self) -> Dict:
         """각성 정보 표시"""
-        from services.common import check_market_closed_for_game
-
         result = EnhanceService.get_enhance_info(self.db, self.kakao_id)
 
         if not result["success"]:
@@ -771,9 +769,6 @@ class GameHandlerMixin(BaseHandlerMixin):
 
         # 레벨 게이지 바
         gauge = self._make_gauge(level, EnhanceConfig.MAX_LEVEL)
-
-        # 장 마감 여부 확인 (각성 버튼 노출 제어)
-        can_enhance, _ = check_market_closed_for_game("🧬", "각성")
 
         # 직군·종 표시 (Lv.10 이상이고 배정 완료)
         class_line = ""
@@ -831,9 +826,7 @@ class GameHandlerMixin(BaseHandlerMixin):
 {next_emoji} 성공 시 → {next_name} Lv.{level + 1}"""
 
             can_afford = result["cash"] >= cost
-            if not can_enhance:
-                msg += "\n\n⏰ 각성은 장 마감 후에만 가능합니다."
-            elif not can_afford:
+            if not can_afford:
                 msg += f"\n\n❌ 골드 부족 (보유: {result['cash']:,}원)"
             else:
                 buttons.append(
@@ -854,13 +847,12 @@ class GameHandlerMixin(BaseHandlerMixin):
         return KakaoResponse.text_with_buttons(msg, buttons)
 
     def _do_enhance(self) -> Dict:
-        """실제 각성 실행 (장 마감 후만 가능)"""
-        from services.common import check_market_closed_for_game
+        """실제 각성 실행.
 
-        can_play, market_error = check_market_closed_for_game("🧬", "각성")
-        if not can_play:
-            return self._market_closed_response(market_error["message"])
-
+        시간 제한은 없다. 각성은 시세와 무관한 성장 요소라 장중에 막을
+        이유가 없고, 막아두면 낮에 들어온 유저가 할 게 없어진다.
+        관문은 비용뿐이고 그 돈은 주식으로 번다.
+        """
         result = EnhanceService.attempt_enhance(self.db, self.kakao_id)
 
         if not result["success"]:
@@ -996,14 +988,10 @@ class GameHandlerMixin(BaseHandlerMixin):
 🪙 사용: -{cost:,}원
 💰 현재 골드: {result["cash"]:,}원"""
 
-        # 다시 각성 가능 여부 체크 (장마감 여부도 확인)
-        from services.common import check_market_closed_for_game
-
-        can_enhance, _ = check_market_closed_for_game("🧬", "각성")
         buttons = []
         if new_lv < EnhanceConfig.MAX_LEVEL:
             next_cost = EnhanceConfig.get_cost(new_lv)
-            if result["cash"] >= next_cost and can_enhance:
+            if result["cash"] >= next_cost:
                 # 비용은 본문에 적는다. 버튼 라벨은 14자 한도라
                 # 금액을 붙이면 잘려서 오히려 안 보인다.
                 msg += f"\n\n📋 다음 각성 비용: {next_cost:,}원"
