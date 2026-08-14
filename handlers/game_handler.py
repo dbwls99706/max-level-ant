@@ -1032,25 +1032,58 @@ class GameHandlerMixin(BaseHandlerMixin):
                 msg, buttons, button_cap=self.button_cap
             )
 
+        title, body = (
+            self._enhance_card_text(result)
+            if result["enhanced"]
+            else self._enhance_fail_card_text(result)
+        )
+        return KakaoResponse.basic_card(
+            title,
+            body,
+            image_url,
+            buttons,
+            button_cap=self.button_cap,
+            image_size=AssetConfig.image_size(),
+        )
+
+    @staticmethod
+    def _enhance_card_text(result: Dict) -> tuple:
+        """각성 성공 카드의 제목과 본문.
+
+        카드 본문은 230자로 잘리므로 수치는 넣지 않는다(텍스트 경로에 있다).
+        대신 '이번에 무엇이 바뀌었는지'는 반드시 넣는다. 그게 없으면 만렙
+        달성도 종 하락도 평범한 레벨업과 똑같이 생긴 카드로 나간다.
+        """
         level = result["new_level"]
-        title = f"{result['new_emoji']} Lv.{level} {result['job_label']}"
 
-        # 카드 본문은 짧아야 한다(230자). 수치는 텍스트 경로에 있고,
-        # 카드에서는 그림과 그 그림을 설명하는 문장이 주인공이다.
-        #
-        # 다만 이번 각성에서 '무엇이 바뀌었는지'는 카드에도 있어야 한다.
-        # 종이 올랐는지 내렸는지가 안 보이면 재추첨이 무작위 소음이 된다.
-        lines = []
+        # 한 번에 두 사건이 겹칠 수 있다. Lv.30은 만렙이면서 종 재추첨
+        # 레벨이기도 해서, 하나만 고르면 신화를 잃고도 축하만 받게 된다.
+        headlines = []
+        if level >= EnhanceConfig.MAX_LEVEL:
+            headlines.append("만렙 개미 달성")
         if result.get("job_assigned"):
-            lines.append("직군 배정")
+            # 판의 정체성이 정해지는 순간. 계열까지 이름으로 말해준다.
+            headlines.append(
+                f"직군 배정 - {result['family_emoji']} {result['family_name']} 계열"
+            )
         elif result.get("rarity_rerolled"):
-            arrow = {1: "종 상승", -1: "종 하락", 0: "종 유지"}[
-                result.get("rarity_delta", 0)
-            ]
-            lines.append(arrow)
+            # 올랐는지 내렸는지가 핵심이다. 어디서 어디로 갔는지 없이
+            # '종 하락'만 적으면 무엇을 잃었는지 보이지 않는다.
+            delta = result.get("rarity_delta", 0)
+            word = {1: "종 상승", -1: "종 하락", 0: "종 유지"}[delta]
+            old = result.get("old_rarity")
+            if delta and old:
+                headlines.append(
+                    f"{word} - {ec.rarity_label(old)} → {result['rarity_label']}"
+                )
+            else:
+                headlines.append(word)
         elif result.get("growth_changed"):
-            lines.append(f"{result['growth_name']} 단계 진입")
+            headlines.append(f"{result['growth_name']} 단계 진입")
 
+        title = f"{result['new_emoji']} Lv.{level} {result['job_label'] or ''}".strip()
+
+        lines = list(headlines)
         lines.append(f"{result['rarity_label']} · {result['growth_name']}")
         if result.get("flavor"):
             lines.append("")
@@ -1058,15 +1091,34 @@ class GameHandlerMixin(BaseHandlerMixin):
         if result.get("newly_unlocked"):
             lines.append("")
             lines.append("도감 신규 해금")
+        return title, "\n".join(lines)
 
-        return KakaoResponse.basic_card(
-            title,
-            "\n".join(lines),
-            image_url,
-            buttons,
-            button_cap=self.button_cap,
-            image_size=AssetConfig.image_size(),
+    @staticmethod
+    def _enhance_fail_card_text(result: Dict) -> tuple:
+        """각성 실패 카드의 제목과 본문.
+
+        실패도 카드로 나간다(쪼렙 그림이 생긴 뒤로 이 경로를 탄다).
+        성공용 본문을 그대로 쓰면 직군·종이 이미 풀린 상태라 'None · 쪼렙'이
+        찍히고, 정작 무엇을 잃었는지는 한 줄도 안 나온다.
+
+        실패는 이 게임에서 가장 큰 사건이다. 잃은 이름을 말해줘야 사건이 된다.
+        """
+        old_level = result.get("old_level", 0)
+        title = f"{result['new_emoji']} Lv.{old_level} → Lv.{result['new_level']}"
+
+        lines = []
+        if result.get("lost_job"):
+            lines.append(f"잃은 것: {result['lost_rarity']} {result['lost_job']}")
+            lines.append("도감 기록은 그대로 남습니다.")
+            lines.append("")
+        fail_flavor = (
+            EnhanceConfig.FAIL_FLAVORS[old_level]
+            if old_level < len(EnhanceConfig.FAIL_FLAVORS)
+            else ""
         )
+        if fail_flavor:
+            lines.append(fail_flavor)
+        return title, "\n".join(lines)
 
     @staticmethod
     def _generate_quiz_lesson(quiz: dict) -> str:

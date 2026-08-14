@@ -9,8 +9,11 @@ from unittest.mock import patch
 
 import pytest
 
+import enhance_classes as ec
 from enhance_config import EnhanceConfig
 from handlers.command_handler import CommandHandler
+from services.collection_service import CollectionService
+from settings import AssetConfig
 
 THRESHOLD = EnhanceConfig.CLASS_LEVEL_THRESHOLD
 
@@ -159,3 +162,82 @@ class TestBetLabelsAreHonest:
             source = inspect.getsource(module)
             assert '"label": "2배 올인!"' not in source
             assert '"label": "🔥 2배 올인!"' not in source
+
+
+class TestCardTellsWhatHappened:
+    """카드만 봐도 이번에 무슨 일이 있었는지 알아야 한다.
+
+    이미지 카드는 텍스트 경로와 본문이 다르다. 텍스트에는 있는데 카드에는
+    없으면, 실제 유저가 보는 화면(카드)에서만 조용히 사라진다.
+    """
+
+    def _card(self, db, user, roll=1):
+        with (
+            patch.object(AssetConfig, "BASE_URL", "https://example.com"),
+            patch("services.enhance_service.random.randint", return_value=roll),
+        ):
+            resp = _run(db, user, "/각성 시도")
+        return resp["template"]["outputs"][0]["basicCard"]
+
+    def test_failure_card_never_shows_none(self, db, test_user):
+        """실패하면 직군·종이 풀린다. 성공용 본문을 쓰면 'None'이 찍힌다"""
+        test_user.enhance_level = THRESHOLD + 18
+        test_user.enhance_job = "scalper"
+        test_user.enhance_rarity = "myth"
+        test_user.cash = 100_000_000
+        db.commit()
+
+        card = self._card(db, test_user, roll=100)
+        blob = f"{card['title']}\n{card['description']}"
+        assert "None" not in blob, f"빈 값이 그대로 노출됐다:\n{blob}"
+
+    def test_failure_card_names_what_was_lost(self, db, test_user):
+        """가장 큰 사건이다. 잃은 이름을 말해줘야 사건이 된다"""
+        test_user.enhance_level = THRESHOLD + 18
+        test_user.enhance_job = "scalper"
+        test_user.enhance_rarity = "myth"
+        test_user.cash = 100_000_000
+        db.commit()
+
+        card = self._card(db, test_user, roll=100)
+        blob = f"{card['title']}\n{card['description']}"
+        assert "잃은 것" in blob, f"무엇을 잃었는지 없다:\n{blob}"
+        assert "도감" in blob, "판을 넘어 남는 게 있다는 걸 알려줘야 한다"
+        assert f"Lv.{THRESHOLD + 18}" in blob, "어디서 떨어졌는지 없다"
+
+    def test_max_level_card_announces_it(self, db, test_user):
+        """게임 최종 목표인데 평범한 레벨업과 같은 카드로 나가면 안 된다"""
+        test_user.enhance_level = EnhanceConfig.MAX_LEVEL - 1
+        test_user.enhance_job = "scalper"
+        test_user.enhance_rarity = "myth"
+        test_user.cash = 100_000_000
+        db.commit()
+
+        card = self._card(db, test_user)
+        assert "만렙" in card["description"], f"만렙 표시가 없다:\n{card}"
+
+    def test_rarity_drop_shows_both_sides(self, db, test_user):
+        """'종 하락'만 적으면 무엇을 잃었는지 보이지 않는다"""
+        test_user.enhance_level = 19
+        test_user.enhance_job = "scalper"
+        test_user.enhance_rarity = "myth"
+        test_user.cash = 100_000_000
+        db.commit()
+
+        with patch.object(CollectionService, "roll_rarity", return_value="normal"):
+            card = self._card(db, test_user)
+
+        desc = card["description"]
+        assert "종 하락" in desc, desc
+        assert ec.rarity_label("myth") in desc, f"잃은 종이 안 보인다:\n{desc}"
+        assert ec.rarity_label("normal") in desc
+
+    def test_job_assignment_names_the_family(self, db, test_user):
+        """판의 정체성이 정해지는 순간이다. 한 줄로 넘길 자리가 아니다"""
+        test_user.enhance_level = THRESHOLD - 1
+        test_user.cash = 100_000_000
+        db.commit()
+
+        card = self._card(db, test_user)
+        assert "직군 배정" in card["description"]
+        assert "계열" in card["description"], f"계열이 없다:\n{card['description']}"
