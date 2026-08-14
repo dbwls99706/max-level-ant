@@ -130,8 +130,9 @@ class TestKisRespectsBudget:
             with budget.request_budget(1.0):
                 KISAPIClient.get_stock_price("005930")
 
-        assert captured["timeout"] <= 1.0
-        assert captured["timeout"] <= KISConfig.API_TIMEOUT
+        # timeout은 (연결, 응답 대기) 튜플이다 - 합이 곧 벽시계 상한
+        assert sum(captured["timeout"]) <= 1.0
+        assert sum(captured["timeout"]) <= KISConfig.API_TIMEOUT
 
     def test_exhausted_budget_skips_http_call(self, valid_token):
         """예산이 남지 않으면 아예 호출하지 않는다 (카카오는 이미 타임아웃)"""
@@ -198,7 +199,7 @@ class TestKisRespectsBudget:
 
         def hanging_get(url, headers=None, params=None, timeout=None):
             # 실제 소켓 타임아웃처럼 timeout 만큼 기다렸다 실패
-            time.sleep(min(timeout, 5.0))
+            time.sleep(min(sum(timeout), 5.0))
             raise stock_service.Timeout("서버 무응답")
 
         StockService._price_cache.clear()

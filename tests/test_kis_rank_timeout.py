@@ -26,8 +26,10 @@ def test_rank_uses_its_own_timeout(caplog):
         result = KISAPIClient.get_volume_rank("J")
 
     assert result == []
-    assert seen["timeout"] == KISConfig.RANK_TIMEOUT
-    assert seen["timeout"] > KISConfig.API_TIMEOUT, "시세 상한과 같으면 의미가 없다"
+    assert sum(seen["timeout"]) == KISConfig.RANK_TIMEOUT
+    assert KISConfig.RANK_TIMEOUT > KISConfig.API_TIMEOUT, (
+        "시세 상한과 같으면 의미가 없다"
+    )
 
 
 def test_timeout_log_shows_elapsed_and_cap(caplog):
@@ -223,7 +225,9 @@ class TestBackgroundRefresh:
             StockService.refresh_rankings()
 
         assert seen, "배경 갱신이 KIS를 부르지 않았다"
-        assert set(seen) == {KISConfig.REFRESH_TIMEOUT}, f"적용된 상한: {seen}"
+        assert {sum(t) for t in seen} == {KISConfig.REFRESH_TIMEOUT}, (
+            f"적용된 상한: {seen}"
+        )
         assert KISConfig.REFRESH_TIMEOUT > KISConfig.RANK_TIMEOUT, (
             "요청 경로와 같은 상한이면 배경으로 뺀 의미가 없다"
         )
@@ -252,6 +256,114 @@ class TestBackgroundRefresh:
             KISAPIClient, "get_volume_rank", side_effect=RuntimeError("boom")
         ):
             assert StockService.refresh_rankings() == 0
+
+
+class TestHttpTimeoutIsWallClock:
+    """상한이 벽시계 시간을 뜻하지 않으면 예산 계산도 로그도 거짓말이 된다"""
+
+    def test_split_into_connect_and_read(self):
+        from services.stock_service import _http_timeout
+
+        connect, read = _http_timeout(8.0)
+        assert connect + read <= 8.0, (
+            f"연결 {connect} + 응답 {read} = {connect + read}초, "
+            "requests는 스칼라 상한을 연결·응답에 각각 적용한다"
+        )
+        assert read > connect, "오래 걸리는 쪽은 언제나 응답 대기다"
+
+    def test_rank_call_passes_a_tuple(self):
+        """스칼라로 넘기면 8초 상한이 최악 16초가 된다"""
+        seen = {}
+
+        def fake_get(url, headers=None, params=None, timeout=None):
+            seen["timeout"] = timeout
+            raise Timeout()
+
+        with (
+            patch.object(KISAPIClient, "_get_headers", return_value={"x": "y"}),
+            patch("services.stock_service.requests.get", side_effect=fake_get),
+        ):
+            KISAPIClient.get_volume_rank("J")
+
+        assert isinstance(seen["timeout"], tuple), f"스칼라다: {seen['timeout']}"
+        assert sum(seen["timeout"]) <= KISConfig.RANK_TIMEOUT
+
+
+class TestRankCircuitIsSeparate:
+    """느린 순위 하나가 시세·매수·매도를 막으면 안 된다"""
+
+    def setup_method(self):
+        from services.stock_service import _circuit_breaker, _rank_circuit_breaker
+        from services.stock_service import _rank_cache
+
+        _circuit_breaker.reset()
+        _rank_circuit_breaker.reset()
+        _rank_cache.clear()
+
+    teardown_method = setup_method
+
+    def test_rank_failures_do_not_open_price_circuit(self):
+        """순위가 8초씩 걸린다고 종목별 현재가까지 막을 이유가 없다"""
+        from services.stock_service import _circuit_breaker, _rank_circuit_breaker
+        from utils.resilience import CircuitState
+
+        with (
+            patch.object(KISAPIClient, "_get_headers", return_value={"x": "y"}),
+            patch("services.stock_service.requests.get", side_effect=Timeout),
+        ):
+            for _ in range(KISConfig.CIRCUIT_FAILURE_THRESHOLD + 2):
+                KISAPIClient.get_volume_rank("J")
+
+        assert _rank_circuit_breaker.state == CircuitState.OPEN, (
+            "순위 서킷은 열려야 한다 - 계속 두드릴 이유가 없다"
+        )
+        assert _circuit_breaker.state == CircuitState.CLOSED, (
+            "순위가 느리다고 시세 서킷이 열리면 매수·매도가 통째로 막힌다"
+        )
+
+    def test_price_query_works_while_rank_circuit_is_open(self):
+        """순위 서킷이 열린 상태에서도 시세는 나가야 한다"""
+        from services.stock_service import _rank_circuit_breaker
+        from utils.resilience import CircuitState
+
+        with (
+            patch.object(KISAPIClient, "_get_headers", return_value={"x": "y"}),
+            patch("services.stock_service.requests.get", side_effect=Timeout),
+        ):
+            for _ in range(KISConfig.CIRCUIT_FAILURE_THRESHOLD + 2):
+                KISAPIClient.get_volume_rank("J")
+        assert _rank_circuit_breaker.state == CircuitState.OPEN
+
+        called = []
+
+        class PriceResp:
+            status_code = 200
+
+            @staticmethod
+            def json():
+                return {
+                    "rt_cd": "0",
+                    "output": {
+                        "stck_prpr": "70000",
+                        "prdy_vrss": "1000",
+                        "prdy_ctrt": "1.45",
+                        "acml_vol": "1000",
+                        "hts_kor_isnm": "삼성전자",
+                    },
+                }
+
+        def fake_get(url, headers=None, params=None, timeout=None):
+            called.append(url)
+            return PriceResp()
+
+        with (
+            patch.object(KISAPIClient, "_get_headers", return_value={"x": "y"}),
+            patch("services.stock_service.requests.get", side_effect=fake_get),
+        ):
+            price = KISAPIClient.get_stock_price("005930")
+
+        assert called, "순위 서킷이 시세 호출까지 막았다"
+        assert price and price["price"] == 70000
 
 
 class TestRankRefreshLoop:

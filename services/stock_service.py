@@ -7,7 +7,7 @@
 """
 
 from datetime import datetime, timedelta, timezone
-from typing import Optional, Dict, List
+from typing import Optional, Dict, List, Tuple
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from concurrent.futures import TimeoutError as FuturesTimeout
 from cachetools import TTLCache
@@ -35,9 +35,24 @@ from utils import (
 logger = get_service_logger()
 
 # 전역 서킷 브레이커 (KIS API 장애 시 호출 차단)
+#
+# 시세와 순위를 분리한 이유는 실측 때문이다. 순위(volume-rank)는 30여 종목을
+# 한 번에 돌려주느라 8초를 넘기는 시간대가 있는데, 같은 시각 종목별 현재가
+# (inquire-price)는 멀쩡했다. 서킷이 하나면 느린 순위가 임계치를 채워 서킷을
+# 열고, 그때부터 시세·매수·매도가 전부 막힌다. 게다가 45초마다 도는 배경
+# 갱신이 HALF_OPEN 복구 프로브를 매번 가져가 8초를 쓰고 실패시키므로
+# 시세 쪽은 복구할 기회조차 얻지 못한다.
+#
+# 한쪽 엔드포인트가 느린 것과 KIS 전체가 죽은 것은 다른 사건이다.
 _circuit_breaker = CircuitBreaker(
     failure_threshold=KISConfig.CIRCUIT_FAILURE_THRESHOLD,
     recovery_timeout=KISConfig.CIRCUIT_RECOVERY_TIMEOUT,
+    name="시세",
+)
+_rank_circuit_breaker = CircuitBreaker(
+    failure_threshold=KISConfig.CIRCUIT_FAILURE_THRESHOLD,
+    recovery_timeout=KISConfig.CIRCUIT_RECOVERY_TIMEOUT,
+    name="순위",
 )
 
 # 전역 KIS 유량 제한기 (초당 ~1/min_interval 건)
@@ -54,9 +69,11 @@ _kis_limiter = BoundedConcurrency(KISConfig.MAX_CONCURRENT_CALLS)
 
 
 @contextmanager
-def _kis_call():
+def _kis_call(breaker: Optional[CircuitBreaker] = None):
     """
     KIS 외부 호출 한 건을 감싸는 컨텍스트 (동시 실행 상한 + 서킷 브레이커).
+
+    breaker를 주지 않으면 시세용 서킷을 쓴다. 순위 조회만 별도 서킷을 넘긴다.
 
     슬롯을 서킷 guard '바깥'에서 잡는 이유:
       - guard 안에서 잡으면 HALF_OPEN 프로브가 슬롯을 기다리는 동안
@@ -68,8 +85,22 @@ def _kis_call():
     확보하지 못하면 ConcurrencyLimitError를 던진다(호출을 시작하지 않는다).
     """
     with _kis_limiter.slot(timeout=budget.timeout_for(KISConfig.SLOT_WAIT_CAP)):
-        with _circuit_breaker.guard() as call:
+        with (breaker or _circuit_breaker).guard() as call:
             yield call
+
+
+def _http_timeout(total: float) -> Tuple[float, float]:
+    """requests 타임아웃을 (연결, 응답 대기)로 쪼갠다.
+
+    스칼라로 주면 requests는 그 값을 연결과 응답에 **각각** 적용한다.
+    상한 8초를 줬는데 실측 10.07초를 기다린 로그가 그 증거다. 상한이
+    벽시계 시간을 뜻하지 않으면 예산 계산도 진단 로그도 전부 거짓말이 된다.
+
+    연결은 짧게 자르고 나머지를 응답 대기에 준다. 연결은 몇백 ms면 끝나는
+    일이고, 오래 걸리는 쪽은 언제나 KIS가 데이터를 만드는 시간이다.
+    """
+    connect = min(KISConfig.CONNECT_TIMEOUT, total / 2)
+    return (connect, max(0.1, total - connect))
 
 
 def _timeout_detail(started: float, applied: float) -> str:
@@ -90,13 +121,15 @@ class _RankCache:
     낭비가 그대로 실패로 돌아온다.
 
     두 층으로 나눈다.
-      - fresh: 짧은 TTL. 이 안에 있으면 KIS를 아예 안 부른다.
+      - fresh: TTL 안이면 KIS를 아예 안 부른다. 배경 갱신이 성공할 때마다
+        새로 채워지므로, TTL은 '얼마나 낡을 수 있나'가 아니라 '배경 갱신이
+        멈췄을 때 요청 경로가 직접 부르기까지 얼마나 버티나'를 뜻한다.
       - last_good: 만료 없는 마지막 성공값. 조회가 실패했을 때 빈 화면
         대신 조금 지난 데이터라도 보여주기 위한 것이다. 순위는 몇십 초
         늦어도 쓸모가 있지만, 빈 화면은 아무 쓸모가 없다.
     """
 
-    TTL = 60  # 초
+    TTL = KISConfig.RANK_CACHE_TTL
 
     def __init__(self):
         self._fresh = TTLCache(maxsize=16, ttl=self.TTL)
@@ -300,7 +333,9 @@ class KISAPIClient:
                         url,
                         headers=headers,
                         json=body,
-                        timeout=budget.timeout_for(KISConfig.TOKEN_TIMEOUT),
+                        timeout=_http_timeout(
+                            budget.timeout_for(KISConfig.TOKEN_TIMEOUT)
+                        ),
                     )
 
                     if resp.status_code != 200:
@@ -421,7 +456,7 @@ class KISAPIClient:
                     url,
                     headers=headers,
                     params=params,
-                    timeout=budget.timeout_for(KISConfig.API_TIMEOUT),
+                    timeout=_http_timeout(budget.timeout_for(KISConfig.API_TIMEOUT)),
                 )
 
                 if resp.status_code != 200:
@@ -513,7 +548,7 @@ class KISAPIClient:
         started = time.monotonic()
         applied = timeout_cap or KISConfig.RANK_TIMEOUT
         try:
-            with _kis_call() as call:
+            with _kis_call(_rank_circuit_breaker) as call:
                 url = f"{KISConfig.BASE_URL}/uapi/domestic-stock/v1/quotations/volume-rank"
                 params = {
                     "FID_COND_MRKT_DIV_CODE": market,
@@ -541,7 +576,7 @@ class KISAPIClient:
                     url,
                     headers=headers,
                     params=params,
-                    timeout=applied,
+                    timeout=_http_timeout(applied),
                 )
 
                 if resp.status_code != 200:
@@ -680,7 +715,7 @@ class KISAPIClient:
                     url,
                     headers=headers,
                     params=params,
-                    timeout=budget.timeout_for(KISConfig.API_TIMEOUT),
+                    timeout=_http_timeout(budget.timeout_for(KISConfig.API_TIMEOUT)),
                 )
 
                 if resp.status_code != 200:
