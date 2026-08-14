@@ -11,6 +11,7 @@ from cachetools import TTLCache
 
 from models import User, Holding, ChatRoomMember
 from services.stock_service import StockService
+import enhance_classes as ec
 from enhance_config import EnhanceConfig
 from game_config import GameConfig
 from settings import CacheConfig
@@ -56,6 +57,12 @@ class RankingService:
 
         return total_asset, profit_rate
 
+    @staticmethod
+    def _rarity_bonus(user: User) -> float:
+        """종 등급에 따른 수익률 가산 (%). 없으면 0."""
+        rarity = getattr(user, "enhance_rarity", None)
+        return ec.rarity_bonus(rarity) if rarity else 0.0
+
     @classmethod
     def _build_rankings(cls, db: Session) -> List[Dict]:
         """
@@ -96,12 +103,19 @@ class RankingService:
             seed = getattr(user, "enhance_title_seed", 0) or 0
             title_name, title_emoji = EnhanceConfig.get_title(enhance_level, seed=seed)
 
+            # 종 보정을 얹은 수익률. 순위는 이 값으로 매긴다.
+            # 원래 수익률(raw_profit_rate)도 함께 돌려줘서 화면이 "실력 +보정"을
+            # 나눠 보여줄 수 있게 한다. 보정만 보이면 왜 앞섰는지 알 수 없다.
+            bonus = cls._rarity_bonus(user)
             rankings.append(
                 {
                     "kakao_id": user.kakao_id,
                     "nickname": cls._get_display_name(user),
                     "total_asset": total_asset,
-                    "profit_rate": profit_rate,
+                    "profit_rate": round(profit_rate + bonus, 2),
+                    "raw_profit_rate": profit_rate,
+                    "rarity_bonus": bonus,
+                    "rarity": getattr(user, "enhance_rarity", None),
                     "profit_amount": total_asset
                     - (user.initial_cash or GameConfig.INITIAL_CASH),
                     "enhance_level": enhance_level,
@@ -121,6 +135,10 @@ class RankingService:
     def calculate_total_asset(cls, db: Session, user: User) -> Tuple[int, float]:
         """
         유저의 총 자산 및 수익률 계산 (단일 유저용)
+
+        여기서는 종 보정을 얹지 않는다. 이 값은 잔고·포트폴리오처럼
+        "내 돈이 얼마인가"를 보여주는 곳에서 쓰이고, 보정은 랭킹 경쟁에만
+        적용되는 규칙이기 때문이다. 랭킹은 _build_rankings가 따로 계산한다.
         """
         total_asset = user.cash
 

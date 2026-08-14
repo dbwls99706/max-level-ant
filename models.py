@@ -82,9 +82,15 @@ class User(Base):
     enhance_title_seed = Column(
         Integer, default=0
     )  # 칭호 후보 인덱스 (0~4, 레벨업 시 랜덤 고정)
-    enhance_class = Column(
-        Integer, default=0
-    )  # 직군 (0=미선택, 1=국장파, 2=서학파, 3=퀀트파)
+    # 3계열(1=트레이더, 2=투자가, 3=퀀트) 시절의 유산.
+    # 0002 리비전이 enhance_job으로 backfill했고 지금은 읽지도 쓰지도 않는다.
+    # 운영 데이터가 잘 옮겨졌는지 확인한 뒤 별도 리비전에서 제거한다.
+    enhance_class = Column(Integer, default=0)
+
+    # 각성 도감 - 이미지 한 장의 좌표 (직군 × 종 × 성장)
+    # 성장은 레벨에서 파생되므로 저장하지 않는다 (enhance_classes.growth_stage).
+    enhance_job = Column(String(32), nullable=True)  # 직군 키 (예: "scalper")
+    enhance_rarity = Column(String(16), nullable=True)  # 종 (normal~myth)
 
     # 업적 관련 (JSON 문자열로 저장)
     achievements = Column(String(1000), default="[]")
@@ -428,3 +434,44 @@ class ApiToken(Base):
 
     def __repr__(self):
         return f"<ApiToken(provider={self.provider}, expires_at={self.expires_at})>"
+
+
+class ClassCollection(Base):
+    """
+    각성 도감 - 유저가 한 번이라도 도달한 (직군, 종, 성장) 조합 기록
+
+    각성 실패로 레벨과 직군은 사라지지만 도감은 남는다. 그게 이 게임의
+    영속 성장이다. 한 판의 성과가 전부 증발하면 다시 시작할 이유가 없다.
+
+    같은 조합을 여러 번 찍어도 한 줄만 남기므로 (kakao_id, job, rarity, growth)에
+    유니크 제약을 건다. 동시 요청으로 같은 조합이 두 번 들어오면 제약이 막고,
+    서비스는 그 예외를 성공으로 처리한다 (이미 해금된 것이므로).
+    """
+
+    __tablename__ = "class_collections"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+
+    kakao_id = Column(
+        String(100), ForeignKey("users.kakao_id"), nullable=False, index=True
+    )
+
+    job = Column(String(32), nullable=False)  # 직군 키
+    rarity = Column(String(16), nullable=False)  # 종
+    growth = Column(Integer, nullable=False)  # 성장 단계 1~3
+
+    # 처음 해금한 시각 (naive UTC)
+    unlocked_at = Column(DateTime, default=_utcnow)
+
+    __table_args__ = (
+        UniqueConstraint(
+            "kakao_id", "job", "rarity", "growth", name="unique_collection_entry"
+        ),
+        Index("ix_collection_user", "kakao_id"),
+    )
+
+    def __repr__(self):
+        return (
+            f"<ClassCollection(user={self.kakao_id}, "
+            f"{self.job}/{self.rarity}/g{self.growth})>"
+        )

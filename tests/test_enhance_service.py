@@ -6,6 +6,7 @@ import json
 import pytest
 from unittest.mock import patch
 
+from enhance_art import CLASS_ART, RARITY_ART
 from services.enhance_service import EnhanceService
 from enhance_config import EnhanceConfig
 from game_config import GameConfig
@@ -115,14 +116,15 @@ class TestEnhanceAttempt:
         assert result["new_level"] == 0  # Lv.0으로 초기화
         assert result["drop"] == 8
 
-    def test_enhance_fail_clears_class(self, db, test_user):
-        """실패로 Lv.0이 되면 계열도 풀린다.
+    def test_enhance_fail_clears_job_and_rarity(self, db, test_user):
+        """실패로 Lv.0이 되면 직군과 종이 풀린다.
 
-        계열은 Lv.10 도달 시 배정되므로, 실패가 곧 다른 계열로 갈아탈
-        기회가 된다. 계열이 남아 있으면 처음 뽑힌 계열에 영원히 묶인다.
+        직군은 Lv.10 도달 시 배정되므로, 실패가 곧 다른 직군으로 갈아탈
+        기회가 된다. 남아 있으면 처음 뽑힌 직군에 영원히 묶인다.
         """
         test_user.enhance_level = 12
-        test_user.enhance_class = 2
+        test_user.enhance_job = "scalper"
+        test_user.enhance_rarity = "myth"
         test_user.cash = 100_000_000
         db.commit()
 
@@ -132,12 +134,39 @@ class TestEnhanceAttempt:
         assert result["enhanced"] is False
         assert result["new_level"] == 0
         db.refresh(test_user)
-        assert test_user.enhance_class == 0, "실패했는데 계열이 그대로 남아 있다"
+        assert test_user.enhance_job is None, "실패했는데 직군이 그대로 남아 있다"
+        assert test_user.enhance_rarity is None, "실패했는데 종이 그대로 남아 있다"
 
-    def test_enhance_reassigns_class_after_reset(self, db, test_user):
-        """계열이 풀린 뒤 다시 Lv.10에 도달하면 새로 배정된다"""
+    def test_enhance_fail_keeps_the_collection(self, db, test_user):
+        """실패해도 도감 기록은 남는다. 판을 넘어 남는 유일한 자산이다."""
+        from models import ClassCollection
+
+        test_user.enhance_level = 12
+        test_user.enhance_job = "scalper"
+        test_user.enhance_rarity = "myth"
+        test_user.cash = 100_000_000
+        db.add(
+            ClassCollection(
+                kakao_id=test_user.kakao_id, job="scalper", rarity="myth", growth=2
+            )
+        )
+        db.commit()
+
+        with patch("services.enhance_service.random.randint", return_value=100):
+            EnhanceService.attempt_enhance(db, test_user.kakao_id)
+
+        kept = (
+            db.query(ClassCollection)
+            .filter(ClassCollection.kakao_id == test_user.kakao_id)
+            .count()
+        )
+        assert kept == 1, "실패했다고 도감이 지워졌다"
+
+    def test_enhance_assigns_job_after_reset(self, db, test_user):
+        """직군이 풀린 뒤 다시 Lv.10에 도달하면 새로 배정된다"""
         test_user.enhance_level = EnhanceConfig.CLASS_LEVEL_THRESHOLD - 1
-        test_user.enhance_class = 0
+        test_user.enhance_job = None
+        test_user.enhance_rarity = None
         test_user.cash = 100_000_000
         db.commit()
 
@@ -146,8 +175,10 @@ class TestEnhanceAttempt:
 
         assert result["enhanced"] is True
         assert result["new_level"] == EnhanceConfig.CLASS_LEVEL_THRESHOLD
+        assert result["job_assigned"] is True
         db.refresh(test_user)
-        assert test_user.enhance_class != 0, "Lv.10에 도달했는데 계열이 안 붙었다"
+        assert test_user.enhance_job in CLASS_ART, "Lv.10인데 직군이 안 붙었다"
+        assert test_user.enhance_rarity in RARITY_ART, "직군은 붙었는데 종이 없다"
 
     def test_enhance_fail_at_level_zero(self, db, test_user):
         """Lv.0에서 실패해도 Lv.0 유지"""

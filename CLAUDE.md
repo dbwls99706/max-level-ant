@@ -42,7 +42,8 @@ stock-king-bot/
 ├── game_config.py       # GameConfig (balance) + GameProbability (odds, EV checks)
 ├── quiz_history.py      # 시장예측 quiz dataset (pure data)
 ├── enhance_config.py    # EnhanceConfig: 각성 cost/odds/multipliers, title lookup
-├── enhance_titles.py    # 각성 title trees & flavor text (pure data)
+├── enhance_titles.py    # 레벨별 칭호·문구 (pure data)
+├── enhance_classes.py   # 계열·직군·종·성장 + 각성 문구 조립 (게임 쪽 데이터)
 ├── market_calendar.py   # KST, holidays, market hours → 장 상태 판정
 ├── messages.py          # Kakao response message templates
 ├── errors.py            # ErrorCode constants
@@ -68,6 +69,7 @@ stock-king-bot/
 │   ├── mission_service.py   # Daily missions
 │   ├── challenge_service.py # Weekly challenges
 │   ├── milestone_service.py # Asset milestones
+│   ├── collection_service.py # 도감 기록·직군/종 추첨
 │   ├── asset_service.py     # Asset history tracking
 │   └── quiz_data_service.py # Stock quiz data from public API
 ├── .github/workflows/   # CI (ruff + pytest, PostgreSQL 동시성/마이그레이션 job 포함)
@@ -133,7 +135,7 @@ mutation + commit
 - Error codes defined in `errors.ErrorCode`
 
 ### Database
-- Models in `models.py`, 11 tables: `users`, `holdings`, `transactions`, `battles`, `weekly_challenges`, `user_challenges`, `milestones`, `asset_history`, `chatroom_members`, `stock_cache`, `api_tokens`
+- Models in `models.py`, 12 tables: `users`, `holdings`, `transactions`, `battles`, `weekly_challenges`, `user_challenges`, `milestones`, `asset_history`, `chatroom_members`, `stock_cache`, `api_tokens`, `class_collections`
 - `api_tokens`는 KIS 접근 토큰을 영속 저장한다. 토큰이 프로세스 메모리에만 있으면
   재배포·콜드스타트마다 재발급을 시도하는데, KIS는 토큰 발급 자체에 유량 제한이 있어
   재기동이 잦으면 시세 조회가 통째로 멈춘다
@@ -173,6 +175,7 @@ KIS_CIRCUIT_RECOVERY_TIMEOUT=60           # 차단 후 복구 프로브까지 �
 PUBLIC_DATA_SERVICE_KEY=<공공데이터포털 key>
 PUBLIC_BASE_URL=https://stock-king-bot.onrender.com   # 각성 도감 이미지 절대 URL의 앞부분
 ART_DIR=art/web                           # 이미지 디렉터리 (기본값)
+ART_EXT=webp                              # 이미지 확장자. 카카오가 webp를 못 그리면 jpeg
 ```
 
 ## Testing
@@ -256,6 +259,19 @@ ruff format --check .     # Format check
   user. A unique-constraint violation there means a concurrent request already registered — it
   is treated as success, not failure
 - **Kakao response spec** (enforced in `utils/kakao_response.py`, verified by `tests/test_kakao_spec_compliance.py`): `outputs` ≤ 3; textCard title+description ≤ 400; basicCard description ≤ 230; listCard items ≤ 5; buttons ≤ 3 vertical / 2 horizontal. `KakaoResponse.BODY_LIMIT` (350) is a deliberately stricter UX limit — the group beta guide requires responses not to cover the whole chat screen
+- **각성 정체성은 (계열 × 직군 × 종 × 성장) 네 축이다.** 직군·종은 `users.enhance_job`/
+  `enhance_rarity`에 저장하고 성장은 레벨에서 파생한다(`enhance_classes.growth_stage`).
+  이 좌표가 곧 이미지 파일명이고 각성 성공 문구도 같은 좌표로 조립되므로,
+  한쪽만 바꾸면 유저가 A 그림을 받고 B 설명을 읽는다. 파일명 규칙은
+  `enhance_art.image_stem()` 한곳에만 있다
+- **직군은 Lv.10 도달 시 배정되고, 실패해 Lv.0이 되면 직군·종이 함께 풀린다.**
+  종은 Lv.10/20/30에서 재추첨되며 내려갈 수도 있다. **도감 기록(`class_collections`)만은
+  실패해도 남는다** - 판을 넘어 남는 유일한 자산이라 여기가 무너지면 다시 시작할 이유가 없다
+- **종 수익률 보정은 랭킹에만 적용한다** (상한 10%). 잔고·포트폴리오의 수익률은 보정 없는
+  값이다. `RankingService._build_rankings`가 `profit_rate`(보정 후)와 `raw_profit_rate`를
+  함께 돌려주므로 화면이 "실력 + 보정"을 나눠 보여줄 수 있다
+- **도감 기록은 SAVEPOINT 안에서 쓴다.** 유니크 제약에 걸렸을 때 `db.rollback()`을 부르면
+  같은 트랜잭션의 레벨업·비용 차감까지 사라진다. 도감은 부가 기록이지 각성의 조건이 아니다
 - **각성 직군 도감 이미지는 저장소에 함께 들어 있다** (`art/web/*.webp`, 600장 약 45MB).
   앱이 `/art`로 정적 서빙하고 `AssetConfig.image_url()`이 절대 URL을 만든다. 카카오 카드는
   **공개 HTTPS 절대 URL만** 받으므로 `PUBLIC_BASE_URL`이 없으면 이미지 카드를 못 만든다

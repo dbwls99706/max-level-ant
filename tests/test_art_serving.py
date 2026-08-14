@@ -32,7 +32,7 @@ class TestImageFiles:
         missing = [
             image_stem(*combo)
             for combo in all_combinations()
-            if not (ART_DIR / f"{image_stem(*combo)}.webp").exists()
+            if not (ART_DIR / f"{image_stem(*combo)}.{AssetConfig.EXT}").exists()
         ]
         assert not missing, f"이미지 없는 조합 {len(missing)}개: {missing[:10]}"
 
@@ -42,7 +42,11 @@ class TestImageFiles:
             pytest.skip(f"{ART_DIR} 없음 - 이미지 생성 전")
 
         expected = {image_stem(*combo) for combo in all_combinations()}
-        orphans = [p.stem for p in ART_DIR.glob("*.webp") if p.stem not in expected]
+        orphans = [
+            p.stem
+            for p in ART_DIR.glob(f"*.{AssetConfig.EXT}")
+            if p.stem not in expected
+        ]
         assert not orphans, f"쓰이지 않는 이미지 {len(orphans)}개: {orphans[:10]}"
 
 
@@ -51,8 +55,15 @@ class TestImageUrl:
 
     def test_url_is_absolute_https(self, monkeypatch):
         monkeypatch.setattr(AssetConfig, "BASE_URL", "https://example.com")
+        monkeypatch.setattr(AssetConfig, "EXT", "webp")
         url = AssetConfig.image_url(image_stem("scalper", "myth", 3))
         assert url == "https://example.com/art/scalper__myth__g3.webp"
+
+    def test_extension_follows_config(self, monkeypatch):
+        """카카오가 webp를 못 그리면 ART_EXT만 바꿔 jpeg로 넘어갈 수 있어야 한다"""
+        monkeypatch.setattr(AssetConfig, "BASE_URL", "https://example.com")
+        monkeypatch.setattr(AssetConfig, "EXT", "jpeg")
+        assert AssetConfig.image_url("x") == "https://example.com/art/x.jpeg"
 
     def test_trailing_slash_does_not_double(self, monkeypatch):
         """BASE_URL 끝에 슬래시가 있어도 // 가 생기면 안 된다.
@@ -61,6 +72,7 @@ class TestImageUrl:
         받아 이미지를 못 찾고 카드를 통째로 버린다.
         """
         monkeypatch.setattr(AssetConfig, "BASE_URL", "https://example.com/")
+        monkeypatch.setattr(AssetConfig, "EXT", "webp")
         assert AssetConfig.image_url("x") == "https://example.com/art/x.webp"
 
     def test_missing_base_url_returns_empty(self, monkeypatch):
@@ -83,7 +95,7 @@ class TestArtRoute:
             pytest.skip(f"{ART_DIR} 없음 - 이미지 생성 전")
 
         stem = image_stem("scalper", "normal", 1)
-        resp = client.get(f"/art/{stem}.webp")
+        resp = client.get(f"/art/{stem}.{AssetConfig.EXT}")
         assert resp.status_code == 200
         assert resp.headers["content-type"] == "image/webp"
         assert resp.content[:4] == b"RIFF", "WebP 파일이 아니다"
@@ -93,7 +105,9 @@ class TestArtRoute:
         if not ART_DIR.is_dir():
             pytest.skip(f"{ART_DIR} 없음 - 이미지 생성 전")
 
-        resp = client.get(f"/art/{image_stem('scalper', 'normal', 1)}.webp")
+        resp = client.get(
+            f"/art/{image_stem('scalper', 'normal', 1)}.{AssetConfig.EXT}"
+        )
         cache = resp.headers.get("cache-control", "")
         assert "immutable" in cache
         assert f"max-age={AssetConfig.CACHE_MAX_AGE}" in cache

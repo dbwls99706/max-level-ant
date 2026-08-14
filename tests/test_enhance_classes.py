@@ -65,7 +65,7 @@ class TestFlavorMatchesArt:
         for class_key, rarity, growth in all_combinations():
             stem = ec.art_stem(class_key, rarity, growth)
             assert stem is not None
-            assert (art_dir / f"{stem}.webp").exists(), stem
+            assert (art_dir / f"{stem}.{AssetConfig.EXT}").exists(), stem
 
     def test_invalid_combination_has_no_stem(self):
         assert ec.art_stem("nope", "normal", 1) is None

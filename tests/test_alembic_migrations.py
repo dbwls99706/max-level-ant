@@ -15,6 +15,7 @@ Alembic 마이그레이션 테스트
 """
 
 import os
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -23,7 +24,36 @@ import pytest
 from sqlalchemy import create_engine, inspect, text
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
-BASELINE = PROJECT_ROOT / "migrations" / "versions" / "0001_baseline_baseline_schema.py"
+VERSIONS_DIR = PROJECT_ROOT / "migrations" / "versions"
+BASELINE = VERSIONS_DIR / "0001_baseline_baseline_schema.py"
+
+
+def _all_revision_sources() -> str:
+    """모든 리비전 파일의 소스를 이어 붙인다.
+
+    테이블은 baseline이 아닌 뒤쪽 리비전에서 생길 수도 있다. baseline만
+    보면 정상적으로 추가된 테이블을 누락으로 잘못 잡는다.
+    """
+    return "\n".join(
+        p.read_text(encoding="utf-8") for p in sorted(VERSIONS_DIR.glob("[0-9]*.py"))
+    )
+
+
+def _head_revision() -> str:
+    """가장 최신 리비전 id. 하드코딩하면 리비전을 추가할 때마다 깨진다."""
+    revisions, down = {}, set()
+    for path in sorted(VERSIONS_DIR.glob("[0-9]*.py")):
+        src = path.read_text(encoding="utf-8")
+        rev = re.search(r'^revision:\s*str\s*=\s*"([^"]+)"', src, re.M)
+        prev = re.search(r'^down_revision:.*=\s*"([^"]+)"', src, re.M)
+        if rev:
+            revisions[rev.group(1)] = path
+            if prev:
+                down.add(prev.group(1))
+    heads = set(revisions) - down
+    assert len(heads) == 1, f"head가 하나가 아니다: {heads}"
+    return heads.pop()
+
 
 TEST_DATABASE_URL = os.getenv("TEST_DATABASE_URL", "")
 
@@ -73,11 +103,16 @@ class TestBaselineScript:
             f"baseline이 앱 모듈을 import한다: {forbidden} — 리비전이 고정되지 않는다"
         )
 
-    def test_baseline_creates_every_model_table(self):
-        """모델의 모든 테이블이 baseline에 들어 있어야 한다"""
-        source = BASELINE.read_text()
-        for table in _expected_tables():
-            assert f'"{table}"' in source, f"baseline에 {table} 테이블이 없다"
+    def test_every_model_table_is_managed_by_a_revision(self):
+        """모델의 모든 테이블이 어느 리비전에서든 만들어져야 한다.
+
+        모델에만 추가하고 리비전을 빼먹으면 로컬 SQLite에서는
+        create_all()이 덮어줘서 통과하지만 운영 PostgreSQL에서는
+        테이블이 없어 첫 조회부터 터진다.
+        """
+        source = _all_revision_sources()
+        missing = [t for t in _expected_tables() if f'"{t}"' not in source]
+        assert not missing, f"어떤 리비전에도 없는 테이블: {missing}"
 
     def test_baseline_downgrade_is_forbidden(self):
         """
@@ -167,7 +202,7 @@ class TestSqliteUpgrade:
 
         assert row is not None, "기존 데이터가 사라졌다"
         assert row[0] == 12345
-        assert version == "0001_baseline"
+        assert version == _head_revision()
 
     def test_upgrade_is_repeatable(self, tmp_path):
         """두 번 돌려도 실패하지 않는다"""
@@ -318,6 +353,6 @@ class TestPostgresUpgrade:
             ).scalar()
 
         assert cash == 424242, "downgrade 시도로 기존 유저 데이터가 사라졌다"
-        assert version == "0001_baseline", (
+        assert version == _head_revision(), (
             f"downgrade가 실패했는데 리비전이 바뀌었다: {version}"
         )

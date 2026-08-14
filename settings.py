@@ -90,6 +90,12 @@ class AssetConfig:
     URL_PREFIX = "/art"
     DIRECTORY = os.getenv("ART_DIR", "art/web")
 
+    # 이미지 확장자.
+    # WebP는 용량이 JPEG의 절반이지만, 카카오 카드가 WebP를 렌더한다는
+    # 보장이 공개 명세에 없다. 실제 톡방에서 안 뜨면 JPEG로 다시 변환하고
+    # 이 값만 바꾸면 된다 (scripts/optimize_images.py --format jpeg).
+    EXT = os.getenv("ART_EXT", "webp").lstrip(".")
+
     # 이미지는 한 번 만들면 바뀌지 않는다. 파일명이 곧 내용이므로
     # 길게 캐시해도 안전하고, 그만큼 카카오 쪽 재요청이 줄어든다.
     CACHE_MAX_AGE = 60 * 60 * 24 * 30  # 30일
@@ -108,7 +114,7 @@ class AssetConfig:
         if not cls.BASE_URL:
             return ""
         # 환경변수에 뒤 슬래시를 붙여 넣기 쉽다. 여기서도 한 번 더 잘라낸다.
-        return f"{cls.BASE_URL.rstrip('/')}{cls.URL_PREFIX}/{stem}.webp"
+        return f"{cls.BASE_URL.rstrip('/')}{cls.URL_PREFIX}/{stem}.{cls.EXT}"
 
 
 # ===========================================

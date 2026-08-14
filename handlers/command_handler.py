@@ -111,6 +111,8 @@ class CommandHandler(
         "/ㄱㅎ": "handle_enhance",
         "/능력": "handle_enhance",
         "/강화": "handle_enhance",
+        "/도감": "handle_collection",
+        "/ㄷㄱ": "handle_collection",
         # 소셜/경쟁
         "/랭킹": "handle_ranking",
         "/ㄹㅋ": "handle_ranking",

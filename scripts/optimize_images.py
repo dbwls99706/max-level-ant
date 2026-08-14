@@ -10,8 +10,9 @@ generate_images.py가 만드는 원본은 1536x1024 PNG로 장당 2MB가 넘는�
 원본을 다시 만들려면 돈이 드니 원본 폴더는 지우지 마라.
 
 사용법:
-    python scripts/optimize_images.py            # art/*.png -> art/web/*.webp
-    python scripts/optimize_images.py --force    # 이미 변환된 것도 다시
+    python scripts/optimize_images.py                  # art/*.png -> art/web/*.webp
+    python scripts/optimize_images.py --format jpeg    # 카카오가 webp를 못 그릴 때
+    python scripts/optimize_images.py --force          # 이미 변환된 것도 다시
 """
 
 import argparse
@@ -36,6 +37,13 @@ def main() -> int:
     p.add_argument("--outdir", default="art/web")
     p.add_argument("--max-width", type=int, default=MAX_WIDTH)
     p.add_argument("--quality", type=int, default=QUALITY)
+    p.add_argument(
+        "--format",
+        dest="fmt",
+        default="webp",
+        choices=["webp", "jpeg"],
+        help="출력 포맷. 카카오가 webp를 못 그리면 jpeg로 (settings ART_EXT도 함께)",
+    )
     p.add_argument("--force", action="store_true", help="이미 변환된 것도 다시")
     args = p.parse_args()
 
@@ -52,7 +60,7 @@ def main() -> int:
     converted = skipped = 0
 
     for path in pngs:
-        target = out / f"{path.stem}.webp"
+        target = out / f"{path.stem}.{args.fmt}"
         if target.exists() and not args.force:
             skipped += 1
             before += path.stat().st_size
@@ -64,7 +72,10 @@ def main() -> int:
             if im.width > args.max_width:
                 height = round(im.height * args.max_width / im.width)
                 im = im.resize((args.max_width, height), Image.LANCZOS)
-            im.save(target, "WEBP", quality=args.quality, method=6)
+            if args.fmt == "webp":
+                im.save(target, "WEBP", quality=args.quality, method=6)
+            else:
+                im.save(target, "JPEG", quality=args.quality, optimize=True)
 
         before += path.stat().st_size
         after += target.stat().st_size
