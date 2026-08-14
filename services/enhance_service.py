@@ -166,7 +166,12 @@ class EnhanceService:
         old_seed = getattr(user, "enhance_title_seed", 0) or 0
         old_name, old_emoji = EnhanceConfig.get_title(old_level, seed=old_seed)
         old_rarity = getattr(user, "enhance_rarity", None)
-        old_growth = ec.growth_stage(old_level, EnhanceConfig.MAX_LEVEL)
+        # _identity()와 같은 기준(직군 그림이 붙는 구간)으로 재야 한다.
+        # 한쪽만 first_level을 빼먹으면 단계가 그대로인데도 "단계 진입!"이
+        # 뜬다 - 실제로 Lv.12→13에서 그 오탐이 나왔다.
+        old_growth = ec.growth_stage(
+            old_level, EnhanceConfig.MAX_LEVEL, EnhanceConfig.CLASS_LEVEL_THRESHOLD
+        )
 
         if succeeded:
             # 성공!

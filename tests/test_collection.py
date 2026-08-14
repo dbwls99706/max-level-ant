@@ -268,6 +268,27 @@ class TestGrowthTransition:
         assert result["growth_changed"] is True
         assert result["art_stem"].endswith(f"g{result['growth']}")
 
+    def test_growth_change_is_not_reported_within_a_stage(self, db, test_user):
+        """단계 안에서 레벨만 오르면 그림이 그대로다. '단계 진입'은 거짓말이다"""
+        inside = next(
+            lv
+            for lv in range(THRESHOLD + 1, EnhanceConfig.MAX_LEVEL)
+            if ec.growth_stage(lv, EnhanceConfig.MAX_LEVEL, THRESHOLD)
+            == ec.growth_stage(lv - 1, EnhanceConfig.MAX_LEVEL, THRESHOLD)
+        )
+        test_user.enhance_level = inside - 1
+        test_user.enhance_job = "scalper"
+        test_user.enhance_rarity = "normal"
+        test_user.cash = 100_000_000
+        db.commit()
+
+        with _always_succeed():
+            result = EnhanceService.attempt_enhance(db, test_user.kakao_id)
+
+        assert result["growth_changed"] is False, (
+            f"Lv.{inside - 1}→{inside}은 같은 단계인데 진입이라고 한다"
+        )
+
     def test_growth_transition_unlocks_a_new_entry(self, db, test_user):
         """같은 직군·종이라도 성장이 바뀌면 새 칸이다"""
         boundary = next(

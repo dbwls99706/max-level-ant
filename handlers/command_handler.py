@@ -238,14 +238,14 @@ class CommandHandler(
             logger.info(f"새 유저 가입: {masked_id}")
             welcome_msg = Messages.WELCOME.format(initial_cash=GameConfig.INITIAL_CASH)
             buttons = [
-                {"label": "📅 출석 +30만", "action": "message", "messageText": "/출석"},
+                {"label": "출석 +30만", "action": "message", "messageText": "/출석"},
                 {
-                    "label": "🎁 보물상자",
+                    "label": "보물상자",
                     "action": "message",
                     "messageText": "/보물상자",
                 },
                 {
-                    "label": "🚀 급등주 정찰",
+                    "label": "📈 급등주 정찰",
                     "action": "message",
                     "messageText": "/급등",
                 },
@@ -254,9 +254,9 @@ class CommandHandler(
         else:
             # 세로 버튼 3개 한도 - 나머지 기능은 /도움말에서 안내한다
             buttons = [
-                {"label": "📅 출석", "action": "message", "messageText": "/출석"},
-                {"label": "💼 포폴", "action": "message", "messageText": "/포트폴리오"},
-                {"label": "📖 도움말", "action": "message", "messageText": "/도움말"},
+                {"label": "출석", "action": "message", "messageText": "/출석"},
+                {"label": "포폴", "action": "message", "messageText": "/포트폴리오"},
+                {"label": "도움말", "action": "message", "messageText": "/도움말"},
             ]
             name = self._display_name()
             return KakaoResponse.text_with_buttons(
@@ -274,7 +274,7 @@ class CommandHandler(
                 "먼저 /시작 으로 게임을 시작해주세요.",
                 [
                     {
-                        "label": "🎮 게임 시작",
+                        "label": "게임 시작",
                         "action": "message",
                         "messageText": "/시작",
                     }
@@ -346,13 +346,13 @@ class CommandHandler(
         # 세로 버튼 3개 한도 - 장 마감 시 예측게임 버튼이 붙으므로 기본은 2개만 둔다
         buttons = [
             {"label": "📈 급등주", "action": "message", "messageText": "/급등"},
-            {"label": "🎁 보물상자", "action": "message", "messageText": "/보물상자"},
+            {"label": "보물상자", "action": "message", "messageText": "/보물상자"},
         ]
         buttons.extend(self._get_game_buttons())
         if len(buttons) < KakaoResponse.MAX_VERTICAL_BUTTONS:
             buttons.append(
                 {
-                    "label": "💼 포트폴리오",
+                    "label": "포트폴리오",
                     "action": "message",
                     "messageText": "/포트폴리오",
                 }
@@ -363,10 +363,10 @@ class CommandHandler(
         """도움말 - 분야 선택(화면을 가득 채우지 않도록 카테고리로 분할)"""
         # 세로 버튼은 최대 3개(카카오 명세)이므로 게임·소셜을 한 분류로 묶는다
         buttons = [
-            {"label": "📊 주식", "action": "message", "messageText": "/도움말주식"},
-            {"label": "💼 자산", "action": "message", "messageText": "/도움말자산"},
+            {"label": "주식", "action": "message", "messageText": "/도움말주식"},
+            {"label": "자산", "action": "message", "messageText": "/도움말자산"},
             {
-                "label": "🎮 게임·소셜",
+                "label": "게임·소셜",
                 "action": "message",
                 "messageText": "/도움말게임",
             },
@@ -377,8 +377,8 @@ class CommandHandler(
         """도움말 - 주식 투자"""
         buttons = [
             {"label": "📈 급등주", "action": "message", "messageText": "/급등"},
-            {"label": "🔥 인기 종목", "action": "message", "messageText": "/인기"},
-            {"label": "📖 도움말", "action": "message", "messageText": "/도움말"},
+            {"label": "인기 종목", "action": "message", "messageText": "/인기"},
+            {"label": "도움말", "action": "message", "messageText": "/도움말"},
         ]
         return KakaoResponse.text_with_buttons(Messages.HELP_STOCK, buttons)
 
@@ -386,21 +386,21 @@ class CommandHandler(
         """도움말 - 내 자산"""
         buttons = [
             {
-                "label": "💼 포트폴리오",
+                "label": "포트폴리오",
                 "action": "message",
                 "messageText": "/포트폴리오",
             },
-            {"label": "🏆 랭킹", "action": "message", "messageText": "/랭킹"},
-            {"label": "📖 도움말", "action": "message", "messageText": "/도움말"},
+            {"label": "랭킹", "action": "message", "messageText": "/랭킹"},
+            {"label": "도움말", "action": "message", "messageText": "/도움말"},
         ]
         return KakaoResponse.text_with_buttons(Messages.HELP_ASSET, buttons)
 
     def handle_help_game(self) -> Dict:
         """도움말 - 게임·소셜 (한 장으로 병합)"""
         buttons = [
-            {"label": "🎁 보물상자", "action": "message", "messageText": "/보물상자"},
-            {"label": "🧬 각성", "action": "message", "messageText": "/각성"},
-            {"label": "⚔️ 배틀", "action": "message", "messageText": "/배틀"},
+            {"label": "보물상자", "action": "message", "messageText": "/보물상자"},
+            {"label": "각성", "action": "message", "messageText": "/각성"},
+            {"label": "배틀", "action": "message", "messageText": "/배틀"},
         ]
         return KakaoResponse.text_with_buttons(Messages.HELP_PLAY, buttons)
 
@@ -412,8 +412,8 @@ class CommandHandler(
         return KakaoResponse.text_with_buttons(
             "🐜 만렙개미에 오신 것을 환영합니다!\n쪼렙 개미에서 만렙 개미로 성장하세요!",
             [
-                {"label": "🚀 시작하기", "action": "message", "messageText": "/시작"},
-                {"label": "📖 도움말", "action": "message", "messageText": "/도움말"},
+                {"label": "시작하기", "action": "message", "messageText": "/시작"},
+                {"label": "도움말", "action": "message", "messageText": "/도움말"},
             ],
         )
 
@@ -423,8 +423,8 @@ class CommandHandler(
         return KakaoResponse.text_with_buttons(
             Messages.UNKNOWN_COMMAND,
             [
-                {"label": "🚀 시작하기", "action": "message", "messageText": "/시작"},
-                {"label": "📖 도움말", "action": "message", "messageText": "/도움말"},
+                {"label": "시작하기", "action": "message", "messageText": "/시작"},
+                {"label": "도움말", "action": "message", "messageText": "/도움말"},
                 {"label": "📈 급등주", "action": "message", "messageText": "/급등"},
             ],
         )

@@ -27,17 +27,17 @@ class TradingHandlerMixin(BaseHandlerMixin):
                 [
                     self._popular_stock_btn(),
                     {
-                        "label": "🚀 SK하이닉스",
+                        "label": "SK하이닉스",
                         "action": "message",
                         "messageText": "/시세 SK하이닉스",
                     },
                     {
-                        "label": "⚡ 네이버",
+                        "label": "네이버",
                         "action": "message",
                         "messageText": "/시세 NAVER",
                     },
                     {
-                        "label": "🎮 카카오",
+                        "label": "카카오",
                         "action": "message",
                         "messageText": "/시세 카카오",
                     },
@@ -65,12 +65,12 @@ class TradingHandlerMixin(BaseHandlerMixin):
                     Messages.STOCK_PRICE_UNAVAILABLE.format(name=resolved["name"]),
                     [
                         {
-                            "label": "🔄 다시 시도",
+                            "label": "다시 시도",
                             "action": "message",
                             "messageText": f"/시세 {resolved['name']}",
                         },
                         {
-                            "label": "🚀 급등주",
+                            "label": "📈 급등주",
                             "action": "message",
                             "messageText": "/급등",
                         },
@@ -119,7 +119,7 @@ class TradingHandlerMixin(BaseHandlerMixin):
                     "messageText": f"/매수 {stock_info['name']} 10",
                 },
                 {
-                    "label": "💰 전량매수",
+                    "label": "전량매수",
                     "action": "message",
                     "messageText": f"/전량매수 {stock_info['name']}",
                 },
@@ -140,7 +140,7 @@ class TradingHandlerMixin(BaseHandlerMixin):
                 }
                 if top
                 else {
-                    "label": "📊 인기종목",
+                    "label": "인기종목",
                     "action": "message",
                     "messageText": "/인기",
                 }
@@ -150,11 +150,11 @@ class TradingHandlerMixin(BaseHandlerMixin):
                 [
                     buy_btn,
                     {
-                        "label": "📊 시세 조회",
+                        "label": "시세 조회",
                         "action": "message",
                         "messageText": "/시세",
                     },
-                    {"label": "🚀 급등주", "action": "message", "messageText": "/급등"},
+                    {"label": "📈 급등주", "action": "message", "messageText": "/급등"},
                 ],
             )
 
@@ -166,12 +166,12 @@ class TradingHandlerMixin(BaseHandlerMixin):
                 "수량은 숫자로 입력해주세요.\n예: /매수 삼성전자 10",
                 [
                     {
-                        "label": "📈 1주 매수",
+                        "label": "1주 매수",
                         "action": "message",
                         "messageText": f"/매수 {parts[1]} 1",
                     },
                     {
-                        "label": "📈 10주 매수",
+                        "label": "10주 매수",
                         "action": "message",
                         "messageText": f"/매수 {parts[1]} 10",
                     },
@@ -182,9 +182,9 @@ class TradingHandlerMixin(BaseHandlerMixin):
             return KakaoResponse.text_with_buttons(
                 "종목명을 입력해주세요.\n예: /매수 삼성전자 10",
                 [
-                    {"label": "🚀 급등주", "action": "message", "messageText": "/급등"},
+                    {"label": "📈 급등주", "action": "message", "messageText": "/급등"},
                     {
-                        "label": "📊 시세 조회",
+                        "label": "시세 조회",
                         "action": "message",
                         "messageText": "/시세",
                     },
@@ -210,17 +210,17 @@ class TradingHandlerMixin(BaseHandlerMixin):
                     msg,
                     [
                         {
-                            "label": "📅 출석체크",
+                            "label": "출석체크",
                             "action": "message",
                             "messageText": "/출석",
                         },
                         {
-                            "label": "🎁 보물상자",
+                            "label": "보물상자",
                             "action": "message",
                             "messageText": "/보물상자",
                         },
                         {
-                            "label": "🎯 미션확인",
+                            "label": "미션확인",
                             "action": "message",
                             "messageText": "/미션",
                         },
@@ -236,7 +236,7 @@ class TradingHandlerMixin(BaseHandlerMixin):
                             "messageText": f"/시세 {stock_query}",
                         },
                         {
-                            "label": "🚀 급등주",
+                            "label": "📈 급등주",
                             "action": "message",
                             "messageText": "/급등",
                         },
@@ -274,16 +274,16 @@ class TradingHandlerMixin(BaseHandlerMixin):
             msg,
             [
                 {
-                    "label": "🔄 추가매수",
+                    "label": "추가매수",
                     "action": "message",
                     "messageText": f"/시세 {data['name']}",
                 },
                 {
-                    "label": "💼 포트폴리오",
+                    "label": "포트폴리오",
                     "action": "message",
                     "messageText": "/포트폴리오",
                 },
-                {"label": "🚀 급등주", "action": "message", "messageText": "/급등"},
+                {"label": "📈 급등주", "action": "message", "messageText": "/급등"},
             ],
         )
 
@@ -296,12 +296,12 @@ class TradingHandlerMixin(BaseHandlerMixin):
                 "사용법: /매도 [종목명] [수량]\n예: /매도 삼성전자 10",
                 [
                     {
-                        "label": "💼 포트폴리오",
+                        "label": "포트폴리오",
                         "action": "message",
                         "messageText": "/포트폴리오",
                     },
                     {
-                        "label": "📊 시세 조회",
+                        "label": "시세 조회",
                         "action": "message",
                         "messageText": "/시세",
                     },
@@ -321,7 +321,7 @@ class TradingHandlerMixin(BaseHandlerMixin):
                         "messageText": f"/전량매도 {parts[1]}",
                     },
                     {
-                        "label": "💼 포트폴리오",
+                        "label": "포트폴리오",
                         "action": "message",
                         "messageText": "/포트폴리오",
                     },
@@ -333,7 +333,7 @@ class TradingHandlerMixin(BaseHandlerMixin):
                 "종목명을 입력해주세요.\n예: /매도 삼성전자 10",
                 [
                     {
-                        "label": "💼 포트폴리오",
+                        "label": "포트폴리오",
                         "action": "message",
                         "messageText": "/포트폴리오",
                     }
@@ -362,7 +362,7 @@ class TradingHandlerMixin(BaseHandlerMixin):
                             "messageText": f"/전량매도 {stock_query}",
                         },
                         {
-                            "label": "💼 포트폴리오",
+                            "label": "포트폴리오",
                             "action": "message",
                             "messageText": "/포트폴리오",
                         },
@@ -373,7 +373,7 @@ class TradingHandlerMixin(BaseHandlerMixin):
                     result["message"],
                     [
                         {
-                            "label": "💼 포트폴리오",
+                            "label": "포트폴리오",
                             "action": "message",
                             "messageText": "/포트폴리오",
                         },
@@ -428,13 +428,13 @@ class TradingHandlerMixin(BaseHandlerMixin):
         return KakaoResponse.text_with_buttons(
             msg,
             [
-                {"label": "🚀 급등주", "action": "message", "messageText": "/급등"},
+                {"label": "📈 급등주", "action": "message", "messageText": "/급등"},
                 {
-                    "label": "💼 포트폴리오",
+                    "label": "포트폴리오",
                     "action": "message",
                     "messageText": "/포트폴리오",
                 },
-                {"label": "🏆 랭킹", "action": "message", "messageText": "/랭킹"},
+                {"label": "랭킹", "action": "message", "messageText": "/랭킹"},
             ],
         )
 
@@ -448,11 +448,11 @@ class TradingHandlerMixin(BaseHandlerMixin):
                 [
                     self._popular_stock_btn("💰", "/전량매수"),
                     {
-                        "label": "📊 시세 조회",
+                        "label": "시세 조회",
                         "action": "message",
                         "messageText": "/시세",
                     },
-                    {"label": "🚀 급등주", "action": "message", "messageText": "/급등"},
+                    {"label": "📈 급등주", "action": "message", "messageText": "/급등"},
                 ],
             )
 
@@ -470,17 +470,17 @@ class TradingHandlerMixin(BaseHandlerMixin):
                     result["message"],
                     [
                         {
-                            "label": "📅 출석체크",
+                            "label": "출석체크",
                             "action": "message",
                             "messageText": "/출석",
                         },
                         {
-                            "label": "🎁 보물상자",
+                            "label": "보물상자",
                             "action": "message",
                             "messageText": "/보물상자",
                         },
                         {
-                            "label": "🎯 미션확인",
+                            "label": "미션확인",
                             "action": "message",
                             "messageText": "/미션",
                         },
@@ -490,11 +490,11 @@ class TradingHandlerMixin(BaseHandlerMixin):
                 result["message"],
                 [
                     {
-                        "label": "📊 시세 조회",
+                        "label": "시세 조회",
                         "action": "message",
                         "messageText": "/시세",
                     },
-                    {"label": "🚀 급등주", "action": "message", "messageText": "/급등"},
+                    {"label": "📈 급등주", "action": "message", "messageText": "/급등"},
                 ],
             )
 
@@ -512,11 +512,11 @@ class TradingHandlerMixin(BaseHandlerMixin):
             msg,
             [
                 {
-                    "label": "💼 포트폴리오",
+                    "label": "포트폴리오",
                     "action": "message",
                     "messageText": "/포트폴리오",
                 },
-                {"label": "🚀 급등주", "action": "message", "messageText": "/급등"},
+                {"label": "📈 급등주", "action": "message", "messageText": "/급등"},
             ],
         )
 
@@ -529,12 +529,12 @@ class TradingHandlerMixin(BaseHandlerMixin):
                 "사용법: /전량매도 [종목명]\n예: /전량매도 삼성전자",
                 [
                     {
-                        "label": "💼 포트폴리오",
+                        "label": "포트폴리오",
                         "action": "message",
                         "messageText": "/포트폴리오",
                     },
                     {
-                        "label": "📊 시세 조회",
+                        "label": "시세 조회",
                         "action": "message",
                         "messageText": "/시세",
                     },
@@ -554,12 +554,12 @@ class TradingHandlerMixin(BaseHandlerMixin):
                 result["message"],
                 [
                     {
-                        "label": "💼 포트폴리오",
+                        "label": "포트폴리오",
                         "action": "message",
                         "messageText": "/포트폴리오",
                     },
                     {
-                        "label": "📊 시세 조회",
+                        "label": "시세 조회",
                         "action": "message",
                         "messageText": "/시세",
                     },
@@ -592,13 +592,13 @@ class TradingHandlerMixin(BaseHandlerMixin):
         return KakaoResponse.text_with_buttons(
             msg,
             [
-                {"label": "🚀 급등주", "action": "message", "messageText": "/급등"},
+                {"label": "📈 급등주", "action": "message", "messageText": "/급등"},
                 {
-                    "label": "💼 포트폴리오",
+                    "label": "포트폴리오",
                     "action": "message",
                     "messageText": "/포트폴리오",
                 },
-                {"label": "🏆 랭킹", "action": "message", "messageText": "/랭킹"},
+                {"label": "랭킹", "action": "message", "messageText": "/랭킹"},
             ],
         )
 
@@ -611,7 +611,7 @@ class TradingHandlerMixin(BaseHandlerMixin):
                 "먼저 /시작 으로 게임을 시작해주세요.",
                 [
                     {
-                        "label": "🎮 게임 시작",
+                        "label": "게임 시작",
                         "action": "message",
                         "messageText": "/시작",
                     }
@@ -622,11 +622,11 @@ class TradingHandlerMixin(BaseHandlerMixin):
 
         buttons = [
             {
-                "label": "💼 포트폴리오",
+                "label": "포트폴리오",
                 "action": "message",
                 "messageText": "/포트폴리오",
             },
-            {"label": "📈 인기종목", "action": "message", "messageText": "/인기"},
+            {"label": "인기종목", "action": "message", "messageText": "/인기"},
         ]
         buttons.extend(self._get_game_buttons())
 
@@ -641,7 +641,7 @@ class TradingHandlerMixin(BaseHandlerMixin):
                 "먼저 /시작 으로 게임을 시작해주세요.",
                 [
                     {
-                        "label": "🎮 게임 시작",
+                        "label": "게임 시작",
                         "action": "message",
                         "messageText": "/시작",
                     }
@@ -681,8 +681,8 @@ class TradingHandlerMixin(BaseHandlerMixin):
             holding_items = ["아직 보유 주식이 없어요!"]
             buttons = [
                 self._popular_stock_btn(),
-                {"label": "🚀 급등주", "action": "message", "messageText": "/급등"},
-                {"label": "📊 인기종목", "action": "message", "messageText": "/인기"},
+                {"label": "📈 급등주", "action": "message", "messageText": "/급등"},
+                {"label": "인기종목", "action": "message", "messageText": "/인기"},
             ]
 
         tier = get_tier_title(portfolio["total_asset"])
@@ -711,7 +711,7 @@ class TradingHandlerMixin(BaseHandlerMixin):
 
         if not buttons:
             buttons = [
-                {"label": "📊 인기종목", "action": "message", "messageText": "/인기"}
+                {"label": "인기종목", "action": "message", "messageText": "/인기"}
             ]
 
         buttons.extend(self._get_game_buttons())
@@ -724,7 +724,7 @@ class TradingHandlerMixin(BaseHandlerMixin):
         if not user:
             return KakaoResponse.text_with_buttons(
                 "먼저 게임을 시작해주세요!",
-                [{"label": "🎮 시작하기", "action": "message", "messageText": "/시작"}],
+                [{"label": "시작하기", "action": "message", "messageText": "/시작"}],
             )
 
         transactions = TradeService.get_transactions(self.db, self.kakao_id, limit=10)
@@ -733,7 +733,7 @@ class TradingHandlerMixin(BaseHandlerMixin):
             return KakaoResponse.text_with_buttons(
                 "거래 내역이 없습니다.\n주식을 매수해보세요!",
                 [
-                    {"label": "🚀 급등주", "action": "message", "messageText": "/급등"},
+                    {"label": "📈 급등주", "action": "message", "messageText": "/급등"},
                     self._popular_stock_btn(),
                 ],
             )
@@ -764,10 +764,10 @@ class TradingHandlerMixin(BaseHandlerMixin):
             msg,
             [
                 {
-                    "label": "💼 포트폴리오",
+                    "label": "포트폴리오",
                     "action": "message",
                     "messageText": "/포트폴리오",
                 },
-                {"label": "🏆 랭킹", "action": "message", "messageText": "/랭킹"},
+                {"label": "랭킹", "action": "message", "messageText": "/랭킹"},
             ],
         )
