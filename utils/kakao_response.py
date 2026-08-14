@@ -43,6 +43,9 @@ class KakaoResponse:
         }
     )
 
+    # 한 응답에 넣을 수 있는 멘션 수 (그룹 챗봇 가이드)
+    MAX_MENTIONS = 15
+
     # listCard items: 단일형 최대 5개
     MAX_LIST_ITEMS = 5
 
@@ -91,6 +94,55 @@ class KakaoResponse:
                 ]
             },
         }
+
+    @staticmethod
+    def mention(key: str) -> str:
+        """본문에 넣을 멘션 자리표시자.
+
+        key는 이 응답 안에서만 쓰이는 임의의 이름이다. 실제 사용자는
+        extra.mentions[key]가 가리킨다.
+        """
+        return "{{#mentions." + key + "}}"
+
+    @staticmethod
+    def simple_text_with_mentions(text: str, mentions: Dict[str, str]) -> Dict:
+        """실제 사용자를 멘션하는 텍스트 응답.
+
+        멘션은 **simpleText에서만** 동작한다(그룹 챗봇 가이드). 카드에
+        넣으면 자리표시자가 그대로 노출되므로 여기서만 만든다.
+        버튼을 함께 주고 싶으면 두 번째 output에 카드로 붙여야 한다.
+
+        mentions: {자리표시자 키: botUserKey}
+            botUserKey는 SkillRequest의 userRequest.user.id 값이다.
+
+        본문에 등장하지 않는 키는 버린다. extra에 남겨두면 카카오가
+        치환할 대상을 못 찾고, 무엇보다 '누구를 부르려 했는지'가
+        응답과 어긋난 채 남는다.
+        """
+        text = KakaoResponse._fit_card(text, KakaoResponse.SIMPLE_TEXT_LIMIT)
+
+        used = {}
+        for key, user_id in mentions.items():
+            if not user_id:
+                continue
+            if KakaoResponse.mention(key) not in text:
+                continue
+            used[key] = user_id
+            if len(used) >= KakaoResponse.MAX_MENTIONS:
+                break
+
+        resp = {
+            "version": "2.0",
+            "template": {"outputs": [{"simpleText": {"text": text}}]},
+        }
+        if used:
+            resp["extra"] = {
+                "mentions": {
+                    key: {"type": "botUserKey", "id": user_id}
+                    for key, user_id in used.items()
+                }
+            }
+        return resp
 
     @staticmethod
     def simple_image(image_url: str, alt_text: str = "이미지") -> Dict:

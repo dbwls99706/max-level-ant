@@ -450,3 +450,53 @@ class TestUnsupportedComponents:
         for resp in made:
             for out in resp["template"]["outputs"]:
                 assert not (set(out) & UNSUPPORTED_COMPONENTS), out
+
+
+class TestMentions:
+    """실제 사용자 멘션 (그룹 챗봇 전용, simpleText에서만 동작)"""
+
+    def test_mention_token_format(self):
+        assert KakaoResponse.mention("u1") == "{{#mentions.u1}}"
+
+    def test_mentions_land_in_extra(self):
+        text = f"1위 {KakaoResponse.mention('u1')}"
+        resp = KakaoResponse.simple_text_with_mentions(text, {"u1": "bu-aaa"})
+        assert_valid_skill_response(resp, "멘션", in_group=True)
+        assert resp["extra"]["mentions"]["u1"] == {
+            "type": "botUserKey",
+            "id": "bu-aaa",
+        }
+
+    def test_unused_keys_are_dropped(self):
+        """본문에 없는 키를 extra에 남기면 응답과 의도가 어긋난 채로 나간다"""
+        text = f"1위 {KakaoResponse.mention('u1')}"
+        resp = KakaoResponse.simple_text_with_mentions(
+            text, {"u1": "bu-aaa", "ghost": "bu-zzz"}
+        )
+        assert set(resp["extra"]["mentions"]) == {"u1"}
+
+    def test_empty_user_id_is_dropped(self):
+        text = f"1위 {KakaoResponse.mention('u1')}"
+        resp = KakaoResponse.simple_text_with_mentions(text, {"u1": ""})
+        assert "extra" not in resp
+
+    def test_no_mentions_means_no_extra_key(self):
+        resp = KakaoResponse.simple_text_with_mentions("멘션 없음", {})
+        assert_valid_skill_response(resp, "멘션 없음")
+        assert "extra" not in resp
+
+    def test_mention_count_is_capped(self):
+        """한 응답에 15명이 상한이다. 넘기면 카카오가 응답을 거부할 수 있다"""
+        keys = [f"u{i}" for i in range(30)]
+        text = " ".join(KakaoResponse.mention(k) for k in keys)
+        resp = KakaoResponse.simple_text_with_mentions(
+            text, {k: f"bu-{k}" for k in keys}
+        )
+        assert len(resp["extra"]["mentions"]) == KakaoResponse.MAX_MENTIONS
+
+    def test_only_simple_text_carries_mentions(self):
+        """카드에 자리표시자를 넣으면 치환되지 않고 그대로 노출된다"""
+        text = f"1위 {KakaoResponse.mention('u1')}"
+        resp = KakaoResponse.simple_text_with_mentions(text, {"u1": "bu-aaa"})
+        kind = next(iter(resp["template"]["outputs"][0]))
+        assert kind == "simpleText"

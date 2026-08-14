@@ -282,6 +282,10 @@ ruff format --check .     # Format check
 - **팀채팅 미지원 컴포넌트: `quickReplies` / `commerceCard` / `carousel`.** 셋 다 만들지 않는다
   (스펙 테스트가 막는다). 카드를 여러 장 넘겨 보여주는 연출은 carousel이 없어 불가능하므로
   목록은 `listCard`로 낸다. `BasicCard`/`ItemCard`는 지원된다
+- **멘션은 `simpleText`에서만 동작한다.** `KakaoResponse.simple_text_with_mentions()`가
+  `{{#mentions.key}}` 자리표시자와 `extra.mentions`를 함께 만든다(한 응답 15명 상한).
+  카드에 자리표시자를 넣으면 치환되지 않고 문자 그대로 노출되고, simpleText에는 버튼을
+  달 수 없다. 그래서 `/랭킹`처럼 버튼이 필요한 화면은 `listCard`를 유지한다
 - **버튼 플러그인**(`guide`/`share`/`invite`/`inviteMember`/`mention`/`settings`/`webViewLink`)은
   `messageText`나 URL 없이 `action`만으로 동작한다. `KakaoResponse.PLUGIN_ACTIONS` 참고
 - **SkillRequest에는 하위 호환 필드가 추가될 수 있다.** `main.py`는 전부 `.get()`으로 읽어
