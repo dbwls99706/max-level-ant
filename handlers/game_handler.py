@@ -1073,6 +1073,7 @@ class GameHandlerMixin(BaseHandlerMixin):
             image_url,
             buttons,
             button_cap=self.button_cap,
+            image_size=AssetConfig.image_size(),
         )
 
     @staticmethod

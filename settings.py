@@ -100,6 +100,16 @@ class AssetConfig:
     # 길게 캐시해도 안전하고, 그만큼 카카오 쪽 재요청이 줄어든다.
     CACHE_MAX_AGE = 60 * 60 * 24 * 30  # 30일
 
+    # 생성 이미지의 원본 크기 (scripts/optimize_images.py가 가로 1024로 맞춘다).
+    # 카카오 카드에 fixedRatio와 함께 넘겨야 그림이 카드 가로폭을 채운다.
+    # 안 넘기면 카카오 기본 비율로 잘려 작은 썸네일처럼 나온다.
+    IMAGE_WIDTH = 1024
+    IMAGE_HEIGHT = 683
+
+    @classmethod
+    def image_size(cls) -> Tuple[int, int]:
+        return (cls.IMAGE_WIDTH, cls.IMAGE_HEIGHT)
+
     @classmethod
     def is_configured(cls) -> bool:
         return bool(cls.BASE_URL)

@@ -493,6 +493,18 @@ class TestEnhanceCard:
         assert url.startswith("https://example.com/art/")
         assert "scalper__myth__g" in url, "다른 조합의 이미지가 붙었다"
 
+    def test_image_fills_the_card_width(self, db, test_user):
+        """fixedRatio가 없으면 카카오가 잘라서 작은 썸네일로 띄운다"""
+        resp = self._enhance(db, test_user, "https://example.com")
+        thumb = resp["template"]["outputs"][0]["basicCard"]["thumbnail"]
+
+        assert thumb.get("fixedRatio") is True, (
+            "그림이 주인공인 카드인데 카카오 기본 비율로 잘리게 뒀다"
+        )
+        assert (thumb.get("width"), thumb.get("height")) == AssetConfig.image_size(), (
+            f"원본 비율과 다른 크기: {thumb.get('width')}x{thumb.get('height')}"
+        )
+
     def test_card_text_matches_the_image(self, db, test_user):
         resp = self._enhance(db, test_user, "https://example.com")
         card = resp["template"]["outputs"][0]["basicCard"]

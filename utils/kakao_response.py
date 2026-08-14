@@ -3,7 +3,7 @@
 - 다양한 말풍선 타입 지원
 """
 
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, Tuple
 
 from .visual_helpers import fit_width
 
@@ -172,18 +172,42 @@ class KakaoResponse:
         }
 
     @staticmethod
+    def _thumbnail(
+        image_url: str, image_size: Optional[Tuple[int, int]] = None
+    ) -> Dict:
+        """카드 썸네일 오브젝트.
+
+        `fixedRatio`가 없으면 카카오가 자기 기본 비율에 맞춰 이미지를 잘라
+        작게 띄운다. 원본 비율을 주면 카드 가로폭을 꽉 채워 그린다.
+        width/height는 fixedRatio가 참일 때 비율 계산에 쓰이므로 함께 넣는다.
+        """
+        thumbnail = {"imageUrl": image_url}
+        if image_size:
+            width, height = image_size
+            if width > 0 and height > 0:
+                thumbnail["fixedRatio"] = True
+                thumbnail["width"] = int(width)
+                thumbnail["height"] = int(height)
+        return thumbnail
+
+    @staticmethod
     def basic_card(
         title: str,
         description: str,
         thumbnail_url: str,
         buttons: Optional[List[Dict]] = None,
         button_cap: Optional[int] = None,
+        image_size: Optional[Tuple[int, int]] = None,
     ) -> Dict:
         """
         기본 카드 응답 (피드형)
 
         thumbnail은 카카오 명세상 **필수**이므로 인자로 강제한다.
         title 최대 50자, description 최대 230자.
+
+        image_size(가로, 세로)를 주면 `fixedRatio`로 원본 비율을 유지한다.
+        이걸 안 주면 카카오가 자기 기본 비율로 잘라 작은 썸네일처럼 보인다 -
+        각성 도감처럼 그림이 주인공인 카드에서는 그림이 안 보이는 셈이다.
 
         buttons 예시:
         [
@@ -199,7 +223,7 @@ class KakaoResponse:
             "description": KakaoResponse._fit_card(
                 description, KakaoResponse.BASIC_CARD_DESC_LIMIT
             ),
-            "thumbnail": {"imageUrl": thumbnail_url},
+            "thumbnail": KakaoResponse._thumbnail(thumbnail_url, image_size),
         }
 
         if buttons:
