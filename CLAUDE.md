@@ -165,7 +165,9 @@ DB_POOL_TIMEOUT=2.0                       # DB 커넥션 풀 대기 상한 (초)
 DEV_MODE=false                            # true면 CORS 전체 허용 + 디버그 엔드포인트
 KIS_MIN_CALL_INTERVAL=0.1                 # KIS 호출 간 최소 간격 (초). 모의투자면 1.0 이상
 KIS_API_TIMEOUT=1.5                       # KIS 개별 시세 조회 타임아웃 (초)
-KIS_RANK_TIMEOUT=2.5                      # 순위 조회 타임아웃 (초). 30여 종목이라 더 느리다
+KIS_RANK_TIMEOUT=3.0                      # 순위 조회 타임아웃 (초). 30여 종목이라 더 느리다
+KIS_REFRESH_TIMEOUT=8.0                   # 배경 순위 갱신 타임아웃 (초). SLA가 없어 넉넉하다
+KIS_REFRESH_INTERVAL=45                   # 배경 순위 갱신 주기 (초). 0이면 배경 갱신 끔
 KIS_TOKEN_TIMEOUT=5.0                     # KIS 토큰 발급 전용 타임아웃 (초)
 KIS_MAX_CONCURRENT_CALLS=5                # 프로세스 전역 동시 KIS 호출 상한
 KIS_SLOT_WAIT_CAP=1.0                     # 동시 호출 슬롯 대기 상한 (초)
@@ -240,6 +242,23 @@ ruff format --check .     # Format check
 - Group chat support: `chatroom_members` table tracks which users are in which chat rooms for per-room rankings
 - Rate limiting is in-memory (not Redis) — resets on restart
 - Configuration is split by responsibility (see Project Structure). Large pure-data tables live in their own modules (`quiz_history.py`, `enhance_titles.py`) so the config modules stay readable
+- **순위 조회(급등/급락/거래량/거래대금)는 60초 캐시 + 실패 시 직전 성공값으로 물러선다.**
+  순위는 유저마다 다르지 않은데 사람 수만큼 KIS에 다시 묻고 있었고, 장중에 KIS가 느려지면
+  (실측 2.91초) 그대로 실패로 돌아왔다. 빈 화면보다 조금 지난 순위가 낫다.
+  조회 실패 경로는 타임아웃뿐 아니라 HTTP 에러·`rt_cd` 에러·예산 소진까지 전부
+  `fallback()`(직전 성공값)으로 모인다
+- **순위는 요청 경로가 아니라 배경 루프가 받아온다.** `main._rank_refresh_loop()`이
+  `KIS_REFRESH_INTERVAL`(기본 45초)마다 `StockService.refresh_rankings()`를 스레드풀에서
+  돌려 `_WARM_RANK_KEYS`(거래량·거래대금)를 미리 채운다. 배경에는 카카오 5초 SLA가 없어
+  `budget.timeout_for()`가 상한을 깎지 않으므로 `KIS_REFRESH_TIMEOUT`(기본 8초)을 그대로
+  쓸 수 있다 - 요청 경로의 3.5초 예산에서는 KIS가 3초 걸리는 시간대에 통째로 실패했다.
+  루프의 불변식 셋: 장 마감이면 건너뛴다(순위가 변하지 않는다), 어떤 예외로도 죽지 않는다
+  (한 번 죽으면 그 뒤로 영영 낡은 값만 남는다), `CancelledError`는 반드시 다시 던진다.
+  기동 시 한 번 먼저 채워 첫 유저가 느린 호출을 물지 않게 한다
+- **응답 실패 경로에서 새 외부 호출을 하지 말 것.** `_popular_stock_btn()`이 캐시가 비면
+  KIS를 직접 불렀는데, 순위 조회가 실패한 화면에서 버튼을 만들려다 KIS를 한 번 더 부르는
+  일이 생겼다. 첫 호출이 예산을 다 써서 두 번째는 0.6초만 받고 같이 죽었다.
+  지금은 순위를 성공적으로 받아온 핸들러가 `remember_popular_stock()`으로 넣어준 값만 쓴다
 - KIS API calls go through `services.stock_service._kis_call()`: a process-wide
   `BoundedConcurrency` slot **outside** the `CircuitBreaker.guard()`. The slot is outside
   so a HALF_OPEN probe never waits on a slot while holding the recovery slot, and so a

@@ -143,10 +143,20 @@ class KISConfig:
     API_TIMEOUT = float(os.getenv("KIS_API_TIMEOUT", "1.5"))
 
     # 순위 조회(급등/급락/거래대금/거래량) 전용 타임아웃 상한 (초).
-    # 한 번에 30여 종목을 돌려주므로 단일 시세보다 느리다. 같은 1.5초를
-    # 주면 장중 혼잡 시간대에 순위가 통째로 실패한다(실제로 그랬다).
-    # 이 호출들은 한 요청에 한 번만 나가므로 예산(3.5초) 안에서 더 줄 수 있다.
-    RANK_TIMEOUT = float(os.getenv("KIS_RANK_TIMEOUT", "2.5"))
+    # 한 번에 30여 종목을 돌려주므로 단일 시세보다 느리다. 1.5초를 주면
+    # 장중에 순위가 통째로 실패한다. 실측으로 2.91초가 걸린 적이 있어
+    # 3.0초로 잡았다(요청 전체 예산 3.5초 안).
+    # 결과는 60초 캐시되므로 이 상한을 쓰는 실제 호출은 드물다.
+    RANK_TIMEOUT = float(os.getenv("KIS_RANK_TIMEOUT", "3.0"))
+
+    # 순위 배경 갱신 전용 타임아웃 상한 (초).
+    # 배경 작업에는 카카오 5초 SLA가 없다. 여기서 느긋하게 받아 캐시에
+    # 넣어두면 유저 요청은 메모리만 읽으므로 KIS 지연이 화면에 안 나온다.
+    REFRESH_TIMEOUT = float(os.getenv("KIS_REFRESH_TIMEOUT", "8.0"))
+
+    # 순위 배경 갱신 주기 (초). 0이면 배경 갱신을 끈다.
+    # 캐시 TTL(60초)보다 짧아야 유저가 만료된 캐시를 만나지 않는다.
+    REFRESH_INTERVAL = float(os.getenv("KIS_REFRESH_INTERVAL", "45"))
 
     # 토큰 발급(/oauth2/tokenP) 전용 타임아웃 상한 (초).
     # 시세 조회보다 느리고, 실패하면 그 뒤 모든 조회가 막히는 선행 호출이다.

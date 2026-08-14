@@ -92,6 +92,10 @@ class MarketHandlerMixin(BaseHandlerMixin):
     def handle_top_trading_value(self) -> Dict:
         """인기종목 (거래대금 상위)"""
         stocks = StockService.get_top_trading_value(limit=5)
+        if stocks:
+            # 1등 종목을 기억해 둔다. 다른 화면의 버튼이 이 값을 쓰므로
+            # 버튼을 만들려고 KIS를 다시 부를 필요가 없다.
+            self.remember_popular_stock(stocks[0].get("name"))
 
         if not stocks:
             return KakaoResponse.text_with_buttons(
