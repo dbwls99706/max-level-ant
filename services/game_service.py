@@ -353,7 +353,7 @@ class GameService:
         - 맞추면 계속 진행, 틀리면 투자금 손실
         - 언제든 정산 가능
         """
-        can_play, market_error = check_market_closed_for_game("🔢")
+        can_play, market_error = check_market_closed_for_game("🔢", "업다운")
         if not can_play:
             return market_error
 

@@ -772,7 +772,7 @@ class GameHandlerMixin(BaseHandlerMixin):
         gauge = self._make_gauge(level, EnhanceConfig.MAX_LEVEL)
 
         # 장 마감 여부 확인 (각성 버튼 노출 제어)
-        can_enhance, _ = check_market_closed_for_game("🧬")
+        can_enhance, _ = check_market_closed_for_game("🧬", "각성")
 
         # 직군 표시 줄 (Lv.10 이상이고 직군 배정 완료)
         class_line = f"\n{class_emoji} 직군: {class_name}" if class_name else ""
@@ -844,7 +844,7 @@ class GameHandlerMixin(BaseHandlerMixin):
         """실제 각성 실행 (장 마감 후만 가능)"""
         from services.common import check_market_closed_for_game
 
-        can_play, market_error = check_market_closed_for_game("🧬")
+        can_play, market_error = check_market_closed_for_game("🧬", "각성")
         if not can_play:
             return self._market_closed_response(market_error["message"])
 
@@ -891,11 +891,13 @@ class GameHandlerMixin(BaseHandlerMixin):
                 else ""
             )
 
-            # 이펙트 - 레벨 구간별
-            if new_lv >= 20:
+            # 이펙트 - 레벨 구간별.
+            # 만렙 판정은 MAX_LEVEL을 봐야 한다. 20으로 박아두면 만렙을
+            # 30으로 올렸을 때 Lv.20에서 "만렙 달성"이라고 거짓말을 한다.
+            if new_lv >= EnhanceConfig.MAX_LEVEL:
                 effect = "🎆🎇🎆🎇🎆"
                 header = "👑 만렙 개미 달성!"
-            elif new_lv >= 16:
+            elif new_lv >= EnhanceConfig.MAX_LEVEL - 4:
                 effect = "✨🎉✨🎉✨"
                 header = f"⚡ Lv.{new_lv} 각성 성공!"
             elif new_lv >= 10:
@@ -964,7 +966,7 @@ class GameHandlerMixin(BaseHandlerMixin):
         # 다시 각성 가능 여부 체크 (장마감 여부도 확인)
         from services.common import check_market_closed_for_game
 
-        can_enhance, _ = check_market_closed_for_game("🧬")
+        can_enhance, _ = check_market_closed_for_game("🧬", "각성")
         buttons = []
         if new_lv < EnhanceConfig.MAX_LEVEL:
             next_cost = EnhanceConfig.get_cost(new_lv)
