@@ -1,6 +1,7 @@
 """순위 조회 타임아웃 진단 검증"""
 
 import asyncio
+import logging
 import time
 from unittest.mock import MagicMock, patch
 
@@ -10,6 +11,9 @@ from requests.exceptions import ConnectTimeout, ReadTimeout, Timeout
 
 from services.stock_service import KISAPIClient, StockService
 from settings import KISConfig
+
+# utils.logger가 만드는 서비스 로거 이름. propagate=False라 caplog에 명시해야 한다.
+SERVICE_LOGGER = "stock_king.service"
 
 
 def test_rank_uses_its_own_timeout(caplog):
@@ -43,7 +47,9 @@ def test_timeout_log_shows_elapsed_and_cap(caplog):
     with (
         patch.object(KISAPIClient, "_get_headers", return_value={"x": "y"}),
         patch("services.stock_service._http.get", side_effect=slow_then_timeout),
-        caplog.at_level("WARNING"),
+        # 서비스 로거는 propagate=False라 루트에 붙는 caplog로는 안 잡힌다.
+        # 로거 이름을 명시해야 이 파일만 돌리든 전체를 돌리든 같게 동작한다.
+        caplog.at_level(logging.WARNING, logger=SERVICE_LOGGER),
     ):
         KISAPIClient.get_volume_rank("J")
 
@@ -405,7 +411,7 @@ class TestTimeoutLogNamesThePhase:
         with (
             patch.object(KISAPIClient, "_get_headers", return_value={"x": "y"}),
             patch("services.stock_service._http.get", side_effect=exc),
-            caplog.at_level("WARNING"),
+            caplog.at_level(logging.WARNING, logger=SERVICE_LOGGER),
         ):
             KISAPIClient.get_volume_rank("J")
         msgs = [r.message for r in caplog.records if "순위 조회 타임아웃" in r.message]
