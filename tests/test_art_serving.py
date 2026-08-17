@@ -11,7 +11,7 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
-from enhance_art import all_combinations, image_stem
+from enhance_art import all_combinations, image_stem, novice_combinations
 from settings import AssetConfig
 
 ART_DIR = Path(AssetConfig.DIRECTORY)
@@ -20,19 +20,26 @@ ART_DIR = Path(AssetConfig.DIRECTORY)
 class TestImageFiles:
     """저장소에 실제 이미지가 다 있는지"""
 
-    def test_every_combination_has_an_image(self):
-        """600개 조합 전부에 파일이 있어야 한다.
+    def _all_stems(self):
+        """앱이 만들어낼 수 있는 이미지 좌표 전부 (쪼렙 구간 포함)"""
+        return [
+            image_stem(*combo)
+            for combo in (*novice_combinations(), *all_combinations())
+        ]
 
-        직군을 추가하거나 이름을 바꾸면 이미지가 없는 조합이 생기는데,
+    def test_every_combination_has_an_image(self):
+        """조합 전부에 파일이 있어야 한다.
+
+        직군을 추가하거나 성장 단계를 늘리면 이미지가 없는 조합이 생기는데,
         그 조합을 뽑은 유저에게만 카드가 깨져 보여서 발견이 늦다.
         """
         if not ART_DIR.is_dir():
             pytest.skip(f"{ART_DIR} 없음 - 이미지 생성 전")
 
         missing = [
-            image_stem(*combo)
-            for combo in all_combinations()
-            if not (ART_DIR / f"{image_stem(*combo)}.{AssetConfig.EXT}").exists()
+            stem
+            for stem in self._all_stems()
+            if not (ART_DIR / f"{stem}.{AssetConfig.EXT}").exists()
         ]
         assert not missing, f"이미지 없는 조합 {len(missing)}개: {missing[:10]}"
 
@@ -41,7 +48,7 @@ class TestImageFiles:
         if not ART_DIR.is_dir():
             pytest.skip(f"{ART_DIR} 없음 - 이미지 생성 전")
 
-        expected = {image_stem(*combo) for combo in all_combinations()}
+        expected = set(self._all_stems())
         orphans = [
             p.stem
             for p in ART_DIR.glob(f"*.{AssetConfig.EXT}")

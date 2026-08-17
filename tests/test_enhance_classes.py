@@ -6,10 +6,12 @@
 로그에 아무것도 남기지 않는다. 그래서 대응 관계를 여기서 못박는다.
 """
 
+from collections import Counter
 from pathlib import Path
 
 import pytest
 
+import enhance_art as ea
 import enhance_classes as ec
 from enhance_art import CLASS_ART, RARITY_ART, all_combinations
 from enhance_config import EnhanceConfig
@@ -34,7 +36,7 @@ class TestFlavorCoverage:
         assert set(ec.GROWTH_FLAVORS) == set(ec.GROWTH_STAGES)
 
     def test_every_combination_produces_text(self):
-        """600개 조합 전부가 문구를 만들어야 한다"""
+        """모든 조합이 문구를 만들어야 한다"""
         for class_key, rarity, growth in all_combinations():
             text = ec.awakening_flavor(class_key, rarity, growth)
             assert text.count("\n") == 2, f"{class_key}/{rarity}/g{growth}"
@@ -42,8 +44,11 @@ class TestFlavorCoverage:
 
     def test_flavors_are_distinct_per_combination(self):
         """조합마다 다른 문장이어야 도감을 모으는 맛이 난다"""
-        seen = {ec.awakening_flavor(*c) for c in all_combinations()}
-        assert len(seen) == 600, f"중복 문구가 있다: {600 - len(seen)}개"
+        combos = list(all_combinations())
+        seen = {ec.awakening_flavor(*c) for c in combos}
+        assert len(seen) == len(combos), (
+            f"중복 문구가 있다: {len(combos) - len(seen)}개"
+        )
 
     def test_unknown_key_raises(self):
         with pytest.raises(KeyError):
@@ -76,34 +81,76 @@ class TestFlavorMatchesArt:
 class TestGrowthStage:
     """레벨에서 성장 단계로"""
 
-    def test_stage_spans_the_whole_level_range(self):
-        """만렙 구간이 3단계로 고르게 나뉘어야 한다"""
-        maxlv = EnhanceConfig.MAX_LEVEL
-        stages = [ec.growth_stage(lv, maxlv) for lv in range(0, maxlv + 1)]
-        assert set(stages) == {1, 2, 3}, (
-            f"쓰이지 않는 단계가 있다: {sorted(set(stages))}"
+    THRESHOLD = EnhanceConfig.CLASS_LEVEL_THRESHOLD
+    MAXLV = EnhanceConfig.MAX_LEVEL
+
+    def _stages(self):
+        return [
+            ec.growth_stage(lv, self.MAXLV, self.THRESHOLD)
+            for lv in range(self.THRESHOLD, self.MAXLV + 1)
+        ]
+
+    def test_every_stage_is_actually_used(self):
+        """안 쓰이는 단계는 그려 놓고 못 보는 그림 200장이다"""
+        assert set(self._stages()) == set(ec.GROWTH_STAGES), (
+            f"쓰이지 않는 단계가 있다: {sorted(set(ec.GROWTH_STAGES) - set(self._stages()))}"
         )
 
+    def test_no_stage_hogs_or_starves(self):
+        """예전엔 1단계가 Lv.10 하나뿐이었다. 한 레벨짜리 단계는 사고다"""
+        counts = Counter(self._stages())
+        span = self.MAXLV - self.THRESHOLD + 1
+        even = span / len(ec.GROWTH_STAGES)
+        for stage, n in counts.items():
+            assert abs(n - even) <= 1, (
+                f"{stage}단계가 {n}개 레벨 (고르면 {even:.1f}개): {dict(counts)}"
+            )
+
     def test_stage_never_decreases(self):
-        maxlv = EnhanceConfig.MAX_LEVEL
         prev = 0
-        for lv in range(0, maxlv + 1):
-            stage = ec.growth_stage(lv, maxlv)
+        for lv in range(0, self.MAXLV + 1):
+            stage = ec.growth_stage(lv, self.MAXLV, self.THRESHOLD)
             assert stage >= prev, f"Lv.{lv}에서 단계가 내려갔다"
             prev = stage
 
-    def test_boundaries(self):
-        assert ec.growth_stage(0, 30) == 1
-        assert ec.growth_stage(1, 30) == 1
-        assert ec.growth_stage(10, 30) == 1
-        assert ec.growth_stage(11, 30) == 2
-        assert ec.growth_stage(20, 30) == 2
-        assert ec.growth_stage(21, 30) == 3
-        assert ec.growth_stage(30, 30) == 3
+    def test_art_starts_at_the_job_level(self):
+        """직군 그림은 직군을 받는 레벨부터다. 그전을 나눠 쓰면 앞단계가 사장된다"""
+        assert ec.growth_stage(self.THRESHOLD, self.MAXLV, self.THRESHOLD) == 1
+        assert ec.growth_stage(self.MAXLV, self.MAXLV, self.THRESHOLD) == len(
+            ec.GROWTH_STAGES
+        )
 
     def test_stage_is_capped_above_max(self):
         """레벨이 만렙을 넘겨도 없는 단계를 가리키면 안 된다"""
-        assert ec.growth_stage(999, 30) == 3
+        assert ec.growth_stage(999, self.MAXLV, self.THRESHOLD) == len(ec.GROWTH_STAGES)
+
+
+class TestNoviceStage:
+    """직군 배정 전 구간"""
+
+    THRESHOLD = EnhanceConfig.CLASS_LEVEL_THRESHOLD
+
+    def test_every_pre_job_level_has_an_image(self):
+        """초반 열 레벨이 그림 없이 지나가면 각성이 뭘 주는지 안 보인다"""
+        for lv in range(0, self.THRESHOLD):
+            stage = ec.novice_stage(lv, self.THRESHOLD)
+            assert ec.novice_art_stem(stage), f"Lv.{lv}에 그림이 없다"
+
+    def test_every_novice_stage_is_used(self):
+        stages = {ec.novice_stage(lv, self.THRESHOLD) for lv in range(self.THRESHOLD)}
+        assert stages == set(ea.NOVICE_ART)
+
+    def test_novice_stage_never_decreases(self):
+        prev = 0
+        for lv in range(0, self.THRESHOLD):
+            stage = ec.novice_stage(lv, self.THRESHOLD)
+            assert stage >= prev, f"Lv.{lv}에서 단계가 내려갔다"
+            prev = stage
+
+    def test_novice_art_does_not_collide_with_job_art(self):
+        """쪼렙 그림이 직군 좌표를 쓰면 도감 칸 하나를 몰래 덮는다"""
+        assert ea.NOVICE_KEY not in ea.CLASS_ART
+        assert ea.NOVICE_RARITY not in ea.RARITY_ART
 
 
 class TestRarityOdds:

@@ -66,7 +66,7 @@ class SocialHandlerMixin(BaseHandlerMixin):
                 "아직 랭킹 데이터가 없습니다.\n먼저 시작해서 첫 번째 랭커가 되어보세요!",
                 [
                     {
-                        "label": "🚀 시작하기",
+                        "label": "시작하기",
                         "action": "message",
                         "messageText": "/시작",
                     },
@@ -145,7 +145,7 @@ class SocialHandlerMixin(BaseHandlerMixin):
                 ]
 
         buttons = [
-            {"label": "🧬 각성 랭킹", "action": "message", "messageText": "/각성랭킹"},
+            {"label": "각성 랭킹", "action": "message", "messageText": "/각성랭킹"},
             {"label": "📈 급등주", "action": "message", "messageText": "/급등"},
         ]
         return self._ranking_list_card(title, items, buttons)
@@ -156,7 +156,7 @@ class SocialHandlerMixin(BaseHandlerMixin):
         if not user:
             return KakaoResponse.text_with_buttons(
                 "먼저 /시작 으로 참가하세요.",
-                [{"label": "🚀 시작하기", "action": "message", "messageText": "/시작"}],
+                [{"label": "시작하기", "action": "message", "messageText": "/시작"}],
             )
 
         total_asset, profit_rate = RankingService.calculate_total_asset(self.db, user)
@@ -194,12 +194,12 @@ class SocialHandlerMixin(BaseHandlerMixin):
             msg,
             [
                 {
-                    "label": "💼 포트폴리오",
+                    "label": "포트폴리오",
                     "action": "message",
                     "messageText": "/포트폴리오",
                 },
                 {"label": "📈 급등주", "action": "message", "messageText": "/급등"},
-                {"label": "🧬 각성", "action": "message", "messageText": "/각성"},
+                {"label": "각성", "action": "message", "messageText": "/각성"},
             ],
         )
 
@@ -217,7 +217,7 @@ class SocialHandlerMixin(BaseHandlerMixin):
         if rank_info is None:
             return KakaoResponse.text_with_buttons(
                 "먼저 /시작 으로 참가하세요.",
-                [{"label": "🚀 시작하기", "action": "message", "messageText": "/시작"}],
+                [{"label": "시작하기", "action": "message", "messageText": "/시작"}],
             )
 
         rank = rank_info["rank"]
@@ -259,9 +259,9 @@ class SocialHandlerMixin(BaseHandlerMixin):
 {motivation}{rival_line}"""
 
         buttons = [
-            {"label": "🏆 랭킹", "action": "message", "messageText": "/랭킹"},
+            {"label": "랭킹", "action": "message", "messageText": "/랭킹"},
             {
-                "label": "💼 포트폴리오",
+                "label": "포트폴리오",
                 "action": "message",
                 "messageText": "/포트폴리오",
             },
@@ -284,8 +284,8 @@ class SocialHandlerMixin(BaseHandlerMixin):
             return KakaoResponse.text_with_buttons(
                 "🧬 아직 각성한 개미가 없습니다.\n장 마감 후 각성에 도전해보세요!",
                 [
-                    {"label": "🧬 각성", "action": "message", "messageText": "/각성"},
-                    {"label": "🏆 랭킹", "action": "message", "messageText": "/랭킹"},
+                    {"label": "각성", "action": "message", "messageText": "/각성"},
+                    {"label": "랭킹", "action": "message", "messageText": "/랭킹"},
                 ],
             )
 
@@ -319,8 +319,8 @@ class SocialHandlerMixin(BaseHandlerMixin):
             title = "🧬 각성 랭킹 (이 방)"
 
         buttons = [
-            {"label": "🏆 수익률 랭킹", "action": "message", "messageText": "/랭킹"},
-            {"label": "🧬 각성", "action": "message", "messageText": "/각성"},
+            {"label": "수익률 랭킹", "action": "message", "messageText": "/랭킹"},
+            {"label": "각성", "action": "message", "messageText": "/각성"},
         ]
         return self._ranking_list_card(title, items, buttons)
 
@@ -333,7 +333,7 @@ class SocialHandlerMixin(BaseHandlerMixin):
         if not result["success"]:
             return KakaoResponse.text_with_buttons(
                 "먼저 /시작 으로 참가하세요.",
-                [{"label": "🚀 시작하기", "action": "message", "messageText": "/시작"}],
+                [{"label": "시작하기", "action": "message", "messageText": "/시작"}],
             )
 
         level = result["level"]
@@ -353,10 +353,10 @@ class SocialHandlerMixin(BaseHandlerMixin):
         return KakaoResponse.text_with_buttons(
             msg,
             [
-                {"label": "🧬 각성", "action": "message", "messageText": "/각성"},
-                {"label": "🏆 랭킹", "action": "message", "messageText": "/랭킹"},
+                {"label": "각성", "action": "message", "messageText": "/각성"},
+                {"label": "랭킹", "action": "message", "messageText": "/랭킹"},
                 {
-                    "label": "💼 포트폴리오",
+                    "label": "포트폴리오",
                     "action": "message",
                     "messageText": "/포트폴리오",
                 },
@@ -369,7 +369,7 @@ class SocialHandlerMixin(BaseHandlerMixin):
         if not user:
             return KakaoResponse.text_with_buttons(
                 "먼저 /시작 으로 참가하세요.",
-                [{"label": "🚀 시작하기", "action": "message", "messageText": "/시작"}],
+                [{"label": "시작하기", "action": "message", "messageText": "/시작"}],
             )
 
         status = MissionService.get_mission_status(self.db, self.kakao_id)
@@ -439,15 +439,15 @@ class SocialHandlerMixin(BaseHandlerMixin):
 📈 총 거래 {status["total_trades"]:,}회 | 누적 수익 {status["total_profit_realized"]:,}원"""
 
         buttons = [
-            {"label": "🏆 업적", "action": "message", "messageText": "/업적"},
-            {"label": "🎖️ 마일스톤", "action": "message", "messageText": "/마일스톤"},
-            {"label": "📊 인기 종목", "action": "message", "messageText": "/인기"},
+            {"label": "업적", "action": "message", "messageText": "/업적"},
+            {"label": "마일스톤", "action": "message", "messageText": "/마일스톤"},
+            {"label": "인기 종목", "action": "message", "messageText": "/인기"},
         ]
         if ch_line and "보상 대기" in ch_line:
             buttons.insert(
                 0,
                 {
-                    "label": "🎁 챌린지 보상받기",
+                    "label": "챌린지 보상받기",
                     "action": "message",
                     "messageText": "/챌린지보상",
                 },
@@ -461,7 +461,7 @@ class SocialHandlerMixin(BaseHandlerMixin):
         if not user:
             return KakaoResponse.text_with_buttons(
                 "먼저 /시작 으로 참가하세요.",
-                [{"label": "🚀 시작하기", "action": "message", "messageText": "/시작"}],
+                [{"label": "시작하기", "action": "message", "messageText": "/시작"}],
             )
 
         status = MissionService.get_mission_status(self.db, self.kakao_id)
@@ -527,17 +527,17 @@ class SocialHandlerMixin(BaseHandlerMixin):
             msg,
             [
                 {
-                    "label": "📋 오늘의 미션",
+                    "label": "오늘의 미션",
                     "action": "message",
                     "messageText": "/미션",
                 },
                 {
-                    "label": "🎖️ 마일스톤",
+                    "label": "마일스톤",
                     "action": "message",
                     "messageText": "/마일스톤",
                 },
                 {
-                    "label": "💼 포트폴리오",
+                    "label": "포트폴리오",
                     "action": "message",
                     "messageText": "/포트폴리오",
                 },
@@ -554,7 +554,7 @@ class SocialHandlerMixin(BaseHandlerMixin):
                 "먼저 /시작 으로 게임을 시작해주세요.",
                 [
                     {
-                        "label": "🎮 게임 시작",
+                        "label": "게임 시작",
                         "action": "message",
                         "messageText": "/시작",
                     }
@@ -579,9 +579,9 @@ class SocialHandlerMixin(BaseHandlerMixin):
         return KakaoResponse.text_with_buttons(
             msg,
             [
-                {"label": "🏆 랭킹", "action": "message", "messageText": "/랭킹"},
+                {"label": "랭킹", "action": "message", "messageText": "/랭킹"},
                 {
-                    "label": "💼 포트폴리오",
+                    "label": "포트폴리오",
                     "action": "message",
                     "messageText": "/포트폴리오",
                 },
@@ -626,9 +626,9 @@ class SocialHandlerMixin(BaseHandlerMixin):
         return KakaoResponse.text_with_buttons(
             msg,
             [
-                {"label": "⚔️ 배틀생성", "action": "message", "messageText": "/배틀"},
+                {"label": "배틀생성", "action": "message", "messageText": "/배틀"},
                 {
-                    "label": "📋 배틀목록",
+                    "label": "배틀목록",
                     "action": "message",
                     "messageText": "/배틀목록",
                 },
@@ -650,7 +650,7 @@ class SocialHandlerMixin(BaseHandlerMixin):
                 }
             else:
                 battle_btn = {
-                    "label": "📊 인기종목",
+                    "label": "인기종목",
                     "action": "message",
                     "messageText": "/인기",
                 }
@@ -658,13 +658,13 @@ class SocialHandlerMixin(BaseHandlerMixin):
                 f"⚔️ 주가 배틀 생성\n\n사용법: /배틀 [종목] [상승/하락] [금액]\n예: /배틀 삼성전자 상승 {default_bet}\n\n❓ /배틀설명 으로 자세한 설명 확인",
                 [
                     {
-                        "label": "❓ 배틀설명",
+                        "label": "배틀설명",
                         "action": "message",
                         "messageText": "/배틀설명",
                     },
                     battle_btn,
                     {
-                        "label": "📋 배틀목록",
+                        "label": "배틀목록",
                         "action": "message",
                         "messageText": "/배틀목록",
                     },
@@ -706,11 +706,11 @@ class SocialHandlerMixin(BaseHandlerMixin):
             msg,
             [
                 {
-                    "label": "📋 배틀목록",
+                    "label": "배틀목록",
                     "action": "message",
                     "messageText": "/배틀목록",
                 },
-                {"label": "⚔️ 추가 배틀", "action": "message", "messageText": "/배틀"},
+                {"label": "추가 배틀", "action": "message", "messageText": "/배틀"},
             ],
         )
 
@@ -723,7 +723,7 @@ class SocialHandlerMixin(BaseHandlerMixin):
                 "⚔️ 배틀 참가\n\n사용법: /배틀참가 [배틀ID]\n예: /배틀참가 1",
                 [
                     {
-                        "label": "📋 배틀목록",
+                        "label": "배틀목록",
                         "action": "message",
                         "messageText": "/배틀목록",
                     }
@@ -740,24 +740,23 @@ class SocialHandlerMixin(BaseHandlerMixin):
         if not result["success"]:
             return KakaoResponse.simple_text(result["message"])
 
-        msg = f"""⚔️ 배틀 시작!
-━━━━━━━━━━━━━━━━━
-📊 {result["stock_name"]} | 시작가 {result["start_price"]:,}원
+        msg = f"""배틀 시작
 
-🔵 {result["challenger_name"]} → 📈{result["challenger_prediction"]}!
-  ⚡ VS ⚡
-🔴 {result["opponent_name"]} → 📉{result["opponent_prediction"]}!
+{result["stock_name"]} · 시작가 {result["start_price"]:,}원
 
-🪙 승자 골드: {result["bet_amount"] * 2:,}원
-⏱️ {result["duration"]}분 뒤 승자 결정!
-━━━━━━━━━━━━━━━━━
-어느 개미가 이길까?! /배틀결과 {result["battle_id"]}"""
+{result["challenger_name"]} {result["challenger_prediction"]}
+{result["opponent_name"]} {result["opponent_prediction"]}
+
+승자 골드 {result["bet_amount"] * 2:,}원
+{result["duration"]}분 뒤 승자 결정
+
+/배틀결과 {result["battle_id"]}"""
 
         return KakaoResponse.text_with_buttons(
             msg,
             [
                 {
-                    "label": "📊 결과확인",
+                    "label": "결과확인",
                     "action": "message",
                     "messageText": f"/배틀결과 {result['battle_id']}",
                 }
@@ -795,32 +794,30 @@ class SocialHandlerMixin(BaseHandlerMixin):
                 result_header = f"🎊 배틀 종료!{market_note}"
                 result_detail = f"🏆 승자: {result['winner']}! 예측 적중!"
 
-            msg = f"""⚔️ 배틀 결과
-━━━━━━━━━━━━━━━━━
+            msg = f"""배틀 결과
+
 {result_header}
 
-📊 {result["stock_name"]}
-💰 {result["start_price"]:,}원 → {result["end_price"]:,}원
+{result["stock_name"]}
+{result["start_price"]:,}원 → {result["end_price"]:,}원
 {change_emoji} {result["price_change"]:+,}원 ({result["change_rate"]:+.2f}%)
 
-🔵 {result["challenger_name"]} vs 🔴 {result["opponent_name"]}
-━━━━━━━━━━━━━━━━━
-{result_detail}
-💰 상금 {result["prize"]:,}원 획득!
+{result["challenger_name"]} vs {result["opponent_name"]}
 
-다음 도전자는?! ⚔️"""
+{result_detail}
+상금 {result["prize"]:,}원 획득"""
 
             return KakaoResponse.text_with_buttons(
                 msg,
                 [
-                    {"label": "⚔️ 새 배틀", "action": "message", "messageText": "/배틀"},
+                    {"label": "새 배틀", "action": "message", "messageText": "/배틀"},
                     {
-                        "label": "📋 배틀목록",
+                        "label": "배틀목록",
                         "action": "message",
                         "messageText": "/배틀목록",
                     },
                     {
-                        "label": "💼 포트폴리오",
+                        "label": "포트폴리오",
                         "action": "message",
                         "messageText": "/포트폴리오",
                     },
@@ -838,11 +835,11 @@ class SocialHandlerMixin(BaseHandlerMixin):
                 "⚔️ 대기 중인 배틀이 없습니다.\n새로운 배틀을 시작해보세요!",
                 [
                     {
-                        "label": "⚔️ 배틀생성",
+                        "label": "배틀생성",
                         "action": "message",
                         "messageText": "/배틀",
                     },
-                    {"label": "🚀 급등주", "action": "message", "messageText": "/급등"},
+                    {"label": "📈 급등주", "action": "message", "messageText": "/급등"},
                 ],
             )
 
@@ -867,7 +864,7 @@ class SocialHandlerMixin(BaseHandlerMixin):
         msg = KakaoResponse.fit_items(header, battle_items, more_fmt="…외 {n}건 더")
 
         buttons.append(
-            {"label": "⚔️ 새 배틀", "action": "message", "messageText": "/배틀"}
+            {"label": "새 배틀", "action": "message", "messageText": "/배틀"}
         )
 
         return KakaoResponse.text_with_buttons(msg, buttons)
@@ -907,7 +904,7 @@ class SocialHandlerMixin(BaseHandlerMixin):
         if pr["completed"] and not pr["reward_claimed"]:
             buttons.append(
                 {
-                    "label": "🎁 보상받기",
+                    "label": "보상받기",
                     "action": "message",
                     "messageText": "/챌린지보상",
                 }
@@ -916,12 +913,12 @@ class SocialHandlerMixin(BaseHandlerMixin):
         buttons.extend(
             [
                 {
-                    "label": "🏆 마일스톤",
+                    "label": "마일스톤",
                     "action": "message",
                     "messageText": "/마일스톤",
                 },
                 {
-                    "label": "💼 포트폴리오",
+                    "label": "포트폴리오",
                     "action": "message",
                     "messageText": "/포트폴리오",
                 },
@@ -945,9 +942,9 @@ class SocialHandlerMixin(BaseHandlerMixin):
         return KakaoResponse.text_with_buttons(
             msg,
             [
-                {"label": "🎯 챌린지", "action": "message", "messageText": "/챌린지"},
+                {"label": "챌린지", "action": "message", "messageText": "/챌린지"},
                 {
-                    "label": "💼 포트폴리오",
+                    "label": "포트폴리오",
                     "action": "message",
                     "messageText": "/포트폴리오",
                 },
@@ -966,7 +963,7 @@ class SocialHandlerMixin(BaseHandlerMixin):
                 "먼저 /시작 으로 게임을 시작해주세요.",
                 [
                     {
-                        "label": "🎮 게임 시작",
+                        "label": "게임 시작",
                         "action": "message",
                         "messageText": "/시작",
                     }
@@ -1024,10 +1021,10 @@ class SocialHandlerMixin(BaseHandlerMixin):
         msg = KakaoResponse.fit_items(header, achieved_items, more_fmt="…외 {n}개")
 
         buttons = [
-            {"label": "🏆 업적", "action": "message", "messageText": "/업적"},
-            {"label": "🎯 챌린지", "action": "message", "messageText": "/챌린지"},
+            {"label": "업적", "action": "message", "messageText": "/업적"},
+            {"label": "챌린지", "action": "message", "messageText": "/챌린지"},
             {
-                "label": "💼 포트폴리오",
+                "label": "포트폴리오",
                 "action": "message",
                 "messageText": "/포트폴리오",
             },
@@ -1056,12 +1053,12 @@ class SocialHandlerMixin(BaseHandlerMixin):
             msg,
             [
                 {
-                    "label": "🏆 마일스톤",
+                    "label": "마일스톤",
                     "action": "message",
                     "messageText": "/마일스톤",
                 },
                 {
-                    "label": "💼 포트폴리오",
+                    "label": "포트폴리오",
                     "action": "message",
                     "messageText": "/포트폴리오",
                 },
@@ -1080,7 +1077,7 @@ class SocialHandlerMixin(BaseHandlerMixin):
                 "먼저 /시작 으로 게임을 시작해주세요.",
                 [
                     {
-                        "label": "🎮 게임 시작",
+                        "label": "게임 시작",
                         "action": "message",
                         "messageText": "/시작",
                     }
@@ -1109,10 +1106,10 @@ class SocialHandlerMixin(BaseHandlerMixin):
             msg,
             [
                 {
-                    "label": "💼 포트폴리오",
+                    "label": "포트폴리오",
                     "action": "message",
                     "messageText": "/포트폴리오",
                 },
-                {"label": "🏆 랭킹", "action": "message", "messageText": "/랭킹"},
+                {"label": "랭킹", "action": "message", "messageText": "/랭킹"},
             ],
         )

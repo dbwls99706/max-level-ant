@@ -135,7 +135,12 @@ class TestJobAssignment:
 
         assert result["new_level"] == THRESHOLD - 1
         assert result["job"] is None
-        assert result["art_stem"] is None, "직군이 없는데 이미지 좌표가 나왔다"
+        # 직군은 없어도 그림은 있어야 한다. 초반 열 레벨이 텍스트만 나오면
+        # 각성이 무엇을 주는 시스템인지 보이지 않는다.
+        assert result["art_stem"] is not None, "쪼렙 구간에 그림이 없다"
+        assert result["art_stem"].startswith("novice__"), (
+            f"직군이 없는데 직군 그림이 붙었다: {result['art_stem']}"
+        )
 
     def test_job_assigned_at_threshold(self, db, test_user):
         test_user.enhance_level = THRESHOLD - 1
@@ -247,9 +252,9 @@ class TestGrowthTransition:
     def test_growth_change_is_reported(self, db, test_user):
         boundary = next(
             lv
-            for lv in range(2, EnhanceConfig.MAX_LEVEL + 1)
-            if ec.growth_stage(lv, EnhanceConfig.MAX_LEVEL)
-            != ec.growth_stage(lv - 1, EnhanceConfig.MAX_LEVEL)
+            for lv in range(THRESHOLD + 1, EnhanceConfig.MAX_LEVEL + 1)
+            if ec.growth_stage(lv, EnhanceConfig.MAX_LEVEL, THRESHOLD)
+            != ec.growth_stage(lv - 1, EnhanceConfig.MAX_LEVEL, THRESHOLD)
         )
         test_user.enhance_level = boundary - 1
         test_user.enhance_job = "scalper"
@@ -263,9 +268,35 @@ class TestGrowthTransition:
         assert result["growth_changed"] is True
         assert result["art_stem"].endswith(f"g{result['growth']}")
 
+    def test_growth_change_is_not_reported_within_a_stage(self, db, test_user):
+        """단계 안에서 레벨만 오르면 그림이 그대로다. '단계 진입'은 거짓말이다"""
+        inside = next(
+            lv
+            for lv in range(THRESHOLD + 1, EnhanceConfig.MAX_LEVEL)
+            if ec.growth_stage(lv, EnhanceConfig.MAX_LEVEL, THRESHOLD)
+            == ec.growth_stage(lv - 1, EnhanceConfig.MAX_LEVEL, THRESHOLD)
+        )
+        test_user.enhance_level = inside - 1
+        test_user.enhance_job = "scalper"
+        test_user.enhance_rarity = "normal"
+        test_user.cash = 100_000_000
+        db.commit()
+
+        with _always_succeed():
+            result = EnhanceService.attempt_enhance(db, test_user.kakao_id)
+
+        assert result["growth_changed"] is False, (
+            f"Lv.{inside - 1}→{inside}은 같은 단계인데 진입이라고 한다"
+        )
+
     def test_growth_transition_unlocks_a_new_entry(self, db, test_user):
         """같은 직군·종이라도 성장이 바뀌면 새 칸이다"""
-        test_user.enhance_level = 10
+        boundary = next(
+            lv
+            for lv in range(THRESHOLD + 1, EnhanceConfig.MAX_LEVEL + 1)
+            if ec.growth_stage(lv, EnhanceConfig.MAX_LEVEL, THRESHOLD) == 2
+        )
+        test_user.enhance_level = boundary - 1
         test_user.enhance_job = "scalper"
         test_user.enhance_rarity = "normal"
         test_user.cash = 100_000_000
@@ -492,6 +523,18 @@ class TestEnhanceCard:
         url = card["thumbnail"]["imageUrl"]
         assert url.startswith("https://example.com/art/")
         assert "scalper__myth__g" in url, "다른 조합의 이미지가 붙었다"
+
+    def test_image_fills_the_card_width(self, db, test_user):
+        """fixedRatio가 없으면 카카오가 잘라서 작은 썸네일로 띄운다"""
+        resp = self._enhance(db, test_user, "https://example.com")
+        thumb = resp["template"]["outputs"][0]["basicCard"]["thumbnail"]
+
+        assert thumb.get("fixedRatio") is True, (
+            "그림이 주인공인 카드인데 카카오 기본 비율로 잘리게 뒀다"
+        )
+        assert (thumb.get("width"), thumb.get("height")) == AssetConfig.image_size(), (
+            f"원본 비율과 다른 크기: {thumb.get('width')}x{thumb.get('height')}"
+        )
 
     def test_card_text_matches_the_image(self, db, test_user):
         resp = self._enhance(db, test_user, "https://example.com")

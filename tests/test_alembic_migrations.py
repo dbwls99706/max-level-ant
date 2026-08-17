@@ -90,7 +90,7 @@ class TestBaselineScript:
         """
         import ast
 
-        tree = ast.parse(BASELINE.read_text())
+        tree = ast.parse(BASELINE.read_text(encoding="utf-8"))
         imported = set()
         for node in ast.walk(tree):
             if isinstance(node, ast.Import):
@@ -122,7 +122,7 @@ class TestBaselineScript:
         """
         import ast
 
-        tree = ast.parse(BASELINE.read_text())
+        tree = ast.parse(BASELINE.read_text(encoding="utf-8"))
         downgrade = next(
             node
             for node in tree.body

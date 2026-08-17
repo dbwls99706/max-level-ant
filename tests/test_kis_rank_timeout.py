@@ -1,7 +1,9 @@
 """순위 조회 타임아웃 진단 검증"""
 
 import asyncio
+import logging
 import time
+from contextlib import contextmanager
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -11,8 +13,38 @@ from requests.exceptions import ConnectTimeout, ReadTimeout, Timeout
 from services.stock_service import KISAPIClient, StockService
 from settings import KISConfig
 
+SERVICE_LOGGER = "stock_king.service"
 
-def test_rank_uses_its_own_timeout(caplog):
+
+@contextmanager
+def captured_warnings():
+    """서비스 로거의 WARNING 메시지를 모은다.
+
+    caplog을 쓰지 않는 이유: utils.logger가 만드는 로거는 propagate=False라
+    (중복 출력 방지) 루트에 붙는 caplog 핸들러까지 레코드가 올라오지 않는다.
+    caplog.at_level(logger=...)도 그 로거의 '레벨'만 바꿀 뿐 핸들러를 붙여주진
+    않아서, 로그가 화면에 멀쩡히 찍히는데 테스트만 못 보는 상태가 된다.
+    핸들러를 직접 붙이면 pytest 버전·실행 순서와 무관하게 동작한다.
+    """
+    collected = []
+
+    class _Collect(logging.Handler):
+        def emit(self, record):
+            collected.append(record.getMessage())
+
+    logger = logging.getLogger(SERVICE_LOGGER)
+    handler = _Collect(level=logging.WARNING)
+    previous = logger.level
+    logger.addHandler(handler)
+    logger.setLevel(logging.WARNING)
+    try:
+        yield collected
+    finally:
+        logger.removeHandler(handler)
+        logger.setLevel(previous)
+
+
+def test_rank_uses_its_own_timeout():
     """순위 조회는 단일 시세보다 넉넉한 상한을 쓴다"""
     seen = {}
 
@@ -33,7 +65,7 @@ def test_rank_uses_its_own_timeout(caplog):
     )
 
 
-def test_timeout_log_shows_elapsed_and_cap(caplog):
+def test_timeout_log_shows_elapsed_and_cap():
     """'타임아웃'만 찍으면 상류가 느린 건지 우리가 좁게 준 건지 모른다"""
 
     def slow_then_timeout(url, headers=None, params=None, timeout=None):
@@ -43,11 +75,11 @@ def test_timeout_log_shows_elapsed_and_cap(caplog):
     with (
         patch.object(KISAPIClient, "_get_headers", return_value={"x": "y"}),
         patch("services.stock_service._http.get", side_effect=slow_then_timeout),
-        caplog.at_level("WARNING"),
+        captured_warnings() as logged,
     ):
         KISAPIClient.get_volume_rank("J")
 
-    msgs = [r.message for r in caplog.records if "순위 조회 타임아웃" in r.message]
+    msgs = [m for m in logged if "순위 조회 타임아웃" in m]
     assert msgs, "타임아웃 로그가 없다"
     assert "초 대기" in msgs[0], f"실제 대기 시간이 없다: {msgs[0]}"
     assert "상한" in msgs[0], f"적용된 상한이 없다: {msgs[0]}"
@@ -401,31 +433,31 @@ class TestTimeoutLogNamesThePhase:
 
     teardown_method = setup_method
 
-    def _log_for(self, exc, caplog):
+    def _log_for(self, exc):
         with (
             patch.object(KISAPIClient, "_get_headers", return_value={"x": "y"}),
             patch("services.stock_service._http.get", side_effect=exc),
-            caplog.at_level("WARNING"),
+            captured_warnings() as logged,
         ):
             KISAPIClient.get_volume_rank("J")
-        msgs = [r.message for r in caplog.records if "순위 조회 타임아웃" in r.message]
+        msgs = [m for m in logged if "순위 조회 타임아웃" in m]
         assert msgs, "타임아웃 로그가 없다"
         return msgs[0]
 
-    def test_connect_timeout_says_connect_and_its_own_cap(self, caplog):
+    def test_connect_timeout_says_connect_and_its_own_cap(self):
         from services.stock_service import _http_timeout
 
-        msg = self._log_for(ConnectTimeout, caplog)
+        msg = self._log_for(ConnectTimeout)
         connect, _ = _http_timeout(KISConfig.RANK_TIMEOUT)
         assert "연결" in msg, f"단계가 없다: {msg}"
         assert f"상한 {connect:.2f}초" in msg, (
             f"전체 상한을 찍으면 실제 적용된 연결 상한을 알 수 없다: {msg}"
         )
 
-    def test_read_timeout_says_read_and_its_own_cap(self, caplog):
+    def test_read_timeout_says_read_and_its_own_cap(self):
         from services.stock_service import _http_timeout
 
-        msg = self._log_for(ReadTimeout, caplog)
+        msg = self._log_for(ReadTimeout)
         _, read = _http_timeout(KISConfig.RANK_TIMEOUT)
         assert "응답" in msg, f"단계가 없다: {msg}"
         assert f"상한 {read:.2f}초" in msg

@@ -309,6 +309,17 @@ ruff format --check .     # Format check
   user. A unique-constraint violation there means a concurrent request already registered — it
   is treated as success, not failure
 - **Kakao response spec** (enforced in `utils/kakao_response.py`, verified by `tests/test_kakao_spec_compliance.py`): `outputs` ≤ 3; textCard title+description ≤ 400; basicCard description ≤ 230; listCard items ≤ 5; button label ≤ 14; buttons ≤ 2 horizontal. **버튼은 기본이 가로 2개**다 - 세로로 쌓으면 버튼 하나가 한 줄씩 대화창을 가린다. 셋 이상이 꼭 필요한 화면만 `force_vertical=True`를 쓰고, 그때 세로 한도는 **1:1이 3개, 그룹방이 5개**(그룹 가이드 v1.10.0)라 핸들러가 `self.button_cap`으로 넓힌다. `KakaoResponse.BODY_LIMIT` (350) is a deliberately stricter UX limit — the group beta guide requires responses not to cover the whole chat screen
+- **성장 단계는 6개이고 직군 그림이 붙는 구간(Lv.10~30)을 6등분한다.**
+  예전엔 3단계로 1~30을 나눴는데, 직군을 Lv.10에 받으므로 1단계 200장이 Lv.10
+  한 레벨에만 쓰이고 나머지는 열 레벨씩 같은 그림이었다. `growth_stage()`의
+  `first_level` 인자가 그 시작점이다. 새 1·3·6이 옛 1·2·3이라 기존 600장은
+  파일명만 바꿔 그대로 쓰고 2·4·5만 새로 만든다. 도감에 쌓인 기록도 같은 규칙으로
+  옮겨야 해서 `0003_growth_six_stages`가 3→6, 2→3 순으로 UPDATE한다
+  (작은 번호부터 옮기면 같은 행이 두 번 걸려 전부 6이 된다)
+- **직군 배정 전(Lv.0~9)에도 그림이 있다.** `novice__none__g{1,2,3}` 세 장을
+  공용으로 쓴다. 게임을 막 시작한 열 레벨이 텍스트 카드로만 나가면 각성이 무엇을
+  주는 시스템인지 보이지 않는다. 이 좌표는 도감 칸이 아니므로 `all_combinations()`
+  에 넣지 않는다 - 넣으면 도감 총량이 늘어나 영영 100%가 안 된다
 - **각성 정체성은 (계열 × 직군 × 종 × 성장) 네 축이다.** 직군·종은 `users.enhance_job`/
   `enhance_rarity`에 저장하고 성장은 레벨에서 파생한다(`enhance_classes.growth_stage`).
   이 좌표가 곧 이미지 파일명이고 각성 성공 문구도 같은 좌표로 조립되므로,

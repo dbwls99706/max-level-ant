@@ -4,6 +4,11 @@ Alembic 실행 환경
 DB URL은 alembic.ini가 아니라 settings.DATABASE_URL(환경변수)에서 읽는다.
 운영·로컬·CI가 애플리케이션과 같은 설정 경로를 쓰게 해서, 마이그레이션이
 앱과 다른 DB를 건드리는 사고를 막는다.
+
+alembic.ini는 ASCII만 담는다. Alembic이 그 파일을 encoding="locale"로 읽어서,
+UTF-8이 아닌 로캘(한국어 Windows의 cp949 등)에서는 한글 주석 한 줄 때문에
+모든 alembic 명령이 시작도 못 하고 UnicodeDecodeError로 죽는다. 설명은
+파이썬이 항상 UTF-8로 읽는 이 파일에 둔다.
 """
 
 import os

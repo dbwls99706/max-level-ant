@@ -43,11 +43,12 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from enhance_art import (  # noqa: E402
     CLASS_ART,
-    GROWTH_ART,
     RARITY_ART,
     all_combinations,
     build_prompt,
+    combo_label,
     image_stem,
+    novice_combinations,
 )
 
 API_URL = "https://api.openai.com/v1/images/generations"
@@ -231,8 +232,7 @@ def run(combos, args) -> int:
     def work(combo):
         nonlocal done
         class_key, rarity, growth = combo
-        family, name, emoji, _desc, _body = CLASS_ART[class_key]
-        label = f"{emoji} {name} / {RARITY_ART[rarity][0]} / {GROWTH_ART[growth][0]}"
+        label = combo_label(class_key, rarity, growth)
         prompt = build_prompt(class_key, rarity, growth)
         image = generate_one(prompt, args.model, args.quality, args.size, args.retries)
         path = out_path(outdir, class_key, rarity, growth)
@@ -251,8 +251,7 @@ def run(combos, args) -> int:
                 {
                     "file": path.name,
                     "class": class_key,
-                    "family": family,
-                    "name": name,
+                    "label": label,
                     "rarity": rarity,
                     "growth": growth,
                     "prompt": prompt,
@@ -366,7 +365,10 @@ def main() -> int:
         action="store_true",
         help="계열마다 한 장씩 생성 (8장). 전량 전 그림체 일관성 확인용",
     )
-    p.add_argument("--all", action="store_true", help="전체 조합 생성")
+    p.add_argument("--all", action="store_true", help="전체 조합 생성 (쪼렙 포함)")
+    p.add_argument(
+        "--novice", action="store_true", help="직군 배정 전 공용 그림만 생성 (3장)"
+    )
     p.add_argument("--class", dest="class_key", help="특정 직군만 생성")
     p.add_argument(
         "--limit", type=int, default=0, help="생성 장수 상한 (0이면 제한 없음)"
@@ -411,8 +413,12 @@ def main() -> int:
             print(f"알 수 없는 직군: {args.class_key}")
             print(f"사용 가능: {', '.join(CLASS_ART)}")
             return 1
+    elif args.novice:
+        combos = list(novice_combinations())
     elif args.all:
-        combos = list(all_combinations())
+        # 쪼렙 그림도 함께 만든다. 따로 돌리게 하면 "600장 다 됐다"고 믿은
+        # 뒤 초반 열 레벨만 그림이 없는 채로 배포된다.
+        combos = list(novice_combinations()) + list(all_combinations())
     else:
         p.print_help()
         return 1

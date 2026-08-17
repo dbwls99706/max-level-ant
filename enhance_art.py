@@ -83,6 +83,13 @@ RARITY_ART = {
 #
 # 처음에는 "imposing silhouette, veteran presence" 식의 추상적인 표현만 넣었더니
 # 신화·초월인데도 맨몸으로 나왔다. 갑옷 부위를 명사로 못박아야 반영된다.
+#
+# 단계는 6개다. 처음엔 3개(각성/숙련/초월)였는데 30레벨을 셋으로 나누니
+# 열 레벨 내내 같은 그림이었다. 올려도 안 변하는 축은 성장이 아니다.
+# 1·3·6이 옛 1·2·3이라 기존 600장을 그대로 쓰고 2·4·5만 새로 만든다.
+#
+# 부위를 명사로 못박는 규칙은 그대로다. "imposing silhouette" 같은 추상
+# 표현만 넣었더니 신화·초월인데도 맨몸으로 나왔다.
 GROWTH_ART = {
     1: (
         "각성",
@@ -90,11 +97,28 @@ GROWTH_ART = {
         "most of the clean unmarked carapace exposed, young lean build",
     ),
     2: (
+        "발현",
+        "wearing a hardened leather chest guard over the harness, one "
+        "vambrace and a short scarf, a few fresh scuffs, still lean build",
+    ),
+    3: (
         "숙련",
         "wearing a fitted breastplate, one shoulder pauldron, greaves and "
         "a short cape, scratched and battle-worn, broader hardened build",
     ),
-    3: (
+    4: (
+        "정예",
+        "wearing matched pauldrons on both shoulders, segmented gauntlets, "
+        "belted tassets over the thighs and a knee-length cape, "
+        "trimmed with a single accent color, solid veteran build",
+    ),
+    5: (
+        "극한",
+        "wearing near-complete plate: layered cuirass, closed vambraces, "
+        "knee guards and a rising crested helm that leaves the antennae "
+        "free, a long banner-like cape, engraved edges, powerful build",
+    ),
+    6: (
         "초월",
         "clad head to toe in ornate layered plate armor with an open crested "
         "helm that leaves the antennae free, "
@@ -102,6 +126,64 @@ GROWTH_ART = {
         "cape, gold filigree tracing every edge, towering imposing build",
     ),
 }
+
+# 직군을 받기 전(Lv.10 미만) 공용 그림.
+#
+# 예전에는 이 구간에 그림이 아예 없어서 텍스트 카드로 나갔다. 게임을 막
+# 시작한 사람이 열 레벨 내내 그림을 못 보는 건 앞뒤가 바뀐 것이다.
+# 직군도 종도 없으므로 조합이 아니라 성장만 있는 세 장이다.
+NOVICE_KEY = "novice"
+NOVICE_RARITY = "none"
+NOVICE_ART = {
+    1: (
+        "쪼렙",
+        "a small young worker ant hero with nothing but a cloth waist wrap "
+        "and a worn wooden stick held like a first weapon, bare carapace, "
+        "wide curious eyes, standing up straight for the first time",
+    ),
+    2: (
+        "초심",
+        "a young worker ant hero in a patched cloth tunic and a rope belt, "
+        "holding a plain iron shortsword, a small satchel at the hip, "
+        "scuffed but determined",
+    ),
+    3: (
+        "각오",
+        "a young ant hero in a simple leather vest and forearm wraps, "
+        "holding a well-kept iron blade, a folded map tucked in the belt, "
+        "standing ready at the edge of something bigger",
+    ),
+}
+
+
+def novice_stem(stage: int) -> str:
+    """직군 배정 전 공용 이미지 파일 이름(확장자 제외)"""
+    if stage not in NOVICE_ART:
+        raise KeyError(f"알 수 없는 쪼렙 단계: {stage}")
+    return image_stem(NOVICE_KEY, NOVICE_RARITY, stage)
+
+
+def build_novice_prompt(stage: int) -> str:
+    """쪼렙 구간 이미지 프롬프트. 종 연출 없이 그림체·구도만 공유한다."""
+    if stage not in NOVICE_ART:
+        raise KeyError(f"알 수 없는 쪼렙 단계: {stage}")
+    body = NOVICE_ART[stage][1]
+    return f"{STYLE_LOCK}. {body}. {COMMON_FRAMING}."
+
+
+def novice_combinations():
+    """생성해야 할 쪼렙 이미지 조합 전체.
+
+    직군 조합과 같은 (키, 종, 성장) 모양으로 돌려준다. 생성 스크립트가
+    두 종류를 따로 다루지 않아도 되게 하기 위해서다. 다만 도감 총량
+    계산에는 들어가면 안 되므로 all_combinations()와는 분리한다.
+    """
+    return tuple((NOVICE_KEY, NOVICE_RARITY, stage) for stage in NOVICE_ART)
+
+
+def is_novice(class_key: str) -> bool:
+    return class_key == NOVICE_KEY
+
 
 # 계열: 직군을 묶는 상위 분류. 도감 정렬과 이미지 폴백에 쓴다.
 FAMILIES = {
@@ -507,8 +589,18 @@ CLASS_ART = {
 }
 
 
+def combo_label(class_key: str, rarity: str, growth: int) -> str:
+    """진행 로그에 찍을 사람이 읽는 이름"""
+    if is_novice(class_key):
+        return f"🐜 쪼렙 / {NOVICE_ART[growth][0]}"
+    _family, name, emoji, _desc, _body = CLASS_ART[class_key]
+    return f"{emoji} {name} / {RARITY_ART[rarity][0]} / {GROWTH_ART[growth][0]}"
+
+
 def build_prompt(class_key: str, rarity: str, growth: int) -> str:
     """[공통] + [직군] + [종] + [성장] 조합으로 최종 프롬프트를 만든다"""
+    if is_novice(class_key):
+        return build_novice_prompt(growth)
     if class_key not in CLASS_ART:
         raise KeyError(f"알 수 없는 직군: {class_key}")
     if rarity not in RARITY_ART:

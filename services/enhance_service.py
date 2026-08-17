@@ -33,14 +33,15 @@ class EnhanceService:
     def _identity(user, level: int) -> Dict:
         """직군·종·성장과 그에 딸린 이미지·문구.
 
-        직군이 아직 없으면(Lv.10 미만) 전부 None이다. 호출부는 이 경우
-        이미지 없이 텍스트로만 응답해야 한다.
+        직군이 아직 없으면(Lv.10 미만) 직군·종은 None이지만 이미지는 있다.
+        게임을 막 시작한 열 레벨 동안 그림이 없으면 각성이 무엇을 주는
+        시스템인지 보이지 않는다. 그 구간은 공용 쪼렙 그림을 쓴다.
         """
         job = getattr(user, "enhance_job", None)
         rarity = getattr(user, "enhance_rarity", None)
-        growth = ec.growth_stage(level, EnhanceConfig.MAX_LEVEL)
 
         if not job or not rarity:
+            novice = ec.novice_stage(level, EnhanceConfig.CLASS_LEVEL_THRESHOLD)
             return {
                 "job": None,
                 "job_label": None,
@@ -49,12 +50,17 @@ class EnhanceService:
                 "rarity": None,
                 "rarity_label": None,
                 "rarity_bonus": 0.0,
-                "growth": growth,
-                "growth_name": ec.GROWTH_STAGES[growth],
-                "art_stem": None,
-                "flavor": None,
+                # 직군 그림의 성장 축과 섞이면 도감·문구가 어긋난다.
+                # 쪼렙 구간은 '아직 1단계도 아니다'로 본다.
+                "growth": 1,
+                "growth_name": ec.novice_stage_name(novice),
+                "art_stem": ec.novice_art_stem(novice),
+                "flavor": ec.novice_flavor(novice),
             }
 
+        growth = ec.growth_stage(
+            level, EnhanceConfig.MAX_LEVEL, EnhanceConfig.CLASS_LEVEL_THRESHOLD
+        )
         family_name, family_emoji = ec.class_family(job)
         return {
             "job": job,
@@ -160,7 +166,12 @@ class EnhanceService:
         old_seed = getattr(user, "enhance_title_seed", 0) or 0
         old_name, old_emoji = EnhanceConfig.get_title(old_level, seed=old_seed)
         old_rarity = getattr(user, "enhance_rarity", None)
-        old_growth = ec.growth_stage(old_level, EnhanceConfig.MAX_LEVEL)
+        # _identity()와 같은 기준(직군 그림이 붙는 구간)으로 재야 한다.
+        # 한쪽만 first_level을 빼먹으면 단계가 그대로인데도 "단계 진입!"이
+        # 뜬다 - 실제로 Lv.12→13에서 그 오탐이 나왔다.
+        old_growth = ec.growth_stage(
+            old_level, EnhanceConfig.MAX_LEVEL, EnhanceConfig.CLASS_LEVEL_THRESHOLD
+        )
 
         if succeeded:
             # 성공!

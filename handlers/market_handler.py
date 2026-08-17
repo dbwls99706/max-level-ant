@@ -24,17 +24,17 @@ class MarketHandlerMixin(BaseHandlerMixin):
                 "🔍 어떤 종목을 찾으시나요?",
                 [
                     {
-                        "label": "🔍 반도체",
+                        "label": "반도체",
                         "action": "message",
                         "messageText": "/검색 반도체",
                     },
                     {
-                        "label": "🔍 자동차",
+                        "label": "자동차",
                         "action": "message",
                         "messageText": "/검색 자동차",
                     },
                     {
-                        "label": "🔍 바이오",
+                        "label": "바이오",
                         "action": "message",
                         "messageText": "/검색 바이오",
                     },
@@ -48,9 +48,9 @@ class MarketHandlerMixin(BaseHandlerMixin):
             return KakaoResponse.text_with_buttons(
                 f"'{query}' 관련 종목을 찾을 수 없습니다.",
                 [
-                    {"label": "🚀 급등주", "action": "message", "messageText": "/급등"},
+                    {"label": "📈 급등주", "action": "message", "messageText": "/급등"},
                     {
-                        "label": "📊 인기종목",
+                        "label": "인기종목",
                         "action": "message",
                         "messageText": "/인기",
                     },
@@ -83,7 +83,7 @@ class MarketHandlerMixin(BaseHandlerMixin):
             for r in results[:3]
         ]
         buttons.append(
-            {"label": "🚀 급등주", "action": "message", "messageText": "/급등"}
+            {"label": "📈 급등주", "action": "message", "messageText": "/급등"}
         )
         buttons.extend(self._get_game_buttons())
 
@@ -101,10 +101,10 @@ class MarketHandlerMixin(BaseHandlerMixin):
             return KakaoResponse.text_with_buttons(
                 "📊 인기종목 데이터를 불러오는 중입니다.",
                 [
-                    {"label": "🚀 급등주", "action": "message", "messageText": "/급등"},
+                    {"label": "📈 급등주", "action": "message", "messageText": "/급등"},
                     {"label": "📉 급락주", "action": "message", "messageText": "/급락"},
                     {
-                        "label": "💼 포트폴리오",
+                        "label": "포트폴리오",
                         "action": "message",
                         "messageText": "/포트폴리오",
                     },
@@ -133,7 +133,7 @@ class MarketHandlerMixin(BaseHandlerMixin):
             for s in stocks[:4]
         ]
         buttons.append(
-            {"label": "🚀 급등주", "action": "message", "messageText": "/급등"}
+            {"label": "📈 급등주", "action": "message", "messageText": "/급등"}
         )
 
         return KakaoResponse.text_with_buttons(msg, buttons)
@@ -146,10 +146,10 @@ class MarketHandlerMixin(BaseHandlerMixin):
             return KakaoResponse.text_with_buttons(
                 "📊 거래량 데이터를 불러오는 중입니다.",
                 [
-                    {"label": "🚀 급등주", "action": "message", "messageText": "/급등"},
+                    {"label": "📈 급등주", "action": "message", "messageText": "/급등"},
                     {"label": "📉 급락주", "action": "message", "messageText": "/급락"},
                     {
-                        "label": "💼 포트폴리오",
+                        "label": "포트폴리오",
                         "action": "message",
                         "messageText": "/포트폴리오",
                     },
@@ -174,7 +174,7 @@ class MarketHandlerMixin(BaseHandlerMixin):
             for s in stocks[:4]
         ]
         buttons.append(
-            {"label": "🚀 급등주", "action": "message", "messageText": "/급등"}
+            {"label": "📈 급등주", "action": "message", "messageText": "/급등"}
         )
 
         return KakaoResponse.text_with_buttons(msg, buttons)
@@ -190,7 +190,7 @@ class MarketHandlerMixin(BaseHandlerMixin):
                     self._popular_stock_btn(),
                     {"label": "📉 급락주", "action": "message", "messageText": "/급락"},
                     {
-                        "label": "💼 포트폴리오",
+                        "label": "포트폴리오",
                         "action": "message",
                         "messageText": "/포트폴리오",
                     },
@@ -216,7 +216,7 @@ class MarketHandlerMixin(BaseHandlerMixin):
             {"label": "📉 급락주", "action": "message", "messageText": "/급락"}
         )
         buttons.append(
-            {"label": "📊 ETF급등", "action": "message", "messageText": "/ETF급등"}
+            {"label": "📈 ETF급등", "action": "message", "messageText": "/ETF급등"}
         )
 
         return KakaoResponse.text_with_buttons(msg, buttons)
@@ -230,9 +230,9 @@ class MarketHandlerMixin(BaseHandlerMixin):
                 "📊 급락주 데이터를 불러오는 중입니다.",
                 [
                     self._popular_stock_btn("💎"),
-                    {"label": "🚀 급등주", "action": "message", "messageText": "/급등"},
+                    {"label": "📈 급등주", "action": "message", "messageText": "/급등"},
                     {
-                        "label": "💼 포트폴리오",
+                        "label": "포트폴리오",
                         "action": "message",
                         "messageText": "/포트폴리오",
                     },
@@ -255,10 +255,10 @@ class MarketHandlerMixin(BaseHandlerMixin):
             for s in stocks[:3]
         ]
         buttons.append(
-            {"label": "🚀 급등주", "action": "message", "messageText": "/급등"}
+            {"label": "📈 급등주", "action": "message", "messageText": "/급등"}
         )
         buttons.append(
-            {"label": "📊 ETF급락", "action": "message", "messageText": "/ETF급락"}
+            {"label": "📉 ETF급락", "action": "message", "messageText": "/ETF급락"}
         )
 
         return KakaoResponse.text_with_buttons(msg, buttons)
@@ -271,10 +271,10 @@ class MarketHandlerMixin(BaseHandlerMixin):
             return KakaoResponse.text_with_buttons(
                 "📊 ETF 급등 데이터를 불러오는 중입니다.",
                 [
-                    {"label": "🚀 급등주", "action": "message", "messageText": "/급등"},
+                    {"label": "📈 급등주", "action": "message", "messageText": "/급등"},
                     {"label": "📉 급락주", "action": "message", "messageText": "/급락"},
                     {
-                        "label": "💼 포트폴리오",
+                        "label": "포트폴리오",
                         "action": "message",
                         "messageText": "/포트폴리오",
                     },
@@ -297,10 +297,10 @@ class MarketHandlerMixin(BaseHandlerMixin):
             for s in stocks[:3]
         ]
         buttons.append(
-            {"label": "📊 ETF급락", "action": "message", "messageText": "/ETF급락"}
+            {"label": "📉 ETF급락", "action": "message", "messageText": "/ETF급락"}
         )
         buttons.append(
-            {"label": "🚀 급등주", "action": "message", "messageText": "/급등"}
+            {"label": "📈 급등주", "action": "message", "messageText": "/급등"}
         )
 
         return KakaoResponse.text_with_buttons(msg, buttons)
@@ -313,10 +313,10 @@ class MarketHandlerMixin(BaseHandlerMixin):
             return KakaoResponse.text_with_buttons(
                 "📊 ETF 급락 데이터를 불러오는 중입니다.",
                 [
-                    {"label": "🚀 급등주", "action": "message", "messageText": "/급등"},
+                    {"label": "📈 급등주", "action": "message", "messageText": "/급등"},
                     {"label": "📉 급락주", "action": "message", "messageText": "/급락"},
                     {
-                        "label": "💼 포트폴리오",
+                        "label": "포트폴리오",
                         "action": "message",
                         "messageText": "/포트폴리오",
                     },
@@ -339,7 +339,7 @@ class MarketHandlerMixin(BaseHandlerMixin):
             for s in stocks[:3]
         ]
         buttons.append(
-            {"label": "📊 ETF급등", "action": "message", "messageText": "/ETF급등"}
+            {"label": "📈 ETF급등", "action": "message", "messageText": "/ETF급등"}
         )
         buttons.append(
             {"label": "📉 급락주", "action": "message", "messageText": "/급락"}
@@ -355,10 +355,10 @@ class MarketHandlerMixin(BaseHandlerMixin):
             return KakaoResponse.text_with_buttons(
                 "📊 시장 데이터를 불러오는 중입니다.",
                 [
-                    {"label": "🚀 급등주", "action": "message", "messageText": "/급등"},
+                    {"label": "📈 급등주", "action": "message", "messageText": "/급등"},
                     {"label": "📉 급락주", "action": "message", "messageText": "/급락"},
                     {
-                        "label": "💼 포트폴리오",
+                        "label": "포트폴리오",
                         "action": "message",
                         "messageText": "/포트폴리오",
                     },
@@ -386,9 +386,9 @@ class MarketHandlerMixin(BaseHandlerMixin):
         return KakaoResponse.text_with_buttons(
             msg,
             [
-                {"label": "🚀 급등주", "action": "message", "messageText": "/급등"},
+                {"label": "📈 급등주", "action": "message", "messageText": "/급등"},
                 {"label": "📉 급락주", "action": "message", "messageText": "/급락"},
-                {"label": "📊 거래량", "action": "message", "messageText": "/인기"},
+                {"label": "거래량", "action": "message", "messageText": "/인기"},
             ],
         )
 
@@ -402,11 +402,11 @@ class MarketHandlerMixin(BaseHandlerMixin):
             buttons = [
                 self._popular_stock_btn("📰", "/뉴스"),
                 {
-                    "label": "📰 반도체",
+                    "label": "반도체",
                     "action": "message",
                     "messageText": "/뉴스 반도체",
                 },
-                {"label": "🚀 급등주", "action": "message", "messageText": "/급등"},
+                {"label": "📈 급등주", "action": "message", "messageText": "/급등"},
             ]
         else:
             query = parts[1].strip()
@@ -423,17 +423,17 @@ class MarketHandlerMixin(BaseHandlerMixin):
                     "action": "message",
                     "messageText": f"/매도 {query} 10",
                 },
-                {"label": "📰 다른 뉴스", "action": "message", "messageText": "/뉴스"},
-                {"label": "🚀 급등주", "action": "message", "messageText": "/급등"},
+                {"label": "다른 뉴스", "action": "message", "messageText": "/뉴스"},
+                {"label": "📈 급등주", "action": "message", "messageText": "/급등"},
             ]
 
         if not news:
             return KakaoResponse.text_with_buttons(
                 "📰 뉴스를 불러오지 못했습니다.",
                 [
-                    {"label": "🚀 급등주", "action": "message", "messageText": "/급등"},
+                    {"label": "📈 급등주", "action": "message", "messageText": "/급등"},
                     {
-                        "label": "💼 포트폴리오",
+                        "label": "포트폴리오",
                         "action": "message",
                         "messageText": "/포트폴리오",
                     },

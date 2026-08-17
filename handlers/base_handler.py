@@ -139,7 +139,7 @@ class BaseHandlerMixin:
                 "action": "message",
                 "messageText": f"{command} {name}",
             }
-        return {"label": "📊 인기종목", "action": "message", "messageText": "/인기"}
+        return {"label": "인기종목", "action": "message", "messageText": "/인기"}
 
     # ===========================================
     # Quick Reply 버튼 헬퍼
@@ -148,9 +148,7 @@ class BaseHandlerMixin:
     def _get_game_buttons(self) -> list:
         """장 마감 시간에만 예측게임 버튼 반환"""
         if is_market_closed():
-            return [
-                {"label": "📈 예측게임", "action": "message", "messageText": "/예측"}
-            ]
+            return [{"label": "예측게임", "action": "message", "messageText": "/예측"}]
         return []
 
     def _get_quick_trade_buttons(self, stock_name: str = None) -> List[Dict]:
@@ -173,8 +171,8 @@ class BaseHandlerMixin:
             )
         buttons.extend(
             [
-                {"label": "🚀 급등주", "action": "message", "messageText": "/급등"},
-                {"label": "💼 포폴", "action": "message", "messageText": "/포트폴리오"},
+                {"label": "📈 급등주", "action": "message", "messageText": "/급등"},
+                {"label": "포폴", "action": "message", "messageText": "/포트폴리오"},
             ]
         )
         return buttons
@@ -188,7 +186,7 @@ class BaseHandlerMixin:
         if game_type == "lottery":
             buttons.append(
                 {
-                    "label": "🎁 한번 더!",
+                    "label": "한번 더!",
                     "action": "message",
                     "messageText": "/보물상자",
                 }
@@ -197,12 +195,12 @@ class BaseHandlerMixin:
             buttons.extend(
                 [
                     {
-                        "label": "🔮 한번 더!",
+                        "label": "한번 더!",
                         "action": "message",
                         "messageText": f"/시장예측 {bet}",
                     },
                     {
-                        "label": "🔮 2배!",
+                        "label": "베팅 2배로",
                         "action": "message",
                         "messageText": f"/시장예측 {bet * 2}",
                     },
@@ -212,7 +210,7 @@ class BaseHandlerMixin:
             buttons.extend(
                 [
                     {
-                        "label": "🔢 새 게임!",
+                        "label": "새 게임!",
                         "action": "message",
                         "messageText": f"/업다운 {bet}",
                     },
@@ -221,15 +219,15 @@ class BaseHandlerMixin:
 
         # 다른 예측게임 추천
         buttons.append(
-            {"label": "📈 다른 예측", "action": "message", "messageText": "/예측"}
+            {"label": "다른 예측", "action": "message", "messageText": "/예측"}
         )
         return buttons
 
     def _get_navigation_buttons(self) -> List[Dict]:
         """기본 내비게이션 버튼"""
         buttons = [
-            {"label": "🚀 급등주", "action": "message", "messageText": "/급등"},
-            {"label": "💼 포폴", "action": "message", "messageText": "/포트폴리오"},
+            {"label": "📈 급등주", "action": "message", "messageText": "/급등"},
+            {"label": "포폴", "action": "message", "messageText": "/포트폴리오"},
         ]
         buttons.extend(self._get_game_buttons())
         return buttons
@@ -269,12 +267,12 @@ class BaseHandlerMixin:
         buttons.extend(
             [
                 {
-                    "label": "💼 포폴 확인",
+                    "label": "포폴 확인",
                     "action": "message",
                     "messageText": "/포트폴리오",
                 },
                 {
-                    "label": "🚀 다른 급등주",
+                    "label": "📈 다른 급등주",
                     "action": "message",
                     "messageText": "/급등",
                 },
@@ -286,10 +284,10 @@ class BaseHandlerMixin:
     def _get_ranking_climb_buttons(self) -> List[Dict]:
         """랭킹 상승 유도 버튼"""
         return [
-            {"label": "🚀 급등주 투자", "action": "message", "messageText": "/급등"},
-            {"label": "📉 저점매수", "action": "message", "messageText": "/급락"},
-            {"label": "📈 예측게임", "action": "message", "messageText": "/예측"},
-            {"label": "💼 포폴", "action": "message", "messageText": "/포트폴리오"},
+            {"label": "📈 급등주 투자", "action": "message", "messageText": "/급등"},
+            {"label": "저점매수", "action": "message", "messageText": "/급락"},
+            {"label": "예측게임", "action": "message", "messageText": "/예측"},
+            {"label": "포폴", "action": "message", "messageText": "/포트폴리오"},
         ]
 
     # ===========================================
@@ -401,9 +399,9 @@ class BaseHandlerMixin:
         return KakaoResponse.text_with_buttons(
             message,
             [
-                {"label": "🔥 인기종목", "action": "message", "messageText": "/인기"},
+                {"label": "인기종목", "action": "message", "messageText": "/인기"},
                 {
-                    "label": "🎁 보물상자",
+                    "label": "보물상자",
                     "action": "message",
                     "messageText": "/보물상자",
                 },
@@ -428,14 +426,14 @@ class BaseHandlerMixin:
         return KakaoResponse.text_with_buttons(
             message,
             [
-                {"label": "📅 출석체크", "action": "message", "messageText": "/출석"},
+                {"label": "출석체크", "action": "message", "messageText": "/출석"},
                 {
-                    "label": "🎁 보물상자",
+                    "label": "보물상자",
                     "action": "message",
                     "messageText": "/보물상자",
                 },
                 {
-                    "label": "💼 포트폴리오",
+                    "label": "포트폴리오",
                     "action": "message",
                     "messageText": "/포트폴리오",
                 },
