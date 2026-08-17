@@ -10,7 +10,9 @@
 - **가상 투자**: 1,000만원 시작 자금으로 매수/매도 (수수료 0.1%)
 - **출석 보상**: 매일 출석 시 30만원 지급 (연속 출석 보너스 + 각성 레벨 배율)
 - **예측게임**: 보물상자(하루 5회 무료), 시장예측(과거 주가 퀴즈), 업다운(숫자 연속 맞추기)
-- **각성 시스템**: 골드를 써서 레벨업 도전 (Lv.0~20, 실패 시 Lv.0 초기화)
+- **각성 시스템**: 골드를 써서 레벨업 도전 (Lv.0~30, 실패 시 Lv.0 초기화)
+- **직군 도감**: Lv.10에 40직군 중 하나가 배정되고, 종(5등급)과 성장 단계(6)에
+  따라 전용 일러스트가 붙는다. 실패로 레벨이 초기화돼도 도감 기록은 남는다
 - **PvP 배틀**: 다른 유저와 주가 예측 대결 (배틀 생성/참가/결과 확인)
 - **랭킹 시스템**: 수익률 랭킹, 각성 레벨 랭킹
 - **성장 시스템**: 일간 미션(3회 거래 → 20만원), 주간 챌린지, 마일스톤(자산 목표)
@@ -68,7 +70,8 @@
 | /시장예측 [금액] | /ㅅㅈ | 과거 주가 예측 (장 마감 후) |
 | /업다운 [금액] | /ㅇㄷ | 숫자 연속 맞추기 (장 마감 후) |
 | /업다운정산 | - | 업다운 게임 중간 정산 |
-| /각성 | /ㄱㅎ, /강화, /능력 | 골드를 써서 레벨업 도전 |
+| /각성 | /ㄱㅎ, /강화, /능력 | 골드를 써서 레벨업 도전 (시간 제한 없음) |
+| /도감 [계열] | - | 직군 도감 진행도 (계열명 주면 상세) |
 
 ### 랭킹/소셜
 
@@ -107,7 +110,7 @@
 - **ORM**: SQLAlchemy 2.x
 - **Stock Data**: 한국투자증권 KIS OpenAPI (서킷 브레이커 적용)
 - **News**: Google News RSS
-- **Cache**: cachetools TTLCache (시세 60초, 랭킹 5분)
+- **Cache**: cachetools TTLCache (시세 60초, 유저 랭킹 5분, 시세 순위 180초 + 배경 갱신)
 - **Container**: Docker (멀티스테이지 빌드, non-root 실행)
 - **Deploy**: Render (PaaS, Docker 배포)
 
@@ -143,7 +146,7 @@ KIS_APP_KEY=your_app_key
 KIS_APP_SECRET=your_app_secret
 KIS_BASE_URL=https://openapi.koreainvestment.com:9443
 
-# 스킬 서버 인증 (운영 필수 — 미설정 시 서버가 기동하지 않음)
+# 스킬 서버 인증 (운영 필수 - 미설정 시 서버가 기동하지 않음)
 SKILL_API_KEY=<긴 랜덤 문자열>    # 카카오 관리자센터 스킬 헤더에 등록할 값
 SKILL_API_KEY_HEADER=X-Skill-Key # 헤더 이름 (기본값)
 
@@ -156,7 +159,22 @@ KIS_API_TIMEOUT=1.5              # KIS 개별 조회 타임아웃 (초)
 KIS_TOKEN_TIMEOUT=5.0            # KIS 토큰 발급 타임아웃 (초, 조회보다 넉넉하게)
 KIS_MAX_CONCURRENT_CALLS=5       # 프로세스 전역 동시 KIS 호출 상한
 KIS_SLOT_WAIT_CAP=1.0            # 동시 호출 슬롯 대기 상한 (초)
+KIS_CONNECT_TIMEOUT=5.0          # 연결 단계 타임아웃 (초). 나머지가 응답 대기 몫
+KIS_RANK_TIMEOUT=3.0             # 순위 조회 타임아웃 (초). 30여 종목이라 더 느리다
+KIS_REFRESH_TIMEOUT=40.0         # 배경 순위 갱신 타임아웃 (초). SLA가 없어 넉넉하다
+KIS_REFRESH_INTERVAL=45          # 배경 순위 갱신 주기 (초). 0이면 배경 갱신 끔
+KIS_RANK_CACHE_TTL=180           # 순위 캐시 TTL (초). 갱신 주기보다 길어야 한다
+
+# 각성 도감 이미지 (카카오 카드는 공개 HTTPS 절대 URL만 받는다)
+PUBLIC_BASE_URL=https://your-app.onrender.com   # 미설정 시 텍스트로 물러섬
+ART_DIR=art/web                  # 이미지 디렉터리
+ART_EXT=webp                     # 카카오가 webp를 못 그리면 jpeg
 ```
+
+> **순위는 요청 경로가 아니라 배경 루프가 받아온다.** KIS 순위 API는 실측 17초가
+> 걸려서 카카오 5초 SLA 안에 못 들어온다. `KIS_REFRESH_INTERVAL`마다 배경에서
+> 받아 캐시에 넣고, 유저 요청은 메모리만 읽는다. 조회가 실패하면 직전 성공값으로
+> 물러선다 - 빈 화면보다 조금 지난 순위가 낫기 때문이다.
 
 > **KIS 토큰은 DB(`api_tokens`)에 저장된다.** 토큰은 24시간 유효한데
 > 프로세스 메모리에만 두면 재배포·콜드스타트마다 재발급을 시도하게 되고,
@@ -184,7 +202,7 @@ alembic check            # models.py와 실제 스키마 차이 확인
 
 1. **Render 등 운영 환경에 `SKILL_API_KEY` 먼저 설정** (아직 배포하지 않음)
 2. **카카오 챗봇 관리자센터 > 스킬 설정에 같은 헤더/값 등록**
-3. **스킬 설정 배포** — 관리자센터에서 배포해야 운영 봇에 반영된다
+3. **스킬 설정 배포** - 관리자센터에서 배포해야 운영 봇에 반영된다
 4. **서버 코드 배포**
 
 3번을 먼저 하는 이유: 구버전 서버는 모르는 헤더를 그냥 무시하므로 카카오 쪽을 먼저
@@ -199,12 +217,19 @@ python -c "import secrets; print(secrets.token_urlsafe(32))"
 ### 테스트
 
 ```bash
-pytest                              # 전체 테스트
+pytest                              # 전체 테스트 (postgres 마커는 자동 skip)
+pytest -m "not postgres"            # 단위 테스트만 (CI의 lint job과 동일)
 pytest tests/test_trade_service.py  # 특정 파일
 pytest -k "test_buy"                # 패턴 매칭
+
+# 동시성 통합 테스트 (실제 PostgreSQL 필요)
+TEST_DATABASE_URL=postgresql://user:pw@localhost/dbname pytest -m postgres
 ```
 
-테스트는 인메모리 SQLite를 사용하며 외부 API 호출 없이 동작합니다.
+기본 테스트는 인메모리 SQLite를 쓰고 외부 API를 호출하지 않는다.
+다만 **동시성 정합성은 SQLite로 검증되지 않는다.** `SELECT ... FOR UPDATE`에
+의존하는 매수·출석·보물상자 로직은 실제 PostgreSQL에서만 의미가 있어
+`tests/test_postgres_concurrency.py`가 따로 검증한다 (CI는 서비스 컨테이너로 돌린다).
 
 ### Docker
 
@@ -235,15 +260,19 @@ stock-king-bot/
 ├── quiz_history.py          # 시장예측 퀴즈 데이터
 ├── enhance_config.py        # 각성 비용·확률·칭호 조회
 ├── enhance_titles.py        # 각성 칭호·문구 데이터
+├── enhance_classes.py       # 계열·직군·종·성장 + 각성 문구 조립
+├── enhance_art.py           # 도감 이미지 프롬프트 데이터 (파일명 규칙의 단일 출처)
 ├── market_calendar.py       # 공휴일·장 운영시간
 ├── messages.py              # 응답 메시지 템플릿
 ├── errors.py                # 에러 코드
 ├── responses.py             # 서비스 응답 빌더
 ├── constants.py             # 배틀/거래 상태 상수
 ├── database.py              # DB 연결 + 자동 마이그레이션
-├── models.py                # DB 모델 (11개 테이블)
+├── models.py                # DB 모델 (12개 테이블)
 ├── alembic.ini              # Alembic 설정
 ├── migrations/              # Alembic 리비전 (env.py, versions/)
+├── art/web/                 # 도감 이미지 1203장 (webp, 앱이 /art로 서빙)
+├── scripts/                 # 이미지 생성·변환·검사 (운영 코드 아님)
 ├── requirements.txt
 ├── Dockerfile               # 멀티스테이지 빌드
 ├── Procfile                 # PaaS 기동 명령 (uvicorn, $PORT 바인딩)
@@ -262,6 +291,7 @@ stock-king-bot/
 │   ├── trade_service.py     # 거래 처리 + 수수료
 │   ├── game_service.py      # 예측게임 로직
 │   ├── enhance_service.py   # 각성(강화) 시스템
+│   ├── collection_service.py # 도감 기록·직군/종 추첨
 │   ├── ranking_service.py   # 랭킹 조회 + 캐시
 │   ├── battle_service.py    # PvP 배틀
 │   ├── news_service.py      # Google News RSS
@@ -272,18 +302,14 @@ stock-king-bot/
 │   └── quiz_data_service.py # 주식 퀴즈 데이터 (공공 API)
 ├── utils/                   # 유틸리티
 │   ├── kakao_response.py    # 카카오 응답 포맷 빌더
-│   ├── visual_helpers.py    # 텍스트 차트, 수익률 바
+│   ├── budget.py            # 카카오 5초 SLA 대비 요청 시간 예산
+│   ├── resilience.py        # CircuitBreaker, CallThrottle, BoundedConcurrency
+│   ├── visual_helpers.py    # 텍스트 차트, 수익률 바, 표시 폭 계산
 │   ├── logger.py            # 로깅 설정
 │   └── audit_logger.py      # 감사 로그
-├── tests/                   # pytest (SQLite 인메모리)
+├── tests/                   # pytest 27개 파일 (기본은 SQLite 인메모리)
 │   ├── conftest.py          # 픽스처: db, test_user, rich_user, poor_user
-│   ├── test_trade_service.py
-│   ├── test_game_service.py
-│   ├── test_user_service.py
-│   ├── test_mission_service.py
-│   ├── test_enhance_service.py
-│   ├── test_common.py
-│   └── test_circuit_breaker.py
+│   └── test_*.py            # 서비스·핸들러·카카오 스펙·마이그레이션 검증
 └── docs/
     ├── GUIDE.md             # 개발 + 배포 가이드
     └── GROUP_CHATBOT_GUIDE.md # 그룹 챗봇(팀채팅) 가이드
@@ -299,10 +325,16 @@ stock-king-bot/
 | 거래 수수료 | 0.1% |
 | 일간 미션 | 3회 거래 → 200,000원 |
 | 보물상자 | 하루 5회, 무료 |
-| 각성 최대 레벨 | Lv.20 |
-| 각성 비용 | (레벨+1) × 100,000원 |
-| 각성 성공률 | Lv.1 95% ~ Lv.20 4% |
-| 각성 실패 | Lv.0으로 초기화 |
+| 각성 최대 레벨 | Lv.30 |
+| 각성 비용 | 10,000원 + 현재 레벨 × 3,000원 (Lv.29 → 97,000원) |
+| 각성 성공률 | 0→1 99% ~ 29→30 68% |
+| 각성 도달 확률 | Lv.10 66.4%, Lv.20 19.5%, Lv.30 1.2% |
+| 각성 실패 | Lv.0으로 초기화 (직군·종도 함께 해제, 도감 기록은 유지) |
+| 각성 보너스 | 출석 레벨당 +5%, 보물상자 레벨당 +8% |
+| 직군 배정 | Lv.10 도달 시 40직군 중 랜덤 |
+| 종 추첨 | Lv.10/20/30에서 재추첨 (노멀 50% ~ 신화 1%) |
+| 종 랭킹 보정 | 수익률 +0% ~ +10% (랭킹에만 적용, 잔고는 보정 없음) |
+| 도감 총량 | 40직군 × 5종 × 6성장 = 1,200칸 |
 | 배틀 기본 베팅 | 100,000원 |
 | 최소 베팅 | 10,000원 |
 | 최대 베팅 | 999,999,999,999원 |
